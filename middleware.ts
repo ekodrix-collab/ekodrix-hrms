@@ -57,7 +57,14 @@ export async function middleware(request: NextRequest) {
 
     const { data: { user } } = await supabase.auth.getUser()
 
+
     // Allow unauthenticated access to these routes
+    // Also explicitly skip _next paths that might have slipped through the matcher
+    if (request.nextUrl.pathname.startsWith('/_next')) {
+        return response
+    }
+
+    // Allow unauthenticated access to login/signup/auth
     if (
         !user &&
         !request.nextUrl.pathname.startsWith('/login') &&
