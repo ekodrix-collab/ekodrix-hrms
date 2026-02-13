@@ -88,7 +88,7 @@ const employeeNav: NavGroup[] = [
 ];
 
 export function Sidebar() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const isAdmin = pathname.startsWith("/admin");
   const navGroups = isAdmin ? adminNav : employeeNav;
 
