@@ -1,0 +1,106 @@
+{
+  "profiles": [
+    {
+      "id": "437c32ad-8dea-4d92-b03a-35607adfe98c",
+      "email": "ekodrix@gmail.com",
+      "full_name": "admin",
+      "avatar_url": null,
+      "phone": null,
+      "role": "admin",
+      "department": null,
+      "designation": null,
+      "date_of_joining": "2026-01-25",
+      "is_active": true,
+      "created_at": "2026-01-25T04:02:25.018086+00:00",
+      "updated_at": "2026-01-25T07:12:01.461213+00:00",
+      "organization_id": "51b99f41-7301-4ca6-b63f-58438942d147",
+      "status": "active",
+      "invited_by": null,
+      "monthly_salary": 0,
+      "currency": "INR"
+    },
+    {
+      "id": "e080e49a-ef5e-4bab-89f8-49353b490def",
+      "email": "mhdrashid142@gmail.com",
+      "full_name": "Mohammed Rashid",
+      "avatar_url": null,
+      "phone": null,
+      "role": "admin",
+      "department": null,
+      "designation": null,
+      "date_of_joining": "2026-02-04",
+      "is_active": true,
+      "created_at": "2026-02-04T03:39:23.380822+00:00",
+      "updated_at": "2026-02-04T03:39:23.380822+00:00",
+      "organization_id": "e4024ce4-d9c9-45fb-877d-5241b4bcb3f2",
+      "status": "active",
+      "invited_by": null,
+      "monthly_salary": 0,
+      "currency": "INR"
+    },
+    {
+      "id": "44832ac1-e0b1-4855-8665-48ab0e065e36",
+      "email": "razmsi28@gmail.com",
+      "full_name": "rashid test",
+      "avatar_url": null,
+      "phone": null,
+      "role": "employee",
+      "department": "engineering",
+      "designation": "Software Engineer",
+      "date_of_joining": "2026-02-04",
+      "is_active": true,
+      "created_at": "2026-02-04T05:32:15.187703+00:00",
+      "updated_at": "2026-02-04T05:32:15.187703+00:00",
+      "organization_id": "e4024ce4-d9c9-45fb-877d-5241b4bcb3f2",
+      "status": "invited",
+      "invited_by": "e080e49a-ef5e-4bab-89f8-49353b490def",
+      "monthly_salary": 0,
+      "currency": "INR"
+    },
+    {
+      "id": "92775f18-4fec-4b80-bcda-107a67a56545",
+      "email": "rashidmsi39@gmail.com",
+      "full_name": "rashid test 2",
+      "avatar_url": null,
+      "phone": null,
+      "role": "employee",
+      "department": "finance",
+      "designation": "Software Engineer",
+      "date_of_joining": "2026-02-04",
+      "is_active": true,
+      "created_at": "2026-02-04T05:47:10.902653+00:00",
+      "updated_at": "2026-02-04T17:36:20.971038+00:00",
+      "organization_id": "e4024ce4-d9c9-45fb-877d-5241b4bcb3f2",
+      "status": "active",
+      "invited_by": "e080e49a-ef5e-4bab-89f8-49353b490def",
+      "monthly_salary": 10000,
+      "currency": "INR"
+    }
+  ],
+  "orgs": [
+    {
+      "id": "51b99f41-7301-4ca6-b63f-58438942d147",
+      "name": "Ekodrix",
+      "slug": "ekodrix-744338",
+      "logo_url": null,
+      "created_at": "2026-01-25T04:02:24.548187+00:00",
+      "updated_at": "2026-01-25T04:02:24.548187+00:00"
+    },
+    {
+      "id": "ecb03d07-1a88-4dbd-b9c9-2cabdfe8d483",
+      "name": "raz org",
+      "slug": "raz-org-144498",
+      "logo_url": null,
+      "created_at": "2026-02-04T03:35:45.475056+00:00",
+      "updated_at": "2026-02-04T03:35:45.475056+00:00"
+    },
+    {
+      "id": "e4024ce4-d9c9-45fb-877d-5241b4bcb3f2",
+      "name": "raz org",
+      "slug": "raz-org-362070",
+      "logo_url": null,
+      "created_at": "2026-02-04T03:39:22.901102+00:00",
+      "updated_at": "2026-02-04T03:39:22.901102+00:00"
+    }
+  ]
+}
