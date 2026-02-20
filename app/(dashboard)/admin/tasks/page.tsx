@@ -44,16 +44,18 @@ export default function AdminTasksPage() {
 
   return (
     <div className="space-y-8 p-4 md:p-8 animate-in fade-in duration-700">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-blue-600 font-black text-xs uppercase tracking-widest">
+      <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div className="space-y-1 text-center md:text-left">
+          <div className="flex items-center justify-center md:justify-start gap-2 text-blue-600 font-black text-xs uppercase tracking-widest">
             <Kanban className="h-3 w-3" />
             Task Management
           </div>
-          <h1 className="text-3xl font-black">Organization Tasks</h1>
-          <p className="text-muted-foreground font-medium text-sm">Assign and oversee all employee tasks.</p>
+          <h1 className="text-3xl md:text-4xl font-black text-zinc-900 dark:text-zinc-100">Organization Tasks</h1>
+          <p className="text-muted-foreground font-medium text-sm md:text-base">Assign and oversee all employee tasks.</p>
         </div>
-        <AdminTaskForm employees={employees} onSuccess={() => refetch()} />
+        <div className="flex justify-center md:justify-end">
+          <AdminTaskForm employees={employees} onSuccess={() => refetch()} />
+        </div>
       </header>
 
       <Tabs defaultValue="list" className="space-y-6">
@@ -65,7 +67,54 @@ export default function AdminTasksPage() {
         <TabsContent value="list">
           <Card className="border-none shadow-xl shadow-zinc-200/50 dark:shadow-none bg-white/60 dark:bg-zinc-900/60 backdrop-blur-xl">
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
+              {/* Mobile View */}
+              <div className="block sm:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+                {isLoading ? (
+                  <div className="p-12 text-center">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
+                  </div>
+                ) : tasks && tasks.length > 0 ? (
+                  tasks.map((task: any) => (
+                    <div key={task.id} className="p-4 space-y-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1 min-w-0">
+                          <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 uppercase leading-snug">{task.title}</p>
+                          <p className="text-[11px] text-muted-foreground line-clamp-2">{task.description || 'No description'}</p>
+                        </div>
+                        {getStatusBadge(task.status)}
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-6 w-6">
+                            <AvatarImage src={task.profiles?.avatar_url || undefined} />
+                            <AvatarFallback className="text-[10px] font-black">
+                              {task.profiles?.full_name?.charAt(0) || 'U'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-[11px] font-bold text-zinc-600 dark:text-zinc-400">{task.profiles?.full_name?.split(' ')[0] || 'Unassigned'}</span>
+                        </div>
+                        <Badge variant="outline" className={`font-black text-[9px] uppercase ${getPriorityColor(task.priority)}`}>
+                          {task.priority}
+                        </Badge>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-zinc-50 dark:border-zinc-800">
+                        <div className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Due Date</div>
+                        <DueDateBadge dueDate={task.due_date} />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-12 text-center opacity-40">
+                    <AlertCircle className="h-8 w-8 mx-auto mb-2" />
+                    <p className="text-sm font-bold">No tasks assigned yet.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop View */}
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full text-left">
                   <thead className="bg-zinc-50/50 dark:bg-zinc-800/50 text-[10px] uppercase tracking-widest font-black text-muted-foreground">
                     <tr>
