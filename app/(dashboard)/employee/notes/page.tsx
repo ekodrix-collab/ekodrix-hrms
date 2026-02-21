@@ -10,7 +10,10 @@ import {
   MoreVertical,
   Clock,
   Calendar,
-  Lock
+  Lock,
+  Pencil,
+  Trash2,
+  AlertTriangle
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,7 +29,13 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { getEmployeeNotes, createNoteAction } from "@/actions/employee-actions";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { getEmployeeNotes, createNoteAction, updateNoteAction, deleteNoteAction } from "@/actions/employee-actions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -50,20 +59,42 @@ export default function EmployeeNotesPage() {
   });
   const [searchQuery, setSearchQuery] = useState("");
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
 
-  async function handleCreateNote(e: React.FormEvent<HTMLFormElement>) {
+  async function handleNoteSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsSubmitting(true);
     const formData = new FormData(e.currentTarget);
-    const res = await createNoteAction(formData);
+
+    const res = editingNote
+      ? await updateNoteAction(editingNote.id, formData)
+      : await createNoteAction(formData);
 
     if (res.ok) {
-      toast.success("Note created successfully!");
+      toast.success(editingNote ? "Note updated successfully!" : "Note created successfully!");
       setIsNoteModalOpen(false);
+      setEditingNote(null);
       queryClient.invalidateQueries({ queryKey: ["employee-notes"] });
     } else {
-      toast.error(res.message || "Failed to create note");
+      toast.error(res.message || `Failed to ${editingNote ? "update" : "create"} note`);
+    }
+    setIsSubmitting(false);
+  }
+
+  async function handleDeleteConfirm() {
+    if (!noteToDelete) return;
+    setIsSubmitting(true);
+    const res = await deleteNoteAction(noteToDelete);
+    if (res.ok) {
+      toast.success("Note deleted successfully!");
+      setIsDeleteModalOpen(false);
+      setNoteToDelete(null);
+      queryClient.invalidateQueries({ queryKey: ["employee-notes"] });
+    } else {
+      toast.error(res.message || "Failed to delete note");
     }
     setIsSubmitting(false);
   }
@@ -103,27 +134,30 @@ export default function EmployeeNotesPage() {
             </p>
           </motion.div>
 
-          <Dialog open={isNoteModalOpen} onOpenChange={setIsNoteModalOpen}>
+          <Dialog open={isNoteModalOpen} onOpenChange={(val) => {
+            setIsNoteModalOpen(val);
+            if (!val) setEditingNote(null);
+          }}>
             <DialogTrigger asChild>
-              <Button className="h-12 px-6 gap-2 shadow-xl shadow-yellow-500/20 hover:shadow-yellow-500/40 transition-all duration-300 bg-yellow-600 hover:bg-yellow-700 font-bold border-none text-white">
+              <Button onClick={() => setEditingNote(null)} className="h-12 px-6 gap-2 shadow-xl shadow-yellow-500/20 hover:shadow-yellow-500/40 transition-all duration-300 bg-yellow-600 hover:bg-yellow-700 font-bold border-none text-white">
                 <Plus className="h-5 w-5" />
                 New Note
               </Button>
             </DialogTrigger>
             <DialogContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
-              <form onSubmit={handleCreateNote}>
+              <form onSubmit={handleNoteSubmit}>
                 <DialogHeader>
-                  <DialogTitle>Create New Note</DialogTitle>
-                  <DialogDescription>Quickly jot down your ideas.</DialogDescription>
+                  <DialogTitle>{editingNote ? "Edit Note" : "Create New Note"}</DialogTitle>
+                  <DialogDescription>{editingNote ? "Make changes to your note." : "Quickly jot down your ideas."}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
                     <label className="text-sm font-bold">Title</label>
-                    <Input name="title" placeholder="Note title..." required className="border-zinc-200 dark:border-zinc-800" />
+                    <Input name="title" defaultValue={editingNote?.title} placeholder="Note title..." required className="border-zinc-200 dark:border-zinc-800" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-bold">Content</label>
-                    <Textarea name="content" placeholder="Write your thoughts..." required className="min-h-[150px] border-zinc-200 dark:border-zinc-800" />
+                    <Textarea name="content" defaultValue={editingNote?.content} placeholder="Write your thoughts..." required className="min-h-[150px] border-zinc-200 dark:border-zinc-800" />
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="text-[10px] uppercase gap-1 p-1">
@@ -133,12 +167,36 @@ export default function EmployeeNotesPage() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="button" variant="ghost" onClick={() => setIsNoteModalOpen(false)}>Cancel</Button>
+                  <Button type="button" variant="ghost" onClick={() => { setIsNoteModalOpen(false); setEditingNote(null); }}>Cancel</Button>
                   <Button type="submit" disabled={isSubmitting} className="bg-yellow-600 hover:bg-yellow-700">
-                    {isSubmitting ? "Saving..." : "Save Note"}
+                    {isSubmitting ? "Saving..." : editingNote ? "Update Note" : "Save Note"}
                   </Button>
                 </DialogFooter>
               </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Delete Confirmation Dialog */}
+          <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+            <DialogContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+              <DialogHeader>
+                <div className="mx-auto w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
+                  <AlertTriangle className="h-6 w-6 text-red-600" />
+                </div>
+                <DialogTitle className="text-center">Are you absolutely sure?</DialogTitle>
+                <DialogDescription className="text-center">
+                  This action cannot be undone. This will permanently delete your note.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="sm:justify-center gap-2">
+                <Button variant="outline" onClick={() => { setIsDeleteModalOpen(false); setNoteToDelete(null); }}>Cancel</Button>
+                <Button
+                  onClick={handleDeleteConfirm}
+                  className="bg-red-600 hover:bg-red-700 text-white border-none"
+                >
+                  {isSubmitting ? "Deleting..." : "Delete Note"}
+                </Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
         </header>
@@ -184,13 +242,47 @@ export default function EmployeeNotesPage() {
                         </span>
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button variant="ghost" size="icon" className="h-7 w-7"><Pin className="h-3.5 w-3.5" /></Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3.5 w-3.5" /></Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7">
+                                <MoreVertical className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-32 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+                              <DropdownMenuItem
+                                className="flex items-center gap-2 cursor-pointer font-bold text-xs"
+                                onClick={() => {
+                                  setEditingNote(note);
+                                  setIsNoteModalOpen(true);
+                                }}
+                              >
+                                <Pencil className="h-3 w-3 text-blue-600" />
+                                Edit Note
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="flex items-center gap-2 cursor-pointer font-bold text-xs text-red-600 focus:text-red-600"
+                                onClick={() => {
+                                  setNoteToDelete(note.id);
+                                  setIsDeleteModalOpen(true);
+                                }}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
-                      <CardTitle className="text-base font-black text-zinc-900 dark:text-zinc-100">{note.title}</CardTitle>
+                      <CardTitle className="text-sm md:text-base font-black text-zinc-900 dark:text-zinc-100">{note.title}</CardTitle>
                     </div>
                   </CardHeader>
-                  <CardContent className="p-4 flex-1">
+                  <CardContent
+                    className="p-4 flex-1 cursor-pointer"
+                    onClick={() => {
+                      setEditingNote(note);
+                      setIsNoteModalOpen(true);
+                    }}
+                  >
                     <p className="text-sm text-zinc-600 dark:text-zinc-400 space-y-2 whitespace-pre-wrap line-clamp-6">
                       {note.content}
                     </p>
@@ -200,7 +292,15 @@ export default function EmployeeNotesPage() {
                       <Clock className="h-3 w-3" />
                       {format(new Date(note.created_at), "hh:mm a")}
                     </div>
-                    <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px] font-black uppercase text-zinc-500 hover:text-yellow-600">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-[10px] font-black uppercase text-zinc-500 hover:text-yellow-600"
+                      onClick={() => {
+                        setEditingNote(note);
+                        setIsNoteModalOpen(true);
+                      }}
+                    >
                       View Note
                     </Button>
                   </div>
