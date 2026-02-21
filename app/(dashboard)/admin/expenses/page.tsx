@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { getAllExpenses } from "@/actions/dashboard";
+import type { Expense } from "@/types/dashboard";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,7 +16,7 @@ export default function AdminExpensesPage() {
     queryFn: () => getAllExpenses(),
   });
 
-  const totalSpent = expenses?.reduce((acc: number, curr: { amount: string | number }) => acc + Number(curr.amount), 0) || 0;
+  const totalSpent = expenses?.reduce((acc: number, curr: Expense) => acc + Number(curr.amount), 0) || 0;
 
   return (
     <div className="space-y-8 p-4 md:p-8 animate-in fade-in duration-700">
@@ -55,7 +56,7 @@ export default function AdminExpensesPage() {
                 <Loader2 className="h-8 w-8 animate-spin mx-auto text-purple-600" />
               </div>
             ) : expenses && expenses.length > 0 ? (
-              expenses.map((expense: any) => (
+              expenses.map((expense: Expense) => (
                 <div key={expense.id} className="p-4 space-y-4">
                   <div className="flex items-start justify-between">
                     <div className="space-y-0.5">
@@ -68,7 +69,7 @@ export default function AdminExpensesPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Avatar className="h-6 w-6">
-                        <AvatarImage src={expense.profiles?.avatar_url} />
+                        <AvatarImage src={expense.profiles?.avatar_url || undefined} />
                         <AvatarFallback className="text-[9px] font-black">{expense.profiles?.full_name?.charAt(0)}</AvatarFallback>
                       </Avatar>
                       <span className="text-[11px] font-bold">{expense.profiles?.full_name}</span>
@@ -106,7 +107,7 @@ export default function AdminExpensesPage() {
                 {isLoading ? (
                   <tr><td colSpan={5} className="py-20 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-purple-600" /></td></tr>
                 ) : expenses && expenses.length > 0 ? (
-                  expenses.map((expense: any, index: number) => (
+                  expenses.map((expense: Expense, index: number) => (
                     <motion.tr
                       key={expense.id}
                       initial={{ opacity: 0, y: 5 }}
@@ -123,7 +124,7 @@ export default function AdminExpensesPage() {
                       <td className="px-6">
                         <div className="flex items-center gap-2">
                           <Avatar className="h-7 w-7 border border-zinc-100 dark:border-zinc-800">
-                            <AvatarImage src={expense.profiles?.avatar_url} />
+                            <AvatarImage src={expense.profiles?.avatar_url || undefined} />
                             <AvatarFallback className="text-[10px] font-black">{expense.profiles?.full_name?.charAt(0)}</AvatarFallback>
                           </Avatar>
                           <span className="text-xs font-bold">{expense.profiles?.full_name}</span>

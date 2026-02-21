@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getAttendanceLogs, getAbsentEmployees } from "@/actions/dashboard";
+import type { AttendanceLog, AbsentEmployee } from "@/types/dashboard";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -67,12 +68,12 @@ export default function AdminAttendancePage() {
                 <p className="text-sm font-bold text-muted-foreground">Syncing records...</p>
               </div>
             ) : logs && logs.length > 0 ? (
-              logs.map((log: any) => (
+              logs.map((log: AttendanceLog) => (
                 <div key={log.id} className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10 border-2 border-primary/10">
-                        <AvatarImage src={log.profiles.avatar_url} />
+                        <AvatarImage src={log.profiles.avatar_url || undefined} />
                         <AvatarFallback className="bg-primary/10 text-primary font-black">
                           {log.profiles.full_name.charAt(0)}
                         </AvatarFallback>
@@ -146,7 +147,7 @@ export default function AdminAttendancePage() {
                     </td>
                   </tr>
                 ) : logs && logs.length > 0 ? (
-                  logs.map((log: any, index: number) => (
+                  logs.map((log: AttendanceLog, index: number) => (
                     <motion.tr
                       key={log.id}
                       initial={{ opacity: 0, y: 5 }}
@@ -157,7 +158,7 @@ export default function AdminAttendancePage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <Avatar className="h-9 w-9 border border-zinc-100 dark:border-zinc-800 shadow-sm transition-transform group-hover:scale-105">
-                            <AvatarImage src={log.profiles.avatar_url} />
+                            <AvatarImage src={log.profiles.avatar_url || undefined} />
                             <AvatarFallback className="bg-primary/10 text-primary font-black text-xs">
                               {log.profiles.full_name.charAt(0)}
                             </AvatarFallback>
@@ -236,11 +237,11 @@ export default function AdminAttendancePage() {
                 <p className="text-sm font-bold text-muted-foreground">Checking records...</p>
               </div>
             ) : absentEmployees && absentEmployees.length > 0 ? (
-              absentEmployees.map((emp: any) => (
+              absentEmployees.map((emp: AbsentEmployee) => (
                 <div key={emp.id} className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-10 w-10 border-2 border-rose-100 dark:border-rose-900/30">
-                      <AvatarImage src={emp.avatar_url} />
+                      <AvatarImage src={emp.avatar_url || undefined} />
                       <AvatarFallback className="bg-rose-50 text-rose-600 font-black">
                         {emp.full_name?.charAt(0)}
                       </AvatarFallback>
@@ -279,7 +280,7 @@ export default function AdminAttendancePage() {
                     </td>
                   </tr>
                 ) : absentEmployees && absentEmployees.length > 0 ? (
-                  absentEmployees.map((emp: any, index: number) => (
+                  absentEmployees.map((emp: AbsentEmployee, index: number) => (
                     <motion.tr
                       key={emp.id}
                       initial={{ opacity: 0, x: -5 }}
@@ -290,7 +291,7 @@ export default function AdminAttendancePage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <Avatar className="h-9 w-9 border border-zinc-100 dark:border-zinc-800 shadow-sm">
-                            <AvatarImage src={emp.avatar_url} />
+                            <AvatarImage src={emp.avatar_url || undefined} />
                             <AvatarFallback className="bg-rose-50 text-rose-600 font-black text-xs">
                               {emp.full_name?.charAt(0)}
                             </AvatarFallback>

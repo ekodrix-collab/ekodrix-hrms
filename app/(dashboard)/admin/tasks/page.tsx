@@ -74,7 +74,7 @@ export default function AdminTasksPage() {
                     <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
                   </div>
                 ) : tasks && tasks.length > 0 ? (
-                  tasks.map((task: any) => (
+                  tasks.map((task: Task) => (
                     <div key={task.id} className="p-4 space-y-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="space-y-1 min-w-0">
