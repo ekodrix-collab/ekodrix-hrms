@@ -286,6 +286,48 @@ export async function createNoteAction(formData: FormData) {
     return { ok: true };
 }
 
+export async function updateNoteAction(noteId: string, formData: FormData) {
+    const title = String(formData.get("title") ?? "").trim();
+    const content = String(formData.get("content") ?? "").trim();
+    if (!title) return { ok: false, message: "Title is required" };
+
+    const supabase = createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, message: "Not authenticated" };
+
+    const { error } = await supabase
+        .from("notes")
+        .update({
+            title,
+            content,
+            updated_at: new Date().toISOString()
+        })
+        .eq("id", noteId)
+        .eq("user_id", user.id);
+
+    if (error) return { ok: false, message: error.message };
+
+    revalidatePath("/employee/notes");
+    return { ok: true };
+}
+
+export async function deleteNoteAction(noteId: string) {
+    const supabase = createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, message: "Not authenticated" };
+
+    const { error } = await supabase
+        .from("notes")
+        .delete()
+        .eq("id", noteId)
+        .eq("user_id", user.id);
+
+    if (error) return { ok: false, message: error.message };
+
+    revalidatePath("/employee/notes");
+    return { ok: true };
+}
+
 export async function submitStandupAction(formData: FormData) {
     const accomplished = String(formData.get("accomplished") ?? "").trim();
     const planned = String(formData.get("planned") ?? "").trim();
