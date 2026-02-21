@@ -65,7 +65,7 @@ export default function AdminAttendancePage() {
             {isLoading ? (
               <div className="p-12 text-center">
                 <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-2" />
-                <p className="text-sm font-bold text-muted-foreground">Syncing records...</p>
+                <p className="text-sm font-bold text-muted-foreground">Syncing records....</p>
               </div>
             ) : logs && logs.length > 0 ? (
               logs.map((log: AttendanceLog) => (
