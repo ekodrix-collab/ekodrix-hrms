@@ -146,8 +146,78 @@ export function EmployeeList({ employees: initialEmployees }: EmployeeListProps)
     }
 
     return (
-        <div className="grid gap-4 md:grid-cols-1">
-            <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+        <div className="space-y-4">
+            {/* Mobile View: Card List */}
+            <div className="grid gap-4 sm:hidden">
+                {employees.map((employee) => (
+                    <div
+                        key={employee.id}
+                        className="rounded-xl border bg-card p-4 shadow-sm space-y-4"
+                    >
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary uppercase font-bold text-xs">
+                                    {employee.full_name?.charAt(0) || "U"}
+                                </div>
+                                <div className="flex flex-col min-w-0">
+                                    <span className="font-semibold text-foreground truncate">{employee.full_name}</span>
+                                    <span className="text-xs text-muted-foreground flex items-center mt-0.5 truncate">
+                                        <Mail className="mr-1 h-3 w-3 shrink-0" />
+                                        {employee.email}
+                                    </span>
+                                </div>
+                            </div>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${getStatusStyle(employee.status)}`}>
+                                {employee.status.charAt(0).toUpperCase() + employee.status.slice(1)}
+                            </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 pb-2">
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/60">Department</span>
+                                <div className="flex items-center text-xs font-semibold text-foreground">
+                                    <Building2 className="mr-1.5 h-3 w-3 text-primary/60" />
+                                    {employee.department || "General"}
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/60">Role</span>
+                                <div className="flex items-center text-xs font-semibold text-foreground">
+                                    <Shield className="mr-1.5 h-3 w-3 text-primary/60" />
+                                    {employee.role}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-3 text-primary hover:bg-primary/5"
+                                asChild
+                            >
+                                <a href={`/admin/employees/${employee.id}`}>
+                                    <User className="mr-2 h-4 w-4" />
+                                    Details
+                                </a>
+                            </Button>
+                            {employee.status === "invited" && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8"
+                                    onClick={() => handleCopyLink(employee.id)}
+                                >
+                                    <LinkIcon className="h-4 w-4" />
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Desktop View: Table */}
+            <div className="hidden sm:block rounded-xl border bg-card shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>

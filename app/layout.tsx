@@ -12,7 +12,21 @@ const outfit = Outfit({
 
 export const metadata: Metadata = {
   title: "Ekodrix HRMS",
-  description: "Ekodrix - WorkFlow Pro HRMS"
+  description: "Ekodrix - WorkFlow Pro HRMS",
+  manifest: "/manifest.json",
+  themeColor: "#000000",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Ekodrix HRMS",
+  },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 import { QueryProvider } from "@/components/providers/query-provider";

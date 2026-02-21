@@ -23,19 +23,19 @@ import { getCurrentUser, signOut } from "@/actions/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 
-interface NavItem {
+export interface NavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   disabled?: boolean;
 }
 
-interface NavGroup {
+export interface NavGroup {
   group: string;
   items: NavItem[];
 }
 
-const adminNav: NavGroup[] = [
+export const adminNav: NavGroup[] = [
   {
     group: "Overview",
     items: [
@@ -62,7 +62,7 @@ const adminNav: NavGroup[] = [
   }
 ];
 
-const employeeNav: NavGroup[] = [
+export const employeeNav: NavGroup[] = [
   {
     group: "Personal",
     items: [
