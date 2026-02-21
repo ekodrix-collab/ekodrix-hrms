@@ -60,6 +60,38 @@ export interface AttendanceRecord {
     created_at: string;
 }
 
+export interface AttendanceLog extends AttendanceRecord {
+    profiles: {
+        full_name: string;
+        avatar_url: string | null;
+        department: string | null;
+    };
+}
+
+export interface AbsentEmployee {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+    department: string | null;
+    role: string;
+}
+
+export interface Expense {
+    id: string;
+    description: string;
+    expense_date: string;
+    amount: string | number;
+    payment_method: string;
+    profiles: {
+        avatar_url: string | null;
+        full_name: string;
+    };
+    expense_categories: {
+        color: string;
+        name: string;
+    };
+}
+
 export interface Standup {
     id: string;
     user_id: string;

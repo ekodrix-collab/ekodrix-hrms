@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, Zap } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,7 +13,7 @@ import {
     DialogTrigger,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { adminNav, employeeNav, NavGroup } from "./sidebar";
+import { adminNav, employeeNav } from "./sidebar";
 
 export function MobileNav() {
     const [open, setOpen] = React.useState(false);
