@@ -27,6 +27,9 @@ import {
   GripVertical,
   Pencil,
   Trash2,
+  ChevronDown,
+  ChevronUp,
+  X,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,12 +53,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { getTasksAction, createTaskAction, moveTaskAction, updateTaskAction, deleteTaskAction } from "@/actions/tasks";
+import { Checkbox } from "@/components/ui/checkbox";
+import { getTasksAction, createTaskAction, moveTaskAction, updateTaskAction, deleteTaskAction, toggleSubtaskAction } from "@/actions/tasks";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
 type TaskStatus = "todo" | "in_progress" | "done";
+
+interface Subtask {
+  title: string;
+  completed: boolean;
+}
 
 interface TaskItem {
   id: string;
@@ -65,19 +74,22 @@ interface TaskItem {
   due_date?: string;
   status: TaskStatus;
   position: number;
+  subtasks?: Subtask[];
   created_at: string;
 }
 
-// Sortable Task Card Component
 function SortableTaskCard({
   task,
   onEdit,
-  onDelete
+  onDelete,
+  onToggleSubtask
 }: {
   task: TaskItem & { assigned_by?: string };
   onEdit: (task: TaskItem) => void;
   onDelete: (id: string) => void;
+  onToggleSubtask: (taskId: string, index: number, completed: boolean) => void;
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
 
   const style = {
@@ -105,6 +117,19 @@ function SortableTaskCard({
               <div className="flex items-start justify-between gap-2">
                 <h4 className={`font-bold text-sm mb-1 truncate ${task.status === "done" ? "text-zinc-400 line-through" : "text-zinc-900 dark:text-zinc-100"}`}>{task.title}</h4>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  {task.subtasks && task.subtasks.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-zinc-400 hover:text-primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsExpanded(!isExpanded);
+                      }}
+                    >
+                      {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"
@@ -132,6 +157,53 @@ function SortableTaskCard({
               {task.description && (
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2 line-clamp-2">{task.description}</p>
               )}
+
+              {/* Subtasks Progress */}
+              {task.subtasks && task.subtasks.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px] uppercase font-black text-zinc-400">
+                    <span>Subtasks</span>
+                    <span>{task.subtasks.filter(s => s.completed).length}/{task.subtasks.length}</span>
+                  </div>
+                  <div className="h-1 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all duration-500"
+                      style={{ width: `${(task.subtasks.filter(s => s.completed).length / task.subtasks.length) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Expanded Subtasks List */}
+              {isExpanded && task.subtasks && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  className="mt-4 space-y-2 border-t border-zinc-100 dark:border-zinc-800 pt-3"
+                >
+                  {task.subtasks.map((subtask, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2 group/subtask"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Checkbox
+                        id={`subtask-${task.id}-${idx}`}
+                        checked={subtask.completed}
+                        onCheckedChange={(checked) => onToggleSubtask(task.id, idx, !!checked)}
+                        className="h-3.5 w-3.5"
+                      />
+                      <label
+                        htmlFor={`subtask-${task.id}-${idx}`}
+                        className={`text-[11px] font-medium transition-colors ${subtask.completed ? 'text-zinc-400 line-through' : 'text-zinc-700 dark:text-zinc-300'}`}
+                      >
+                        {subtask.title}
+                      </label>
+                    </div>
+                  ))}
+                </motion.div>
+              )}
+
               <div className="flex items-center gap-2 flex-wrap mt-2">
                 <Badge variant="outline" className={`text-[9px] uppercase font-black px-1.5 h-4 ${priorityColors[task.priority]}`}>
                   {task.priority}
@@ -155,7 +227,6 @@ function SortableTaskCard({
   );
 }
 
-// Droppable Column Component
 function TaskColumn({
   title,
   status,
@@ -163,7 +234,8 @@ function TaskColumn({
   color,
   icon: Icon,
   onEdit,
-  onDelete
+  onDelete,
+  onToggleSubtask
 }: {
   title: string;
   status: TaskStatus;
@@ -172,6 +244,7 @@ function TaskColumn({
   icon: React.ComponentType<{ className?: string }>;
   onEdit: (task: TaskItem) => void;
   onDelete: (id: string) => void;
+  onToggleSubtask: (taskId: string, index: number, completed: boolean) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: status,
@@ -208,6 +281,7 @@ function TaskColumn({
                 task={task}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                onToggleSubtask={onToggleSubtask}
               />
             ))
           )}
@@ -234,6 +308,9 @@ export default function EmployeeTasksPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [newSubtasks, setNewSubtasks] = useState<Subtask[]>([]);
+  const [editingSubtasks, setEditingSubtasks] = useState<Subtask[]>([]);
+  const [subtaskInput, setSubtaskInput] = useState("");
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -318,10 +395,12 @@ export default function EmployeeTasksPage() {
     e.preventDefault();
     setIsAdding(true);
     const formData = new FormData(e.currentTarget);
+    formData.append("subtasks", JSON.stringify(newSubtasks));
     const res = await createTaskAction(formData);
     if (res.ok) {
       toast.success("Task created successfully");
       setIsDialogOpen(false);
+      setNewSubtasks([]);
       queryClient.invalidateQueries({ queryKey: ["employee-tasks"] });
     } else {
       toast.error(res.message || "Failed to create task");
@@ -329,8 +408,27 @@ export default function EmployeeTasksPage() {
     setIsAdding(false);
   };
 
+  const handleToggleSubtask = async (taskId: string, index: number, completed: boolean) => {
+    // Optimistic update
+    setTasks(prev => prev.map(t => {
+      if (t.id === taskId && t.subtasks) {
+        const subtasks = [...t.subtasks];
+        subtasks[index] = { ...subtasks[index], completed };
+        return { ...t, subtasks };
+      }
+      return t;
+    }));
+
+    const res = await toggleSubtaskAction({ taskId, subtaskIndex: index, completed });
+    if (!res.ok) {
+      toast.error("Failed to update subtask");
+      queryClient.invalidateQueries({ queryKey: ["employee-tasks"] });
+    }
+  };
+
   const handleEditTask = (task: TaskItem) => {
     setEditingTask(task);
+    setEditingSubtasks(task.subtasks || []);
     setIsEditDialogOpen(true);
   };
 
@@ -347,7 +445,8 @@ export default function EmployeeTasksPage() {
       id: editingTask.id,
       title,
       description,
-      priority
+      priority,
+      subtasks: editingSubtasks
     });
 
     if (res.ok) {
@@ -466,6 +565,60 @@ export default function EmployeeTasksPage() {
                         </SelectContent>
                       </Select>
                     </div>
+
+                    {/* Subtasks Management */}
+                    <div className="grid gap-2">
+                      <div className="flex items-center justify-between">
+                        <Label>Subtasks</Label>
+                        <span className="text-[10px] font-black uppercase text-zinc-400">
+                          {newSubtasks.length} {newSubtasks.length === 1 ? 'Item' : 'Items'}
+                        </span>
+                      </div>
+                      <div className="space-y-2 max-h-[150px] overflow-y-auto px-1">
+                        {newSubtasks.map((st, i) => (
+                          <div key={i} className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-900 px-2 py-1.5 rounded-md border border-zinc-100 dark:border-zinc-800 group">
+                            <span className="flex-1 text-sm text-zinc-700 dark:text-zinc-300">{st.title}</span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-red-500"
+                              onClick={() => setNewSubtasks(prev => prev.filter((_, idx) => idx !== i))}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2 mt-1">
+                        <Input
+                          placeholder="Add a subtask..."
+                          value={subtaskInput}
+                          onChange={(e) => setSubtaskInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (subtaskInput.trim()) {
+                                setNewSubtasks(prev => [...prev, { title: subtaskInput.trim(), completed: false }]);
+                                setSubtaskInput("");
+                              }
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            if (subtaskInput.trim()) {
+                              setNewSubtasks(prev => [...prev, { title: subtaskInput.trim(), completed: false }]);
+                              setSubtaskInput("");
+                            }
+                          }}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
@@ -495,6 +648,7 @@ export default function EmployeeTasksPage() {
                 icon={Clock}
                 onEdit={handleEditTask}
                 onDelete={handleDeleteTask}
+                onToggleSubtask={handleToggleSubtask}
               />
 
               <TaskColumn
@@ -505,6 +659,7 @@ export default function EmployeeTasksPage() {
                 icon={Calendar}
                 onEdit={handleEditTask}
                 onDelete={handleDeleteTask}
+                onToggleSubtask={handleToggleSubtask}
               />
 
               <TaskColumn
@@ -515,6 +670,7 @@ export default function EmployeeTasksPage() {
                 icon={CheckCircle2}
                 onEdit={handleEditTask}
                 onDelete={handleDeleteTask}
+                onToggleSubtask={handleToggleSubtask}
               />
             </div>
 
@@ -572,6 +728,62 @@ export default function EmployeeTasksPage() {
                         </SelectContent>
                       </Select>
                     </div>
+
+                    {/* Edit Subtasks Management */}
+                    <div className="grid gap-2">
+                      <div className="flex items-center justify-between">
+                        <Label>Subtasks</Label>
+                        <span className="text-[10px] font-black uppercase text-zinc-400">
+                          {editingSubtasks.length} {editingSubtasks.length === 1 ? 'Item' : 'Items'}
+                        </span>
+                      </div>
+                      <div className="space-y-2 max-h-[150px] overflow-y-auto px-1">
+                        {editingSubtasks.map((st, i) => (
+                          <div key={i} className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-900 px-2 py-1.5 rounded-md border border-zinc-100 dark:border-zinc-800 group">
+                            <span className={`flex-1 text-sm ${st.completed ? 'text-zinc-400 line-through' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                              {st.title}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-red-500"
+                              onClick={() => setEditingSubtasks(prev => prev.filter((_, idx) => idx !== i))}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2 mt-1">
+                        <Input
+                          placeholder="Add a subtask..."
+                          value={subtaskInput}
+                          onChange={(e) => setSubtaskInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (subtaskInput.trim()) {
+                                setEditingSubtasks(prev => [...prev, { title: subtaskInput.trim(), completed: false }]);
+                                setSubtaskInput("");
+                              }
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            if (subtaskInput.trim()) {
+                              setEditingSubtasks(prev => [...prev, { title: subtaskInput.trim(), completed: false }]);
+                              setSubtaskInput("");
+                            }
+                          }}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
@@ -583,8 +795,8 @@ export default function EmployeeTasksPage() {
               </DialogContent>
             </Dialog>
           </DndContext>
-        </main>
-      </div>
-    </div>
+        </main >
+      </div >
+    </div >
   );
 }
