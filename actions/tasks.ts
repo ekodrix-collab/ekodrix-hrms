@@ -167,6 +167,67 @@ export async function deleteTaskAction(id: string) {
 
   if (error) return { ok: false, message: error.message };
 
+  revalidatePath("/admin/tasks");
+  revalidatePath("/admin/projects");
+  revalidatePath("/employee/tasks");
+  revalidatePath("/employee/dashboard");
+  return { ok: true };
+}
+
+export async function updateAdminTaskAction(params: {
+  id: string;
+  userId?: string | null;
+  title: string;
+  description?: string;
+  priority: string;
+  dueDate?: string;
+  isOpenAssignment?: boolean;
+  subtasks?: any[];
+}) {
+  const supabase = createSupabaseServerClient();
+  const { id, userId, title, description, priority, dueDate, isOpenAssignment, subtasks } = params;
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Not authenticated" };
+
+  // Verify admin role
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || profile.role !== "admin") {
+    return { ok: false, message: "Unauthorized: Admin access required" };
+  }
+
+  const updateData: any = {
+    title,
+    description,
+    priority,
+    due_date: dueDate || null,
+    subtasks: subtasks || [],
+    updated_at: new Date().toISOString()
+  };
+
+  if (isOpenAssignment !== undefined) {
+    updateData.is_open_assignment = isOpenAssignment;
+    updateData.assignment_status = isOpenAssignment ? 'open' : 'assigned';
+    updateData.user_id = isOpenAssignment ? null : userId;
+  } else if (userId !== undefined) {
+    updateData.user_id = userId;
+    updateData.assignment_status = userId ? 'assigned' : 'open';
+  }
+
+  const { error } = await supabase
+    .from("tasks")
+    .update(updateData)
+    .eq("id", id);
+
+  if (error) return { ok: false, message: error.message };
+
+  revalidatePath("/admin/tasks");
+  revalidatePath("/admin/projects");
   revalidatePath("/employee/tasks");
   revalidatePath("/employee/dashboard");
   return { ok: true };
@@ -232,13 +293,39 @@ export async function toggleSubtaskAction(params: {
 }
 
 
-export async function getOpenTasksAction() {
+export async function getTasksAction() {
   const supabase = createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Not authenticated" };
+
   const { data, error } = await supabase
     .from("tasks")
-    .select("*, profiles!user_id(full_name, avatar_url), projects(name)")
-    .eq("is_open_assignment", true)
-    .eq("assignment_status", "open")
+    .select(`
+      *,
+      project:projects(name)
+    `)
+    .eq("user_id", user.id)
+    .eq("assignment_status", "assigned")
+    .order("position", { ascending: true });
+
+  if (error) return { ok: false, message: error.message };
+  return { ok: true, data: data || [] };
+}
+
+export async function getOpenTasksAction() {
+  const supabase = createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Not authenticated" };
+
+  // Fetch tasks that are 'open' OR 'pending_approval' (if requested by current user)
+  const { data, error } = await supabase
+    .from("tasks")
+    .select(`
+      *,
+      projects(name),
+      assignee:profiles!user_id(full_name, avatar_url)
+    `)
+    .or(`assignment_status.eq.open,user_id.eq.${user.id}`)
     .order("created_at", { ascending: false });
 
   if (error) return { ok: false, message: error.message };
@@ -291,14 +378,58 @@ export async function getFreeEmployeesAction() {
   return { ok: true, data: freeEmployees };
 }
 
+export async function getAllEmployeesAction() {
+  const supabase = createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return { ok: false, message: "Not authenticated" };
+
+  // 1. Get current user's organization
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("organization_id")
+    .eq("id", user.id)
+    .single();
+
+  // 2. Fetch employees (RLS will also filter, but explicit organization_id helps)
+  const query = supabase
+    .from("profiles")
+    .select(`
+      id,
+      full_name,
+      avatar_url,
+      role,
+      department,
+      tasks:tasks(id)
+    `)
+    .eq("role", "employee")
+    .eq("is_active", true);
+
+  if (profile?.organization_id) {
+    query.eq("organization_id", profile.organization_id);
+  }
+
+  const { data, error } = await query.order("full_name", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching employees:", error);
+    return { ok: false, message: error.message };
+  }
+
+  return { ok: true, data: data || [] };
+}
+
 export async function approveTaskClaimAction(taskId: string) {
   const supabase = createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Not authenticated" };
 
   // Check admin
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const { data: profile } = await supabase.from("profiles").select("role, full_name").eq("id", user.id).single();
   if (profile?.role !== 'admin') return { ok: false, message: "Admin access required" };
+
+  // Get task info for notification
+  const { data: task } = await supabase.from("tasks").select("title, user_id").eq("id", taskId).single();
 
   const { error } = await supabase
     .from("tasks")
@@ -310,8 +441,73 @@ export async function approveTaskClaimAction(taskId: string) {
 
   if (error) return { ok: false, message: error.message };
 
+  // Create notification for employee
+  if (task?.user_id) {
+    await supabase.from("notifications").insert({
+      user_id: task.user_id,
+      type: "task_assigned",
+      title: "Task Claim Approved",
+      message: `${profile?.full_name} approved your claim for: "${task.title}"`,
+      entity_type: "task",
+      entity_id: taskId,
+      is_read: false
+    });
+  }
+
   revalidatePath("/admin/inbox");
   revalidatePath("/admin/tasks");
+  revalidatePath("/admin/projects");
   revalidatePath("/employee/tasks");
+  revalidatePath("/employee/projects");
+  revalidatePath("/employee/marketplace");
+  return { ok: true };
+}
+
+export async function rejectTaskClaimAction(taskId: string) {
+  const supabase = createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Not authenticated" };
+
+  // Check admin
+  const { data: profile } = await supabase.from("profiles").select("role, full_name").eq("id", user.id).single();
+  if (profile?.role !== 'admin') return { ok: false, message: "Admin access required" };
+
+  // Get task info and current requester
+  const { data: task } = await supabase.from("tasks").select("title, user_id, rejected_user_ids").eq("id", taskId).single();
+
+  if (!task || !task.user_id) return { ok: false, message: "Requester not found" };
+  const requesterId = task.user_id;
+
+  // Revert task to 'open', clear user_id, and add to rejected list
+  const rejectedUserIds = [...(task.rejected_user_ids || []), requesterId];
+
+  const { error } = await supabase
+    .from("tasks")
+    .update({
+      assignment_status: "open",
+      user_id: null,
+      rejected_user_ids: rejectedUserIds
+    })
+    .eq("id", taskId);
+
+  if (error) return { ok: false, message: error.message };
+
+  // Create notification for employee
+  await supabase.from("notifications").insert({
+    user_id: requesterId,
+    type: "task_rejected",
+    title: "Task Claim Rejected",
+    message: `${profile?.full_name} rejected your claim for: "${task.title}"`,
+    entity_type: "task",
+    entity_id: taskId,
+    is_read: false
+  });
+
+  revalidatePath("/admin/inbox");
+  revalidatePath("/admin/tasks");
+  revalidatePath("/admin/projects");
+  revalidatePath("/employee/tasks");
+  revalidatePath("/employee/projects");
+  revalidatePath("/employee/marketplace");
   return { ok: true };
 }

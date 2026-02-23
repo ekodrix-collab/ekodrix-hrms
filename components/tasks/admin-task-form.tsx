@@ -20,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { createAdminTaskAction } from "@/actions/tasks";
+import { createAdminTaskAction, updateAdminTaskAction } from "@/actions/tasks";
 import { toast } from "sonner";
 import { Loader2, UserPlus, X, PlusCircle, LayoutGrid, Zap, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,17 @@ interface AdminTaskFormProps {
     onSuccess?: () => void;
     projectId?: string;
     isMarketplaceDefault?: boolean;
+    initialData?: {
+        id: string;
+        title: string;
+        description: string;
+        priority: string;
+        dueDate?: string;
+        assignment_status: string;
+        user_id?: string;
+        subtasks: Subtask[];
+    };
+    trigger?: React.ReactNode;
 }
 
 interface Subtask {
@@ -48,16 +59,24 @@ export function AdminTaskForm({
     employees,
     onSuccess,
     projectId,
-    isMarketplaceDefault = false
+    isMarketplaceDefault = false,
+    initialData,
+    trigger
 }: AdminTaskFormProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [selectedEmployee, setSelectedEmployee] = useState<string>(isMarketplaceDefault ? "marketplace" : "");
-    const [title, setTitle] = useState("");
-    const [description, setDescription] = useState("");
-    const [priority, setPriority] = useState("medium");
-    const [dueDate, setDueDate] = useState("");
-    const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+
+    // Initialize state from initialData or defaults
+    const [selectedEmployee, setSelectedEmployee] = useState<string>(
+        initialData
+            ? (initialData.assignment_status === 'open' ? 'marketplace' : (initialData.user_id || ""))
+            : (isMarketplaceDefault ? "marketplace" : "")
+    );
+    const [title, setTitle] = useState(initialData?.title || "");
+    const [description, setDescription] = useState(initialData?.description || "");
+    const [priority, setPriority] = useState(initialData?.priority || "medium");
+    const [dueDate, setDueDate] = useState(initialData?.dueDate || "");
+    const [subtasks, setSubtasks] = useState<Subtask[]>(initialData?.subtasks || []);
     const [subtaskInput, setSubtaskInput] = useState("");
 
     const isMarketplace = selectedEmployee === "marketplace";
@@ -88,44 +107,73 @@ export function AdminTaskForm({
 
         setIsSubmitting(true);
 
-        const result = await createAdminTaskAction({
-            userId: isMarketplace ? "" : selectedEmployee,
-            title: title.trim(),
-            description: description.trim(),
-            priority,
-            dueDate: dueDate || undefined,
-            projectId: projectId,
-            isOpenAssignment: isMarketplace,
-            subtasks: subtasks
-        });
+        let result;
+        if (initialData) {
+            // Update existing task
+            // We need a dedicated updateAdminTaskAction or enhance updateTaskAction
+            // For now, let's assume we enhance it or use create with logic
+            // Since I don't have updateAdminTaskAction yet, I'll use updateTaskAction
+            // but updateTaskAction doesn't handle assignment or subtasks well in this context
+            // I'll add updateAdminTaskAction to tasks.ts first
+            result = await updateAdminTaskAction({
+                id: initialData.id,
+                userId: isMarketplace ? null : selectedEmployee,
+                title: title.trim(),
+                description: description.trim(),
+                priority,
+                dueDate: dueDate || undefined,
+                isOpenAssignment: isMarketplace,
+                subtasks: subtasks
+            });
+        } else {
+            // Create new task
+            result = await createAdminTaskAction({
+                userId: isMarketplace ? "" : selectedEmployee,
+                title: title.trim(),
+                description: description.trim(),
+                priority,
+                dueDate: dueDate || undefined,
+                projectId: projectId,
+                isOpenAssignment: isMarketplace,
+                subtasks: subtasks
+            });
+        }
 
         setIsSubmitting(false);
 
         if (result.ok) {
-            toast.success("Task created and assigned successfully");
-            // Reset form
-            setTitle("");
-            setDescription("");
-            setPriority("medium");
-            setDueDate("");
-            setSelectedEmployee(isMarketplaceDefault ? "marketplace" : "");
-            setSubtasks([]);
+            toast.success(initialData ? "Task updated successfully" : "Task created and assigned successfully");
+            if (!initialData) {
+                // Reset form only if creating
+                setTitle("");
+                setDescription("");
+                setPriority("medium");
+                setDueDate("");
+                setSelectedEmployee(isMarketplaceDefault ? "marketplace" : "");
+                setSubtasks([]);
+            }
             setIsOpen(false);
             onSuccess?.();
         } else {
-            toast.error(result.message || "Failed to create task");
+            toast.error(result.message || "Failed to save task");
         }
     };
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <Button
-                onClick={() => setIsOpen(true)}
-                className="gap-2 bg-zinc-900 hover:bg-zinc-800 text-white shadow-lg rounded-2xl px-6 font-black uppercase tracking-tight transition-all hover:scale-105 active:scale-95"
-            >
-                <PlusCircle className="h-5 w-5" />
-                Add Project Task
-            </Button>
+            {trigger ? (
+                <div onClick={() => setIsOpen(true)} className="cursor-pointer">
+                    {trigger}
+                </div>
+            ) : (
+                <Button
+                    onClick={() => setIsOpen(true)}
+                    className="gap-2 bg-zinc-900 hover:bg-zinc-800 text-white shadow-lg rounded-2xl px-6 font-black uppercase tracking-tight transition-all hover:scale-105 active:scale-95"
+                >
+                    <PlusCircle className="h-5 w-5" />
+                    Add Project Task
+                </Button>
+            )}
 
             <DialogContent className="sm:max-w-[700px] rounded-[2.5rem] p-0 border-zinc-100 dark:border-zinc-800 overflow-hidden">
                 <form onSubmit={handleSubmit} className="flex flex-col max-h-[90vh]">

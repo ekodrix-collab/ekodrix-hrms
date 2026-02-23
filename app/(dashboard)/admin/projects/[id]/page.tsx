@@ -1,6 +1,6 @@
 import { getProjectDetailsAction } from "@/actions/projects";
 import { ProjectDetailsClient } from "@/components/admin/projects/project-details-client";
-import { getFreeEmployeesAction } from "@/actions/tasks";
+import { getAllEmployeesAction } from "@/actions/tasks";
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default async function ProjectDetailsPage({ params }: { params: { id: string } }) {
     const [projectRes, employeesRes] = await Promise.all([
         getProjectDetailsAction(params.id),
-        getFreeEmployeesAction()
+        getAllEmployeesAction()
     ]);
 
     if (!projectRes.ok || !projectRes.data) {

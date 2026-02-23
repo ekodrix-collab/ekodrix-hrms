@@ -11,7 +11,8 @@ import {
     LayoutGrid,
     Search,
     Filter,
-    ShieldAlert
+    ShieldAlert,
+    CheckCircle2
 } from "lucide-react";
 import { claimOpenTaskAction } from "@/actions/tasks";
 import { toast } from "sonner";
@@ -20,9 +21,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface MarketplaceClientProps {
     initialTasks: any[];
+    currentUserId?: string;
 }
 
-export function MarketplaceClient({ initialTasks }: MarketplaceClientProps) {
+export function MarketplaceClient({ initialTasks, currentUserId }: MarketplaceClientProps) {
     const [tasks, setTasks] = useState(initialTasks);
     const [claimingId, setClaimingId] = useState<string | null>(null);
 
@@ -108,14 +110,38 @@ export function MarketplaceClient({ initialTasks }: MarketplaceClientProps) {
                                             {task.due_date ? format(new Date(task.due_date), 'MMM d') : 'No Deadline'}
                                         </div>
                                     </div>
-                                    <Button
-                                        onClick={() => handleClaim(task.id)}
-                                        disabled={claimingId === task.id}
-                                        className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-black rounded-xl h-10 px-6 shadow-xl hover:scale-105 active:scale-95 transition-all"
-                                    >
-                                        {claimingId === task.id ? "Requesting..." : "Claim Task"}
-                                        <ArrowUpRight className="h-4 w-4 ml-2" />
-                                    </Button>
+
+                                    {task.assignment_status === 'pending_approval' && (
+                                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-500 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 rounded-xl border border-amber-100 dark:border-amber-900/50">
+                                            <Clock className="h-3.5 w-3.5 animate-pulse" />
+                                            Requested
+                                        </div>
+                                    )}
+
+                                    {task.assignment_status === 'assigned' && task.user_id === currentUserId && (
+                                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-500 bg-emerald-50 dark:bg-emerald-950/20 px-3 py-2 rounded-xl border border-emerald-100 dark:border-emerald-900/50">
+                                            <CheckCircle2 className="h-3.5 w-3.5" />
+                                            Approved
+                                        </div>
+                                    )}
+
+                                    {task.assignment_status === 'open' && currentUserId && task.rejected_user_ids?.includes(currentUserId) && (
+                                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-red-500 bg-red-50 dark:bg-red-950/20 px-3 py-2 rounded-xl border border-red-100 dark:border-red-900/50">
+                                            <ShieldAlert className="h-3.5 w-3.5" />
+                                            Rejected
+                                        </div>
+                                    )}
+
+                                    {task.assignment_status === 'open' && (!currentUserId || !task.rejected_user_ids?.includes(currentUserId)) && (
+                                        <Button
+                                            onClick={() => handleClaim(task.id)}
+                                            disabled={claimingId === task.id}
+                                            className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-black rounded-xl h-10 px-6 shadow-xl hover:scale-105 active:scale-95 transition-all group"
+                                        >
+                                            {claimingId === task.id ? "Requesting..." : "Claim Task"}
+                                            <ArrowUpRight className="h-4 w-4 ml-2 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         </CardContent>
@@ -132,6 +158,6 @@ export function MarketplaceClient({ initialTasks }: MarketplaceClientProps) {
                     </div>
                 )}
             </div>
-        </div>
+        </div >
     );
 }

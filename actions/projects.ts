@@ -70,7 +70,7 @@ export async function getProjectDetailsAction(id: string) {
         .from("projects")
         .select(`
       *,
-      tasks:tasks(*)
+      tasks:tasks(*, assignee:profiles!user_id(full_name, avatar_url))
     `)
         .eq("id", id)
         .single();

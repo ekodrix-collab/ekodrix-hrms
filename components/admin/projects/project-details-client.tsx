@@ -16,12 +16,17 @@ import {
     MoreHorizontal,
     ArrowLeft,
     ChevronRight,
-    AlertCircle
+    AlertCircle,
+    Edit3,
+    Trash2
 } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AdminTaskForm } from "@/components/tasks/admin-task-form";
+import { approveTaskClaimAction, rejectTaskClaimAction, deleteTaskAction } from "@/actions/tasks";
+import { toast } from "sonner";
+import { XCircle, CheckCircle } from "lucide-react";
 
 interface ProjectDetailsClientProps {
     project: any;
@@ -30,6 +35,29 @@ interface ProjectDetailsClientProps {
 
 export function ProjectDetailsClient({ project, employees }: ProjectDetailsClientProps) {
     const [activeTab, setActiveTab] = useState("tasks");
+    const [isActionLoading, setIsActionLoading] = useState<string | null>(null);
+
+    const handleApprove = async (taskId: string) => {
+        setIsActionLoading(taskId);
+        const res = await approveTaskClaimAction(taskId);
+        if (res.ok) {
+            toast.success("Task claim approved!");
+        } else {
+            toast.error(res.message);
+        }
+        setIsActionLoading(null);
+    };
+
+    const handleReject = async (taskId: string) => {
+        setIsActionLoading(taskId);
+        const res = await rejectTaskClaimAction(taskId);
+        if (res.ok) {
+            toast.success("Task claim rejected");
+        } else {
+            toast.error(res.message);
+        }
+        setIsActionLoading(null);
+    };
 
     const totalTasks = project.tasks?.length || 0;
     const completedTasks = project.tasks?.filter((t: any) => t.status === 'done').length || 0;
@@ -136,8 +164,8 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
                                             <div className="flex items-center gap-2">
                                                 <span className="font-bold text-zinc-900 dark:text-zinc-100 truncate">{task.title}</span>
                                                 <Badge variant="outline" className={`text-[8px] h-4 px-1 uppercase font-black ${task.priority === 'urgent' ? 'border-red-500/20 text-red-500' :
-                                                        task.priority === 'high' ? 'border-orange-500/20 text-orange-500' :
-                                                            'border-zinc-200/50 text-zinc-400'
+                                                    task.priority === 'high' ? 'border-orange-500/20 text-orange-500' :
+                                                        'border-zinc-200/50 text-zinc-400'
                                                     }`}>
                                                     {task.priority}
                                                 </Badge>
@@ -167,19 +195,101 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-8 px-6 border-x border-zinc-100 dark:border-zinc-800/50">
+                                    <div className="flex items-center gap-8 px-6 border-x border-zinc-100 dark:border-zinc-800/50 min-w-[300px]">
                                         <div className="flex items-center gap-2">
                                             <Avatar className="h-7 w-7 border-2 border-white dark:border-zinc-800 ring-1 ring-zinc-100 dark:ring-zinc-800">
-                                                <AvatarFallback className="text-[8px] font-bold uppercase">U</AvatarFallback>
+                                                <AvatarImage src={task.assignee?.avatar_url} />
+                                                <AvatarFallback className="text-[8px] font-bold uppercase">
+                                                    {task.assignee?.full_name?.charAt(0) || 'U'}
+                                                </AvatarFallback>
                                             </Avatar>
-                                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest whitespace-nowrap">
-                                                Assigned Employee
-                                            </span>
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-widest whitespace-nowrap">
+                                                    {task.assignee?.full_name || (task.is_open_assignment ? 'Unassigned' : 'Unknown')}
+                                                </span>
+                                                {task.assignment_status === 'pending_approval' && (
+                                                    <span className="text-[8px] font-black text-amber-500 uppercase">Pending Approval</span>
+                                                )}
+                                                {task.assignment_status === 'open' && (
+                                                    <span className="text-[8px] font-black text-blue-500 uppercase">Marketplace</span>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-widest whitespace-nowrap">
+                                        <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-widest whitespace-nowrap ml-auto">
                                             <Calendar className="h-3.5 w-3.5" />
                                             {task.due_date ? format(new Date(task.due_date), 'MMM d') : 'No Due Date'}
                                         </div>
+                                    </div>
+
+                                    {/* Action Buttons for Pending Approvals / Unassigned Tasks */}
+                                    <div className="flex items-center gap-2 px-6 pr-8">
+                                        {task.assignment_status === 'pending_approval' && (
+                                            <>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-8 rounded-lg border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold text-[10px] uppercase px-3"
+                                                    onClick={() => handleReject(task.id)}
+                                                    disabled={isActionLoading === task.id}
+                                                >
+                                                    <XCircle className="h-3.5 w-3.5 mr-1" />
+                                                    Reject
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    className="h-8 rounded-lg bg-green-600 hover:bg-green-700 text-white font-bold text-[10px] uppercase px-3 shadow-sm"
+                                                    onClick={() => handleApprove(task.id)}
+                                                    disabled={isActionLoading === task.id}
+                                                >
+                                                    <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                                                    Approve
+                                                </Button>
+                                            </>
+                                        )}
+
+                                        {/* Edit/Delete for Admin */}
+                                        <AdminTaskForm
+                                            employees={employees}
+                                            projectId={project.id}
+                                            initialData={{
+                                                id: task.id,
+                                                title: task.title,
+                                                description: task.description || "",
+                                                priority: task.priority,
+                                                dueDate: task.due_date ? format(new Date(task.due_date), 'yyyy-MM-dd') : "",
+                                                assignment_status: task.assignment_status,
+                                                user_id: task.user_id,
+                                                subtasks: task.subtasks || []
+                                            }}
+                                            onSuccess={() => window.location.reload()}
+                                            trigger={
+                                                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-primary transition-all">
+                                                    <Edit3 className="h-4 w-4" />
+                                                </Button>
+                                            }
+                                        />
+
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-9 w-9 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 text-zinc-500 hover:text-red-500 transition-all"
+                                            onClick={async () => {
+                                                if (confirm("Are you sure you want to delete this task?")) {
+                                                    setIsActionLoading(task.id);
+                                                    const res = await deleteTaskAction(task.id);
+                                                    if (res.ok) {
+                                                        toast.success("Task deleted successfully");
+                                                        window.location.reload();
+                                                    } else {
+                                                        toast.error(res.message);
+                                                    }
+                                                    setIsActionLoading(null);
+                                                }
+                                            }}
+                                            disabled={isActionLoading === task.id}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
                                     </div>
 
                                     <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
