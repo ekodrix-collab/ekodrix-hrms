@@ -106,7 +106,10 @@ function SortableTaskCard({
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="mb-3 select-none">
-      <Card className={`cursor-grab active:cursor-grabbing border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm hover:shadow-lg transition-all duration-200 ${isDragging ? 'shadow-xl scale-105 rotate-1' : ''} group relative overflow-hidden`}>
+      <Card
+        onClick={() => task.subtasks && task.subtasks.length > 0 && setIsExpanded(!isExpanded)}
+        className={`cursor-grab active:cursor-grabbing border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm hover:shadow-lg hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-all duration-200 ${isDragging ? 'shadow-xl scale-105 rotate-1' : ''} group relative overflow-hidden ${task.subtasks && task.subtasks.length > 0 ? 'cursor-pointer' : ''}`}
+      >
         <div className={`absolute left-0 top-0 bottom-0 w-1 ${task.priority === "high" ? "bg-red-500" : task.priority === "medium" ? "bg-orange-500" : "bg-blue-500"}`} />
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
@@ -127,7 +130,12 @@ function SortableTaskCard({
                         setIsExpanded(!isExpanded);
                       }}
                     >
-                      {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      <motion.div
+                        animate={{ rotate: isExpanded ? 180 : 0 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </motion.div>
                     </Button>
                   )}
                   <Button
@@ -180,6 +188,7 @@ function SortableTaskCard({
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: "auto", opacity: 1 }}
                   className="mt-4 space-y-2 border-t border-zinc-100 dark:border-zinc-800 pt-3"
+                  onClick={(e) => e.stopPropagation()}
                 >
                   {task.subtasks.map((subtask, idx) => (
                     <div
@@ -196,6 +205,7 @@ function SortableTaskCard({
                       <label
                         htmlFor={`subtask-${task.id}-${idx}`}
                         className={`text-[11px] font-medium transition-colors ${subtask.completed ? 'text-zinc-400 line-through' : 'text-zinc-700 dark:text-zinc-300'}`}
+                        onClick={(e) => e.stopPropagation()}
                       >
                         {subtask.title}
                       </label>
