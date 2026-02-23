@@ -17,7 +17,8 @@ import {
   Zap,
   ListTodo,
   CalendarCheck,
-  Inbox
+  Inbox,
+  LayoutGrid
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -43,6 +44,7 @@ export const adminNav: NavGroup[] = [
     items: [
       { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/admin/inbox", label: "Action Inbox", icon: Inbox },
+      { href: "/admin/projects", label: "Projects", icon: LayoutGrid },
       { href: "/admin/analytics", label: "Analytics", icon: Zap },
     ]
   },
@@ -71,6 +73,8 @@ export const employeeNav: NavGroup[] = [
     group: "Personal",
     items: [
       { href: "/employee/dashboard", label: "My Overview", icon: LayoutDashboard },
+      { href: "/employee/projects", label: "My Projects", icon: LayoutGrid },
+      { href: "/employee/marketplace", label: "Task Marketplace", icon: Zap },
       { href: "/employee/attendance", label: "Clock In/Out", icon: CalendarDays },
       { href: "/employee/leaves", label: "My Leaves", icon: CalendarCheck },
       { href: "/employee/tasks", label: "My Tasks", icon: KanbanSquare },
