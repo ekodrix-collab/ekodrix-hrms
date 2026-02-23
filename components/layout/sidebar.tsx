@@ -15,7 +15,9 @@ import {
   CreditCard,
   Briefcase,
   Zap,
-  ListTodo
+  ListTodo,
+  CalendarCheck,
+  Inbox
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -40,6 +42,7 @@ export const adminNav: NavGroup[] = [
     group: "Overview",
     items: [
       { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/admin/inbox", label: "Action Inbox", icon: Inbox },
       { href: "/admin/analytics", label: "Analytics", icon: Zap },
     ]
   },
@@ -49,6 +52,7 @@ export const adminNav: NavGroup[] = [
       { href: "/admin/employees", label: "Employees", icon: Users },
       { href: "/admin/standups", label: "Daily Standups", icon: ListTodo },
       { href: "/admin/attendance", label: "Attendance", icon: CalendarDays },
+      { href: "/admin/leaves", label: "Leaves", icon: CalendarCheck },
       { href: "/admin/tasks", label: "Project Tasks", icon: KanbanSquare },
       { href: "/admin/finance", label: "Company Finance", icon: CreditCard },
     ]
@@ -68,6 +72,7 @@ export const employeeNav: NavGroup[] = [
     items: [
       { href: "/employee/dashboard", label: "My Overview", icon: LayoutDashboard },
       { href: "/employee/attendance", label: "Clock In/Out", icon: CalendarDays },
+      { href: "/employee/leaves", label: "My Leaves", icon: CalendarCheck },
       { href: "/employee/tasks", label: "My Tasks", icon: KanbanSquare },
       { href: "/employee/finance", label: "My Earnings", icon: CreditCard },
     ]

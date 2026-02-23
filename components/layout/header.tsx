@@ -4,6 +4,7 @@ import * as React from "react";
 import { Search } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { InboxBell } from "@/components/admin/inbox/inbox-bell";
 import { Input } from "@/components/ui/input";
 
 import { MobileNav } from "@/components/layout/mobile-nav";
@@ -24,7 +25,8 @@ export function Header() {
           </div>
         </div>
 
-        <div className="ml-auto flex items-center gap-4">
+        <div className="ml-auto flex items-center gap-2 md:gap-4">
+          <InboxBell />
           <NotificationBell />
           <ThemeToggle />
         </div>
