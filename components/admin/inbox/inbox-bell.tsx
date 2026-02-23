@@ -8,6 +8,7 @@ import { getAdminInboxAction, InboxItem } from "@/actions/inbox";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+
 export function InboxBell() {
     const pathname = usePathname();
     const isAdmin = pathname?.startsWith("/admin");

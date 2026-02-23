@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -111,7 +111,7 @@ export function AdminLeavesClient({ initialRequests }: AdminLeavesClientProps) {
                                         <div className="flex items-start gap-2 bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-2xl border border-zinc-100/50 dark:border-zinc-800/50">
                                             <MessageSquare className="h-4 w-4 text-zinc-300 shrink-0 mt-0.5" />
                                             <p className="text-sm text-zinc-600 dark:text-zinc-400 font-medium italic line-clamp-2">
-                                                "{request.reason || 'No reason provided'}"
+                                                &quot;{request.reason || 'No reason provided'}&quot;
                                             </p>
                                         </div>
                                     </div>
