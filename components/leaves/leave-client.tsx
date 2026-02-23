@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,11 @@ interface LeaveClientProps {
 export function LeaveClient({ initialBalances, initialRequests, leaveTypes }: LeaveClientProps) {
     const [requests, setRequests] = useState<LeaveRequest[]>(initialRequests);
     const [isCancelling, setIsCancelling] = useState<string | null>(null);
+
+    // Sync state with props when server data changes
+    useEffect(() => {
+        setRequests(initialRequests);
+    }, [initialRequests]);
 
     const handleCancelRequest = async (id: string) => {
         setIsCancelling(id);

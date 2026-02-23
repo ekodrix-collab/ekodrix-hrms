@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { InboxItem, toggleInboxHandledAction } from "@/actions/inbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,11 @@ interface InboxClientProps {
 export function InboxClient({ initialItems }: InboxClientProps) {
     const [items, setItems] = useState<InboxItem[]>(initialItems);
     const [loading, setLoading] = useState<string | null>(null);
+
+    // Sync state with props when server data refreshes
+    useEffect(() => {
+        setItems(initialItems);
+    }, [initialItems]);
 
     const handleToggleHandled = async (id: string, currentStatus: boolean) => {
         setLoading(id);

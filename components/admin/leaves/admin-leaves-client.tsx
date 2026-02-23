@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,11 @@ export function AdminLeavesClient({ initialRequests }: AdminLeavesClientProps) {
     const [rejectionReason, setRejectionReason] = useState("");
     const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
     const [loading, setLoading] = useState<string | null>(null);
+
+    // Sync state with props when server data changes
+    useEffect(() => {
+        setRequests(initialRequests);
+    }, [initialRequests]);
 
     const handleStatusUpdate = async (id: string, status: 'approved' | 'rejected', reason?: string) => {
         setLoading(id);

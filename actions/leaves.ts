@@ -181,7 +181,7 @@ export async function getAllLeaveRequestsAction() {
         .from("leave_requests")
         .select(`
           *,
-          user:profiles(full_name, avatar_url, department),
+          user:profiles!user_id(full_name, avatar_url, department),
           leave_type:leave_types(name, color)
         `)
         .order("created_at", { ascending: false });
