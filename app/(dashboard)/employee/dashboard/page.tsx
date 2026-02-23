@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { motion } from "framer-motion";
+import Image from "next/image";
 import { Users, Target, Coffee, PlayCircle, LogOut, Zap, CheckCircle2, AlertCircle, Edit2, CheckSquare, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -644,7 +645,13 @@ export default function EmployeeDashboardPage() {
                           <div className={`h-8 w-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center border-2 ${isOnline ? 'border-green-500/20' : isCompleted ? 'border-primary/20' : 'border-zinc-200/20'}`}>
                             <span className="text-[10px] font-black text-zinc-500 dark:text-zinc-400">
                               {m.avatar_url ? (
-                                <img src={m.avatar_url} alt={m.full_name || "Team Member"} className="h-full w-full rounded-full object-cover" />
+                                <Image
+                                  src={m.avatar_url}
+                                  alt={m.full_name || "Team Member"}
+                                  width={32}
+                                  height={32}
+                                  className="h-full w-full rounded-full object-cover"
+                                />
                               ) : (
                                 (m.full_name as string)?.charAt(0) || '?'
                               )}

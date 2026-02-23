@@ -17,6 +17,9 @@ export async function createTaskAction(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Not authenticated" };
 
+  const subtasksRaw = formData.get("subtasks");
+  const subtasks = subtasksRaw ? JSON.parse(String(subtasksRaw)) : [];
+
   const { data, error } = await supabase
     .from("tasks")
     .insert({
@@ -24,7 +27,8 @@ export async function createTaskAction(formData: FormData) {
       title,
       description,
       status: "todo",
-      priority
+      priority,
+      subtasks
     })
     .select("*")
     .single();
@@ -86,7 +90,8 @@ export async function createAdminTaskAction(params: {
       description,
       status: "todo",
       priority,
-      due_date: dueDate || null
+      due_date: dueDate || null,
+      subtasks: []
     })
     .select("*")
     .single();
@@ -115,6 +120,7 @@ export async function updateTaskAction(params: {
   title: string;
   description?: string;
   priority: string;
+  subtasks?: any[];
 }) {
   const supabase = createSupabaseServerClient();
   const { id, title, description, priority } = params;
@@ -125,6 +131,7 @@ export async function updateTaskAction(params: {
       title,
       description,
       priority,
+      subtasks: params.subtasks || [],
       updated_at: new Date().toISOString()
     })
     .eq("id", id);
@@ -169,6 +176,43 @@ export async function moveTaskAction(params: {
 
   revalidatePath("/employee/tasks");
   revalidatePath("/employee/dashboard");
+  return { ok: true };
+}
+
+export async function toggleSubtaskAction(params: {
+  taskId: string;
+  subtaskIndex: number;
+  completed: boolean;
+}) {
+  const supabase = createSupabaseServerClient();
+  const { taskId, subtaskIndex, completed } = params;
+
+  // 1. Get current subtasks
+  const { data: task, error: fetchError } = await supabase
+    .from("tasks")
+    .select("subtasks")
+    .eq("id", taskId)
+    .single();
+
+  if (fetchError || !task) return { ok: false, message: fetchError?.message || "Task not found" };
+
+  const subtasks = [...(task.subtasks as any[])];
+  if (subtasks[subtaskIndex]) {
+    subtasks[subtaskIndex].completed = completed;
+  }
+
+  // 2. Update subtasks
+  const { error: updateError } = await supabase
+    .from("tasks")
+    .update({
+      subtasks,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", taskId);
+
+  if (updateError) return { ok: false, message: updateError.message };
+
+  revalidatePath("/employee/tasks");
   return { ok: true };
 }
 
