@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ApplyLeaveDialog } from "./apply-leave-dialog";
 import { LeaveBalance, LeaveRequest, LeaveType } from "@/types/leaves";
-import { Calendar, Clock, CheckCircle2, XCircle, AlertCircle, Plus } from "lucide-react";
+import { Calendar, Clock, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import { cancelLeaveRequestAction } from "@/actions/leaves";
 import { toast } from "sonner";
@@ -159,7 +159,7 @@ export function LeaveClient({ initialBalances, initialRequests, leaveTypes }: Le
                     <div className="py-20 text-center border-2 border-dashed border-zinc-100 dark:border-zinc-800 rounded-[2rem] bg-zinc-50/30 dark:bg-zinc-900/30">
                         <Clock className="h-12 w-12 text-zinc-300 mx-auto mb-4" />
                         <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">No Leave History</h3>
-                        <p className="text-zinc-500 font-medium mt-1">You haven't requested any leaves yet.</p>
+                        <p className="text-zinc-500 font-medium mt-1">You haven&apos;t requested any leaves yet.</p>
                     </div>
                 )}
             </div>

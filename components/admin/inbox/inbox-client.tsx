@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { InboxItem, toggleInboxHandledAction } from "@/actions/inbox";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check, Clock, ChevronRight, AlertCircle, Calendar, Receipt, ClipboardCheck, Trash2 } from "lucide-react";

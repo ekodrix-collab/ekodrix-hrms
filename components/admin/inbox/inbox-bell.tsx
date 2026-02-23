@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getAdminInboxAction } from "@/actions/inbox";
+import { getAdminInboxAction, InboxItem } from "@/actions/inbox";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -21,8 +21,8 @@ export function InboxBell() {
 
     if (!isAdmin) return null;
 
-    const items = result?.data || [];
-    const unhandledCount = items.filter((i: any) => !i.is_handled).length;
+    const items = (result?.data || []) as InboxItem[];
+    const unhandledCount = items.filter((i) => !i.is_handled).length;
 
     return (
         <Link href="/admin/inbox">

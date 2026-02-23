@@ -21,12 +21,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Plus, Calendar, Info } from "lucide-react";
+import { Plus, Info } from "lucide-react";
 import { LeaveType } from "@/types/leaves";
 import { applyLeaveAction } from "@/actions/leaves";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
-import { format, differenceInDays } from "date-fns";
+import { format } from "date-fns";
 
 interface ApplyLeaveDialogProps {
     leaveTypes: LeaveType[];
