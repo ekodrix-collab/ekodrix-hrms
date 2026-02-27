@@ -25,7 +25,7 @@ import { Plus, Rocket } from "lucide-react";
 import { createProjectAction } from "@/actions/projects";
 import { toast } from "sonner";
 
-export function CreateProjectDialog() {
+export function CreateProjectDialog({ onSuccess }: { onSuccess?: () => void }) {
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
 
@@ -39,6 +39,7 @@ export function CreateProjectDialog() {
         if (res.ok) {
             toast.success("Project created successfully!");
             setOpen(false);
+            onSuccess?.();
         } else {
             toast.error(res.message || "Failed to create project");
         }

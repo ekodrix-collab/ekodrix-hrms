@@ -18,6 +18,8 @@ import { useDroppable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { DueDateBadge } from "@/components/tasks/due-date-badge";
+import { TaskStatsBar } from "@/components/tasks/task-stats-bar";
+import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import {
   Search,
   Plus,
@@ -29,6 +31,8 @@ import {
   Trash2,
   ChevronDown,
   X,
+  ArrowUpRight,
+  ShieldAlert
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,7 +57,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { getTasksAction, createTaskAction, moveTaskAction, updateTaskAction, deleteTaskAction, toggleSubtaskAction } from "@/actions/tasks";
+import { getTasksAction, createTaskAction, moveTaskAction, updateTaskAction, deleteTaskAction, toggleSubtaskAction, getMyClaimedTasksAction } from "@/actions/tasks";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -311,12 +315,21 @@ export default function EmployeeTasksPage() {
     }
   });
 
+  const { data: claimedTasksData } = useQuery({
+    queryKey: ["employee-claimed-tasks"],
+    queryFn: async () => {
+      const res = await getMyClaimedTasksAction();
+      return res.ok ? res.data || [] : [];
+    }
+  });
+
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [newSubtasks, setNewSubtasks] = useState<Subtask[]>([]);
   const [editingSubtasks, setEditingSubtasks] = useState<Subtask[]>([]);
   const [subtaskInput, setSubtaskInput] = useState("");
@@ -484,9 +497,15 @@ export default function EmployeeTasksPage() {
     }
   };
 
-  const todoTasks = tasks.filter((t) => t.status === "todo");
-  const inProgressTasks = tasks.filter((t) => t.status === "in_progress");
-  const doneTasks = tasks.filter((t) => t.status === "done");
+  const searchLower = searchQuery.toLowerCase();
+  const matchesSearch = (t: TaskItem) =>
+    !searchQuery ||
+    t.title.toLowerCase().includes(searchLower) ||
+    (t.description ?? "").toLowerCase().includes(searchLower);
+
+  const todoTasks = tasks.filter((t) => t.status === "todo" && matchesSearch(t));
+  const inProgressTasks = tasks.filter((t) => t.status === "in_progress" && matchesSearch(t));
+  const doneTasks = tasks.filter((t) => t.status === "done" && matchesSearch(t));
 
   const activeTask = activeId ? tasks.find((t) => t.id === activeId) : null;
 
@@ -524,7 +543,12 @@ export default function EmployeeTasksPage() {
           <div className="flex items-center gap-3">
             <div className="relative w-64 hidden md:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-              <Input className="pl-9 h-10 bg-white/50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800" placeholder="Search tasks..." />
+              <Input
+                className="pl-9 h-10 bg-white/50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 font-medium"
+                placeholder="Search tasks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
@@ -640,6 +664,36 @@ export default function EmployeeTasksPage() {
             </Dialog>
           </div>
         </header>
+
+        {/* Stats bar */}
+        {tasks.length > 0 && (
+          <div className="pb-4">
+            <TaskStatsBar tasks={tasks} />
+          </div>
+        )}
+
+        {/* Pending Claims Section */}
+        {(claimedTasksData && claimedTasksData.length > 0) && (
+          <div className="mb-6 space-y-3">
+            <h2 className="text-sm font-black uppercase tracking-[0.1em] text-amber-500/80 flex items-center gap-2">
+              <Clock className="h-4 w-4" /> My Pending Claims
+            </h2>
+            <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide snap-x">
+              {claimedTasksData.map((task: any) => (
+                <div key={task.id} className="snap-start shrink-0 w-[300px] bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/50 p-4 rounded-2xl flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 line-clamp-1">{task.title}</h3>
+                    <TaskPriorityBadge priority={task.priority} className="text-[8px] h-4 px-1" />
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] font-black uppercase text-amber-600 dark:text-amber-500">
+                    <ShieldAlert className="h-3 w-3" />
+                    Waiting for Admin Approval
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <main className="flex-1 min-h-0 pb-8">
           <DndContext

@@ -368,6 +368,26 @@ export async function claimOpenTaskAction(taskId: string) {
   return { ok: true };
 }
 
+export async function getMyClaimedTasksAction() {
+  const supabase = createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Not authenticated" };
+
+  const { data, error } = await supabase
+    .from("tasks")
+    .select(`
+      *,
+      projects(name),
+      assignee:profiles!user_id(full_name, avatar_url)
+    `)
+    .eq("user_id", user.id)
+    .eq("assignment_status", "pending_approval")
+    .order("updated_at", { ascending: false });
+
+  if (error) return { ok: false, message: error.message };
+  return { ok: true, data };
+}
+
 export async function getFreeEmployeesAction() {
   const supabase = createSupabaseServerClient();
 

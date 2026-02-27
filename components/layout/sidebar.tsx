@@ -23,6 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { getCurrentUser, signOut } from "@/actions/auth";
+import { getSidebarCountsAction } from "@/actions/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 
@@ -31,6 +32,7 @@ export interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   disabled?: boolean;
+  badgeKey?: "adminInbox" | "marketplace";
 }
 
 export interface NavGroup {
@@ -43,7 +45,7 @@ export const adminNav: NavGroup[] = [
     group: "Overview",
     items: [
       { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/admin/inbox", label: "Action Inbox", icon: Inbox },
+      { href: "/admin/inbox", label: "Action Inbox", icon: Inbox, badgeKey: "adminInbox" },
       { href: "/admin/projects", label: "Projects", icon: LayoutGrid },
       { href: "/admin/analytics", label: "Analytics", icon: Zap },
     ]
@@ -74,7 +76,7 @@ export const employeeNav: NavGroup[] = [
     items: [
       { href: "/employee/dashboard", label: "My Overview", icon: LayoutDashboard },
       { href: "/employee/projects", label: "My Projects", icon: LayoutGrid },
-      { href: "/employee/marketplace", label: "Task Marketplace", icon: Zap },
+      { href: "/employee/marketplace", label: "Task Marketplace", icon: Zap, badgeKey: "marketplace" },
       { href: "/employee/attendance", label: "Clock In/Out", icon: CalendarDays },
       { href: "/employee/leaves", label: "My Leaves", icon: CalendarCheck },
       { href: "/employee/tasks", label: "My Tasks", icon: KanbanSquare },
@@ -104,6 +106,15 @@ export function Sidebar() {
   const { data: user } = useQuery({
     queryKey: ["current-user"],
     queryFn: () => getCurrentUser(),
+  });
+
+  const { data: counts } = useQuery({
+    queryKey: ["sidebar-counts"],
+    queryFn: async () => {
+      const res = await getSidebarCountsAction();
+      return res.ok ? res.data : { adminInbox: 0, marketplace: 0 };
+    },
+    refetchInterval: 30000, // Refresh counts every 30s
   });
 
   return (
@@ -149,7 +160,19 @@ export function Sidebar() {
                         "h-4 w-4 transition-transform duration-300 group-hover:scale-110",
                         isActive ? "text-white" : "text-zinc-400 group-hover:text-primary"
                       )} />
-                      <span>{item.label}</span>
+                      <span className="flex-1">{item.label}</span>
+
+                      {/* BADGE */}
+                      {(item.badgeKey === "adminInbox" && (counts?.adminInbox ?? 0) > 0) && (
+                        <span className="bg-red-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-md min-w-[20px] text-center shadow-sm">
+                          {counts!.adminInbox}
+                        </span>
+                      )}
+                      {(item.badgeKey === "marketplace" && (counts?.marketplace ?? 0) > 0) && (
+                        <span className="bg-blue-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-md min-w-[20px] text-center shadow-sm">
+                          {counts!.marketplace}
+                        </span>
+                      )}
 
                       {isActive && (
                         <motion.div

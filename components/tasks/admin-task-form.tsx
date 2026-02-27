@@ -183,9 +183,9 @@ export function AdminTaskForm({
                                 <Zap className="h-3.5 w-3.5 fill-current" />
                                 Task Management
                             </div>
-                            <DialogTitle className="text-3xl font-black uppercase tracking-tight text-zinc-900 dark:text-white italic">Deployment Strategy</DialogTitle>
+                            <DialogTitle className="text-3xl font-black uppercase tracking-tight text-zinc-900 dark:text-white italic">{initialData ? "Edit Task" : "Assign Task"}</DialogTitle>
                             <DialogDescription className="font-medium text-zinc-500 mt-2">
-                                Define the objective and assign it to a team member or the marketplace.
+                                {initialData ? "Update the task details and assignment." : "Define the objective and assign it to a team member or the marketplace."}
                             </DialogDescription>
                         </DialogHeader>
                     </div>
@@ -376,10 +376,10 @@ export function AdminTaskForm({
                                 {isSubmitting ? (
                                     <>
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Creating...
+                                        {initialData ? "Updating..." : "Creating..."}
                                     </>
                                 ) : (
-                                    "Create Task"
+                                    initialData ? "Update Task" : "Create Task"
                                 )}
                             </Button>
                         </DialogFooter>
