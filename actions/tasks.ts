@@ -337,19 +337,34 @@ export async function claimOpenTaskAction(taskId: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Not authenticated" };
 
+  // Get user profile for inbox title
+  const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).single();
+  // Get task title for inbox description
+  const { data: task } = await supabase.from("tasks").select("title").eq("id", taskId).single();
+
   const { error } = await supabase
     .from("tasks")
     .update({
       user_id: user.id,
       assignment_status: "pending_approval"
     })
-    .eq("id", taskId)
-    .eq("assignment_status", "open");
+    .eq("id", taskId);
+  // Removed .eq("assignment_status", "open") to allow re-claiming from 'open' state even if previously rejected
 
   if (error) return { ok: false, message: error.message };
 
+  // Create Admin Inbox item
+  await supabase.from("admin_inbox").insert({
+    title: `Task Claim: ${profile?.full_name || 'Employee'}`,
+    description: `Wants to claim: "${task?.title || 'a task'}"`,
+    entity_type: 'task_review',
+    entity_id: taskId,
+    priority: 'medium'
+  });
+
   revalidatePath("/employee/tasks");
   revalidatePath("/admin/inbox");
+  revalidatePath("/employee/marketplace"); // Important for re-claim UI refresh
   return { ok: true };
 }
 
@@ -400,9 +415,8 @@ export async function getAllEmployeesAction() {
       avatar_url,
       role,
       department,
-      tasks:tasks(id)
+      tasks:tasks!tasks_user_id_fkey(id)
     `)
-    .eq("role", "employee")
     .eq("is_active", true);
 
   if (profile?.organization_id) {
@@ -440,6 +454,13 @@ export async function approveTaskClaimAction(taskId: string) {
     .eq("id", taskId);
 
   if (error) return { ok: false, message: error.message };
+
+  // Mark Admin Inbox items as handled
+  await supabase
+    .from("admin_inbox")
+    .update({ is_handled: true, updated_at: new Date().toISOString() })
+    .eq("entity_id", taskId)
+    .eq("entity_type", "task_review");
 
   // Create notification for employee
   if (task?.user_id) {
@@ -491,6 +512,13 @@ export async function rejectTaskClaimAction(taskId: string) {
     .eq("id", taskId);
 
   if (error) return { ok: false, message: error.message };
+
+  // Mark Admin Inbox items as handled
+  await supabase
+    .from("admin_inbox")
+    .update({ is_handled: true, updated_at: new Date().toISOString() })
+    .eq("entity_id", taskId)
+    .eq("entity_type", "task_review");
 
   // Create notification for employee
   await supabase.from("notifications").insert({

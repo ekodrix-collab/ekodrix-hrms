@@ -55,7 +55,7 @@ export const adminNav: NavGroup[] = [
       { href: "/admin/standups", label: "Daily Standups", icon: ListTodo },
       { href: "/admin/attendance", label: "Attendance", icon: CalendarDays },
       { href: "/admin/leaves", label: "Leaves", icon: CalendarCheck },
-      { href: "/admin/tasks", label: "Project Tasks", icon: KanbanSquare },
+      { href: "/admin/tasks", label: "All Tasks", icon: KanbanSquare },
       { href: "/admin/finance", label: "Company Finance", icon: CreditCard },
     ]
   },

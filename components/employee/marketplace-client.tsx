@@ -126,9 +126,21 @@ export function MarketplaceClient({ initialTasks, currentUserId }: MarketplaceCl
                                     )}
 
                                     {task.assignment_status === 'open' && currentUserId && task.rejected_user_ids?.includes(currentUserId) && (
-                                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-red-500 bg-red-50 dark:bg-red-950/20 px-3 py-2 rounded-xl border border-red-100 dark:border-red-900/50">
-                                            <ShieldAlert className="h-3.5 w-3.5" />
-                                            Rejected
+                                        <div className="flex flex-col items-end gap-2">
+                                            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-red-500 bg-red-50 dark:bg-red-950/20 px-3 py-1.5 rounded-lg border border-red-100 dark:border-red-900/50">
+                                                <ShieldAlert className="h-3 w-3" />
+                                                Claim Rejected
+                                            </div>
+                                            <Button
+                                                onClick={() => handleClaim(task.id)}
+                                                disabled={claimingId === task.id}
+                                                variant="outline"
+                                                size="sm"
+                                                className="border-zinc-200 dark:border-zinc-800 hover:border-primary hover:text-primary font-black rounded-xl h-9 px-4 transition-all group text-[11px] uppercase tracking-wider"
+                                            >
+                                                {claimingId === task.id ? "Requesting..." : "Try Again"}
+                                                <ArrowUpRight className="h-3.5 w-3.5 ml-1.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                                            </Button>
                                         </div>
                                     )}
 

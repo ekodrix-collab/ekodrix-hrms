@@ -41,9 +41,14 @@ export interface Task {
     priority: string;
     status: string;
     due_date: string;
+    projects: { name: string } | null;
+    assignment_status?: string;
+    is_open_assignment?: boolean;
     profiles: {
+        id: string;
         full_name: string;
         avatar_url: string | null;
+        role: string;
     } | null;
 }
 

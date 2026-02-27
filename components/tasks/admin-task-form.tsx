@@ -179,11 +179,12 @@ export function AdminTaskForm({
                 <form onSubmit={handleSubmit} className="flex flex-col max-h-[90vh]">
                     <div className="p-8 pb-4">
                         <DialogHeader>
-                            <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-                                <PlusCircle className="h-6 w-6 text-primary" />
+                            <div className="flex items-center gap-2 text-blue-600 font-black text-[10px] uppercase tracking-[0.2em] mb-4">
+                                <Zap className="h-3.5 w-3.5 fill-current" />
+                                Task Management
                             </div>
-                            <DialogTitle className="text-2xl font-black uppercase tracking-tight text-zinc-900 dark:text-white">Create New Task</DialogTitle>
-                            <DialogDescription className="font-medium text-zinc-500">
+                            <DialogTitle className="text-3xl font-black uppercase tracking-tight text-zinc-900 dark:text-white italic">Deployment Strategy</DialogTitle>
+                            <DialogDescription className="font-medium text-zinc-500 mt-2">
                                 Define the objective and assign it to a team member or the marketplace.
                             </DialogDescription>
                         </DialogHeader>

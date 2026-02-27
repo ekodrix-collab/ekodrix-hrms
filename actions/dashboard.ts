@@ -222,14 +222,21 @@ export async function getAllTasks() {
     const { organizationId } = await getOrgContext();
     if (!organizationId) return [];
 
-    const { data: tasks } = await supabase
+    const { data: tasks, error } = await supabase
         .from('tasks')
         .select(`
             *,
-            profiles:profiles!user_id!inner(full_name, avatar_url, organization_id)
+            projects(name),
+            profiles:profiles!user_id(id, full_name, avatar_url, role),
+            creator:profiles!created_by!inner(organization_id)
         `)
-        .eq('profiles.organization_id', organizationId)
+        .eq('creator.organization_id', organizationId)
         .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("Error fetching tasks:", error);
+        return [];
+    }
 
     return tasks || [];
 }
