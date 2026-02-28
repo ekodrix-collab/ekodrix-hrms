@@ -10,17 +10,16 @@ import {
     ArrowUpRight,
     LayoutGrid,
     Search,
-    Filter,
     ShieldAlert,
     CheckCircle2
 } from "lucide-react";
 import { claimOpenTaskAction } from "@/actions/tasks";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { Task } from "@/types/dashboard";
 
 interface MarketplaceClientProps {
-    initialTasks: any[];
+    initialTasks: Task[];
     currentUserId?: string;
 }
 

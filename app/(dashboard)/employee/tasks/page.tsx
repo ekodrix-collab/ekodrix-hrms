@@ -31,7 +31,6 @@ import {
   Trash2,
   ChevronDown,
   X,
-  ArrowUpRight,
   ShieldAlert
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -679,7 +678,7 @@ export default function EmployeeTasksPage() {
               <Clock className="h-4 w-4" /> My Pending Claims
             </h2>
             <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide snap-x">
-              {claimedTasksData.map((task: any) => (
+              {claimedTasksData.map((task: { id: string; title: string; priority: string; }) => (
                 <div key={task.id} className="snap-start shrink-0 w-[300px] bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/50 p-4 rounded-2xl flex flex-col gap-3">
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 line-clamp-1">{task.title}</h3>

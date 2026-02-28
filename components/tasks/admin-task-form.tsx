@@ -22,14 +22,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createAdminTaskAction, updateAdminTaskAction } from "@/actions/tasks";
 import { toast } from "sonner";
-import { Loader2, UserPlus, X, PlusCircle, LayoutGrid, Zap, Users } from "lucide-react";
+import { Loader2, X, PlusCircle, Zap, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface Employee {
     id: string;
     full_name: string;
     email: string;
-    department?: string;
+    department?: string | null;
 }
 
 interface AdminTaskFormProps {

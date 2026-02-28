@@ -15,9 +15,10 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
+import type { Project, Task } from "@/types/dashboard";
 
 interface EmployeeProjectsClientProps {
-    initialProjects: any[];
+    initialProjects: Project[];
     userId?: string;
 }
 
@@ -37,7 +38,7 @@ export function EmployeeProjectsClient({ initialProjects, userId }: EmployeeProj
             const tasks = p.tasks ?? [];
             if (tasks.length === 0) return false;
             if (!userId) return true;
-            return tasks.some((t: any) => t.user_id === userId || t.assignee?.id === userId);
+            return tasks.some((t: Task) => t.user_id === userId || t.assignee?.id === userId);
         });
         // Fall back to all if none have assigned tasks (e.g., fetched differently)
         const list = withTasks.length > 0 ? withTasks : initialProjects;
@@ -86,9 +87,9 @@ export function EmployeeProjectsClient({ initialProjects, userId }: EmployeeProj
 
             {/* Projects Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {relevantProjects.map((project) => {
+                {relevantProjects.map((project: Project) => {
                     const totalTasks = project.tasks?.length || 0;
-                    const completedTasks = project.tasks?.filter((t: any) => t.status === "done").length || 0;
+                    const completedTasks = project.tasks?.filter((t: Task) => t.status === "done").length || 0;
                     const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
                     const statusClass = statusConfig[project.status] ?? statusConfig.active;
 

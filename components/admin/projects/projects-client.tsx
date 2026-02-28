@@ -22,6 +22,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import type { Project } from "@/types/dashboard";
 
 const statusConfig: Record<string, { label: string; dot: string; badge: string }> = {
     active: { label: "Active", dot: "bg-primary", badge: "text-primary border-primary/20 bg-primary/5" },
@@ -30,7 +31,7 @@ const statusConfig: Record<string, { label: string; dot: string; badge: string }
     planned: { label: "Planned", dot: "bg-blue-500", badge: "text-blue-600 border-blue-200 bg-blue-50/50" },
 };
 
-export function ProjectsClient({ initialProjects }: { initialProjects: any[] }) {
+export function ProjectsClient({ initialProjects }: { initialProjects: Project[] }) {
     const queryClient = useQueryClient();
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
@@ -46,7 +47,7 @@ export function ProjectsClient({ initialProjects }: { initialProjects: any[] }) 
     });
 
     const filtered = useMemo(() => {
-        return projects.filter((p: any) => {
+        return projects.filter((p: Project) => {
             const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
                 (p.description ?? "").toLowerCase().includes(search.toLowerCase());
             const matchStatus = statusFilter === "all" || p.status === statusFilter;
@@ -57,9 +58,9 @@ export function ProjectsClient({ initialProjects }: { initialProjects: any[] }) 
     // Summary stats
     const stats = useMemo(() => ({
         total: projects.length,
-        active: projects.filter((p: any) => p.status === "active" || (!p.status || p.status === "in_progress")).length,
-        completed: projects.filter((p: any) => p.status === "completed").length,
-        on_hold: projects.filter((p: any) => p.status === "on_hold").length,
+        active: projects.filter((p: Project) => p.status === "active" || (!p.status || p.status === "in_progress")).length,
+        completed: projects.filter((p: Project) => p.status === "completed").length,
+        on_hold: projects.filter((p: Project) => p.status === "on_hold").length,
     }), [projects]);
 
     const handleDelete = async (id: string) => {
@@ -135,7 +136,7 @@ export function ProjectsClient({ initialProjects }: { initialProjects: any[] }) 
 
             {/* Projects Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filtered.map((project: any) => {
+                {filtered.map((project: Project & { task_count?: { count: number }[]; completed_count?: { count: number }[] }) => {
                     const totalTasks = project.task_count?.[0]?.count || 0;
                     const completedTasks = project.completed_count?.[0]?.count || 0;
                     const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;

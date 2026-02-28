@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
-  Loader2, Kanban, List, LayoutGrid, AlertCircle, Users,
+  Loader2, Kanban, List, AlertCircle, Users,
   Check, X, Zap, Search, Filter, ChevronDown, FolderSearch,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -177,7 +177,7 @@ export default function AdminTasksPage() {
                 <span className="text-xs">
                   {assigneeFilter === "all" ? "Any Assignee" :
                     assigneeFilter === "unassigned" ? "Unassigned" :
-                      employees.find((e: any) => e.id === assigneeFilter)?.full_name?.split(" ")[0] || "Assignee"}
+                      employees.find((e: { id: string; full_name?: string }) => e.id === assigneeFilter)?.full_name?.split(" ")[0] || "Assignee"}
                 </span>
                 <ChevronDown className="h-3.5 w-3.5 opacity-50" />
               </Button>
@@ -187,7 +187,7 @@ export default function AdminTasksPage() {
               <DropdownMenuItem onClick={() => setAssigneeFilter("all")} className="rounded-lg font-bold">All Members</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setAssigneeFilter("unassigned")} className="rounded-lg font-bold text-blue-600">Unassigned / Marketplace</DropdownMenuItem>
               <DropdownMenuSeparator />
-              {employees.map((emp: any) => (
+              {employees.map((emp: { id: string; full_name?: string; avatar_url?: string }) => (
                 <DropdownMenuItem key={emp.id} onClick={() => setAssigneeFilter(emp.id)} className="rounded-lg gap-2">
                   <Avatar className="h-5 w-5">
                     <AvatarImage src={emp.avatar_url} />
@@ -424,7 +424,7 @@ export default function AdminTasksPage() {
         <TabsContent value="team" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {employees.length > 0 ? (
-              employees.map((emp: any, index: number) => {
+              employees.map((emp: { id: string; full_name?: string; avatar_url?: string; role?: string; department?: string }, index: number) => {
                 const empTaskCount = tasks?.filter((t: Task) => t.profiles?.id === emp.id).length ?? 0;
                 return (
                   <motion.div

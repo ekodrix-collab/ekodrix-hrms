@@ -13,6 +13,7 @@ import { ArrowLeft, Calendar, CheckCircle2, ChevronRight, Clock, KanbanSquare, U
 import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { Task } from "@/types/dashboard";
 
 export const metadata: Metadata = {
     title: "Project Details | Ekodrix",
@@ -28,11 +29,11 @@ export default async function EmployeeProjectDetailPage({ params }: { params: { 
 
     const project = result.data;
     const tasks = project.tasks ?? [];
-    const myTasks = tasks.filter((t: any) => t.user_id === user?.id || t.assignee?.id === user?.id);
+    const myTasks = tasks.filter((t: { user_id?: string; assignee?: { id: string } }) => t.user_id === user?.id || t.assignee?.id === user?.id);
     const allTasks = myTasks.length > 0 ? myTasks : tasks;
 
     const totalTasks = allTasks.length;
-    const completedTasks = allTasks.filter((t: any) => t.status === "done").length;
+    const completedTasks = allTasks.filter((t: { status?: string }) => t.status === "done").length;
     const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
     return (
@@ -103,7 +104,7 @@ export default async function EmployeeProjectDetailPage({ params }: { params: { 
 
                 {totalTasks > 0 ? (
                     <div className="grid grid-cols-1 gap-4">
-                        {allTasks.map((task: any) => (
+                        {allTasks.map((task: Task) => (
                             <div
                                 key={task.id}
                                 className="bg-white/40 dark:bg-zinc-900/40 p-5 rounded-[1.5rem] border border-zinc-100 dark:border-zinc-800 flex items-center gap-4 flex-wrap md:flex-nowrap hover:bg-white/70 dark:hover:bg-zinc-900/70 transition-all"
@@ -134,11 +135,11 @@ export default async function EmployeeProjectDetailPage({ params }: { params: { 
                                             <div className="h-1 w-24 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
                                                 <div
                                                     className="h-full bg-primary transition-all duration-500"
-                                                    style={{ width: `${(task.subtasks.filter((s: any) => s.completed).length / task.subtasks.length) * 100}%` }}
+                                                    style={{ width: `${(task.subtasks.filter((s: { completed: boolean }) => s.completed).length / task.subtasks.length) * 100}%` }}
                                                 />
                                             </div>
                                             <span className="text-[9px] font-black text-zinc-400 uppercase">
-                                                {task.subtasks.filter((s: any) => s.completed).length}/{task.subtasks.length} subtasks
+                                                {task.subtasks.filter((s: { completed: boolean }) => s.completed).length}/{task.subtasks.length} subtasks
                                             </span>
                                         </div>
                                     )}
@@ -147,7 +148,7 @@ export default async function EmployeeProjectDetailPage({ params }: { params: { 
                                 {/* Assignee */}
                                 <div className="flex items-center gap-2 shrink-0">
                                     <Avatar className="h-7 w-7 border-2 border-white dark:border-zinc-800">
-                                        <AvatarImage src={task.assignee?.avatar_url} />
+                                        <AvatarImage src={task.assignee?.avatar_url || undefined} />
                                         <AvatarFallback className="text-[8px] font-bold uppercase">{task.assignee?.full_name?.charAt(0) || "U"}</AvatarFallback>
                                     </Avatar>
                                     <div className="flex flex-col">

@@ -353,14 +353,32 @@ export async function claimOpenTaskAction(taskId: string) {
 
   if (error) return { ok: false, message: error.message };
 
-  // Create Admin Inbox item
-  await supabase.from("admin_inbox").insert({
-    title: `Task Claim: ${profile?.full_name || 'Employee'}`,
-    description: `Wants to claim: "${task?.title || 'a task'}"`,
-    entity_type: 'task_review',
-    entity_id: taskId,
-    priority: 'medium'
-  });
+  // Create or Update Admin Inbox item for this task claim
+  const { data: existingInbox } = await supabase
+    .from("admin_inbox")
+    .select("id")
+    .eq("entity_id", taskId)
+    .eq("entity_type", "task_review")
+    .maybeSingle();
+
+  if (existingInbox) {
+    await supabase
+      .from("admin_inbox")
+      .update({
+        is_handled: false,
+        title: `Task Re-claim: ${profile?.full_name || 'Employee'}`,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", existingInbox.id);
+  } else {
+    await supabase.from("admin_inbox").insert({
+      title: `Task Claim: ${profile?.full_name || 'Employee'}`,
+      description: `Wants to claim: "${task?.title || 'a task'}"`,
+      entity_type: 'task_review',
+      entity_id: taskId,
+      priority: 'medium'
+    });
+  }
 
   revalidatePath("/employee/tasks");
   revalidatePath("/admin/inbox");

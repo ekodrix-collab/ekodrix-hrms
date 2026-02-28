@@ -21,10 +21,11 @@ import { AdminTaskForm } from "@/components/tasks/admin-task-form";
 import { approveTaskClaimAction, rejectTaskClaimAction, deleteTaskAction } from "@/actions/tasks";
 import { toast } from "sonner";
 import { XCircle, CheckCircle } from "lucide-react";
+import type { Employee, Task, Project } from "@/types/dashboard";
 
 interface ProjectDetailsClientProps {
-    project: any;
-    employees: any[];
+    project: Project;
+    employees: Employee[];
 }
 
 export function ProjectDetailsClient({ project, employees }: ProjectDetailsClientProps) {
@@ -49,7 +50,7 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
     };
 
     const totalTasks = project.tasks?.length || 0;
-    const completedTasks = project.tasks?.filter((t: any) => t.status === "done").length || 0;
+    const completedTasks = project.tasks?.filter((t: Task) => t.status === "done").length || 0;
     const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
     return (
@@ -135,7 +136,7 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
 
                     {totalTasks > 0 ? (
                         <div className="grid grid-cols-1 gap-4">
-                            {project.tasks.map((task: any) => (
+                            {project.tasks?.map((task: Task) => (
                                 <div key={task.id} className="group bg-white/40 dark:bg-zinc-900/40 p-5 rounded-[1.5rem] border border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-4 hover:bg-white dark:hover:bg-zinc-900 transition-all flex-wrap md:flex-nowrap">
                                     {/* Status icon */}
                                     <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${task.status === "done" ? "bg-green-500/10 text-green-500" : "bg-primary/10 text-primary"}`}>
@@ -157,11 +158,11 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
                                         {task.subtasks && task.subtasks.length > 0 && (
                                             <div className="pt-1 space-y-1 max-w-[200px]">
                                                 <div className="flex items-center justify-between text-[8px] uppercase font-black text-zinc-400">
-                                                    <span>{Math.round((task.subtasks.filter((s: any) => s.completed).length / task.subtasks.length) * 100)}% subtasks</span>
-                                                    <span>{task.subtasks.filter((s: any) => s.completed).length}/{task.subtasks.length}</span>
+                                                    <span>{Math.round((task.subtasks.filter((s: { title: string; completed: boolean }) => s.completed).length / task.subtasks.length) * 100)}% subtasks</span>
+                                                    <span>{task.subtasks.filter((s: { title: string; completed: boolean }) => s.completed).length}/{task.subtasks.length}</span>
                                                 </div>
                                                 <div className="h-1 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-primary transition-all duration-500" style={{ width: `${(task.subtasks.filter((s: any) => s.completed).length / task.subtasks.length) * 100}%` }} />
+                                                    <div className="h-full bg-primary transition-all duration-500" style={{ width: `${(task.subtasks.filter((s: { title: string; completed: boolean }) => s.completed).length / task.subtasks.length) * 100}%` }} />
                                                 </div>
                                             </div>
                                         )}
@@ -171,7 +172,7 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
                                     <div className="flex items-center gap-6 px-4 border-x border-zinc-100 dark:border-zinc-800/50 shrink-0">
                                         <div className="flex items-center gap-2">
                                             <Avatar className="h-7 w-7 border-2 border-white dark:border-zinc-800 ring-1 ring-zinc-100 dark:ring-zinc-800">
-                                                <AvatarImage src={task.assignee?.avatar_url} />
+                                                <AvatarImage src={task.assignee?.avatar_url || undefined} />
                                                 <AvatarFallback className="text-[8px] font-bold uppercase">{task.assignee?.full_name?.charAt(0) || "U"}</AvatarFallback>
                                             </Avatar>
                                             <div className="flex flex-col">
@@ -213,8 +214,8 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
                                                 description: task.description || "",
                                                 priority: task.priority,
                                                 dueDate: task.due_date ? format(new Date(task.due_date), "yyyy-MM-dd") : "",
-                                                assignment_status: task.assignment_status,
-                                                user_id: task.user_id,
+                                                assignment_status: task.assignment_status || "open",
+                                                user_id: task.user_id || "",
                                                 subtasks: task.subtasks || [],
                                             }}
                                             onSuccess={() => router.refresh()}
@@ -256,11 +257,11 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
 
                 <TabsContent value="team" className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {employees.map((emp: any) => (
+                        {employees.map((emp: Employee) => (
                             <Card key={emp.id} className="border-zinc-100 dark:border-zinc-800 rounded-[2rem] bg-white/50 dark:bg-zinc-900/50">
                                 <CardContent className="p-6 flex items-center gap-4">
                                     <Avatar className="h-12 w-12 border-2 border-white dark:border-zinc-800 shadow-sm ring-1 ring-zinc-100 dark:ring-zinc-800">
-                                        <AvatarImage src={emp.avatar_url} />
+                                        <AvatarImage src={emp.avatar_url || undefined} />
                                         <AvatarFallback className="text-sm font-black uppercase">{emp.full_name?.charAt(0)}</AvatarFallback>
                                     </Avatar>
                                     <div className="flex-1 min-w-0">
