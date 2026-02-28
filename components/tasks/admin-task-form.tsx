@@ -20,36 +20,83 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { createAdminTaskAction } from "@/actions/tasks";
+import { createAdminTaskAction, updateAdminTaskAction } from "@/actions/tasks";
 import { toast } from "sonner";
-import { Loader2, UserPlus } from "lucide-react";
+import { Loader2, X, PlusCircle, Zap, Users } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface Employee {
     id: string;
     full_name: string;
     email: string;
-    department?: string;
+    department?: string | null;
 }
 
 interface AdminTaskFormProps {
     employees: Employee[];
     onSuccess?: () => void;
+    projectId?: string;
+    isMarketplaceDefault?: boolean;
+    initialData?: {
+        id: string;
+        title: string;
+        description: string;
+        priority: string;
+        dueDate?: string;
+        assignment_status: string;
+        user_id?: string;
+        subtasks: Subtask[];
+    };
+    trigger?: React.ReactNode;
 }
 
-export function AdminTaskForm({ employees, onSuccess }: AdminTaskFormProps) {
+interface Subtask {
+    title: string;
+    completed: boolean;
+}
+
+export function AdminTaskForm({
+    employees,
+    onSuccess,
+    projectId,
+    isMarketplaceDefault = false,
+    initialData,
+    trigger
+}: AdminTaskFormProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [selectedEmployee, setSelectedEmployee] = useState<string>("");
-    const [title, setTitle] = useState("");
-    const [description, setDescription] = useState("");
-    const [priority, setPriority] = useState("medium");
-    const [dueDate, setDueDate] = useState("");
+
+    // Initialize state from initialData or defaults
+    const [selectedEmployee, setSelectedEmployee] = useState<string>(
+        initialData
+            ? (initialData.assignment_status === 'open' ? 'marketplace' : (initialData.user_id || ""))
+            : (isMarketplaceDefault ? "marketplace" : "")
+    );
+    const [title, setTitle] = useState(initialData?.title || "");
+    const [description, setDescription] = useState(initialData?.description || "");
+    const [priority, setPriority] = useState(initialData?.priority || "medium");
+    const [dueDate, setDueDate] = useState(initialData?.dueDate || "");
+    const [subtasks, setSubtasks] = useState<Subtask[]>(initialData?.subtasks || []);
+    const [subtaskInput, setSubtaskInput] = useState("");
+
+    const isMarketplace = selectedEmployee === "marketplace";
+
+    const addSubtask = () => {
+        if (subtaskInput.trim()) {
+            setSubtasks([...subtasks, { title: subtaskInput.trim(), completed: false }]);
+            setSubtaskInput("");
+        }
+    };
+
+    const removeSubtask = (index: number) => {
+        setSubtasks(subtasks.filter((_, i) => i !== index));
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         if (!selectedEmployee) {
-            toast.error("Please select an employee");
+            toast.error("Please select an employee or Marketplace");
             return;
         }
 
@@ -60,150 +107,283 @@ export function AdminTaskForm({ employees, onSuccess }: AdminTaskFormProps) {
 
         setIsSubmitting(true);
 
-        const result = await createAdminTaskAction({
-            userId: selectedEmployee,
-            title: title.trim(),
-            description: description.trim(),
-            priority,
-            dueDate: dueDate || undefined,
-        });
+        let result;
+        if (initialData) {
+            // Update existing task
+            // We need a dedicated updateAdminTaskAction or enhance updateTaskAction
+            // For now, let's assume we enhance it or use create with logic
+            // Since I don't have updateAdminTaskAction yet, I'll use updateTaskAction
+            // but updateTaskAction doesn't handle assignment or subtasks well in this context
+            // I'll add updateAdminTaskAction to tasks.ts first
+            result = await updateAdminTaskAction({
+                id: initialData.id,
+                userId: isMarketplace ? null : selectedEmployee,
+                title: title.trim(),
+                description: description.trim(),
+                priority,
+                dueDate: dueDate || undefined,
+                isOpenAssignment: isMarketplace,
+                subtasks: subtasks
+            });
+        } else {
+            // Create new task
+            result = await createAdminTaskAction({
+                userId: isMarketplace ? "" : selectedEmployee,
+                title: title.trim(),
+                description: description.trim(),
+                priority,
+                dueDate: dueDate || undefined,
+                projectId: projectId,
+                isOpenAssignment: isMarketplace,
+                subtasks: subtasks
+            });
+        }
 
         setIsSubmitting(false);
 
         if (result.ok) {
-            toast.success("Task assigned successfully");
-            // Reset form
-            setTitle("");
-            setDescription("");
-            setPriority("medium");
-            setDueDate("");
-            setSelectedEmployee("");
+            toast.success(initialData ? "Task updated successfully" : "Task created and assigned successfully");
+            if (!initialData) {
+                // Reset form only if creating
+                setTitle("");
+                setDescription("");
+                setPriority("medium");
+                setDueDate("");
+                setSelectedEmployee(isMarketplaceDefault ? "marketplace" : "");
+                setSubtasks([]);
+            }
             setIsOpen(false);
             onSuccess?.();
         } else {
-            toast.error(result.message || "Failed to create task");
+            toast.error(result.message || "Failed to save task");
         }
     };
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <Button
-                onClick={() => setIsOpen(true)}
-                className="gap-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/20"
-            >
-                <UserPlus className="h-4 w-4" />
-                Assign Task
-            </Button>
+            {trigger ? (
+                <div onClick={() => setIsOpen(true)} className="cursor-pointer">
+                    {trigger}
+                </div>
+            ) : (
+                <Button
+                    onClick={() => setIsOpen(true)}
+                    className="gap-2 bg-zinc-900 hover:bg-zinc-800 text-white shadow-lg rounded-2xl px-6 font-black uppercase tracking-tight transition-all hover:scale-105 active:scale-95"
+                >
+                    <PlusCircle className="h-5 w-5" />
+                    Add Project Task
+                </Button>
+            )}
 
-            <DialogContent className="sm:max-w-[500px]">
-                <form onSubmit={handleSubmit}>
-                    <DialogHeader>
-                        <DialogTitle>Assign New Task</DialogTitle>
-                        <DialogDescription>
-                            Create and assign a task to an employee. They will be notified immediately.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="grid gap-4 py-4">
-                        {/* Employee Selection */}
-                        <div className="grid gap-2">
-                            <Label htmlFor="employee">Assign to Employee *</Label>
-                            <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
-                                <SelectTrigger id="employee" className="w-full">
-                                    <SelectValue placeholder="Select an employee" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {employees.map((emp) => (
-                                        <SelectItem key={emp.id} value={emp.id}>
-                                            <div className="flex flex-col items-start">
-                                                <span className="font-medium">{emp.full_name}</span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {emp.email} {emp.department && `• ${emp.department}`}
-                                                </span>
-                                            </div>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Task Title */}
-                        <div className="grid gap-2">
-                            <Label htmlFor="title">Task Title *</Label>
-                            <Input
-                                id="title"
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                placeholder="e.g., Complete Q1 Report"
-                                required
-                            />
-                        </div>
-
-                        {/* Description */}
-                        <div className="grid gap-2">
-                            <Label htmlFor="description">Description</Label>
-                            <Textarea
-                                id="description"
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                placeholder="Add task details, requirements, or context..."
-                                className="min-h-[100px]"
-                            />
-                        </div>
-
-                        {/* Priority & Due Date Row */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="priority">Priority</Label>
-                                <Select value={priority} onValueChange={setPriority}>
-                                    <SelectTrigger id="priority">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="urgent">🔴 Urgent</SelectItem>
-                                        <SelectItem value="high">🟠 High</SelectItem>
-                                        <SelectItem value="medium">🟡 Medium</SelectItem>
-                                        <SelectItem value="low">🟢 Low</SelectItem>
-                                    </SelectContent>
-                                </Select>
+            <DialogContent className="sm:max-w-[700px] rounded-[2.5rem] p-0 border-zinc-100 dark:border-zinc-800 overflow-hidden">
+                <form onSubmit={handleSubmit} className="flex flex-col max-h-[90vh]">
+                    <div className="p-8 pb-4">
+                        <DialogHeader>
+                            <div className="flex items-center gap-2 text-blue-600 font-black text-[10px] uppercase tracking-[0.2em] mb-4">
+                                <Zap className="h-3.5 w-3.5 fill-current" />
+                                Task Management
                             </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="dueDate">Due Date</Label>
-                                <Input
-                                    id="dueDate"
-                                    type="date"
-                                    value={dueDate}
-                                    onChange={(e) => setDueDate(e.target.value)}
-                                />
-                            </div>
-                        </div>
+                            <DialogTitle className="text-3xl font-black uppercase tracking-tight text-zinc-900 dark:text-white italic">{initialData ? "Edit Task" : "Assign Task"}</DialogTitle>
+                            <DialogDescription className="font-medium text-zinc-500 mt-2">
+                                {initialData ? "Update the task details and assignment." : "Define the objective and assign it to a team member or the marketplace."}
+                            </DialogDescription>
+                        </DialogHeader>
                     </div>
 
-                    <DialogFooter>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setIsOpen(false)}
-                            disabled={isSubmitting}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="bg-indigo-600 hover:bg-indigo-700"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Assigning...
-                                </>
-                            ) : (
-                                "Assign Task"
-                            )}
-                        </Button>
-                    </DialogFooter>
+                    <div className="flex-1 overflow-y-auto p-8 pt-0 custom-scrollbar">
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                            <div className="space-y-6">
+                                {/* Task Title */}
+                                <div className="space-y-2">
+                                    <Label htmlFor="title" className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                                        Objective Title *
+                                    </Label>
+                                    <Input
+                                        id="title"
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
+                                        placeholder="e.g., UI Refinement"
+                                        required
+                                        className="rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-bold"
+                                    />
+                                </div>
+
+                                {/* Description */}
+                                <div className="space-y-2">
+                                    <Label htmlFor="description" className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                                        Detailed Brief
+                                    </Label>
+                                    <Textarea
+                                        id="description"
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                        placeholder="What needs to be done?"
+                                        className="min-h-[120px] rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-medium"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-6">
+                                {/* Assignment Strategy */}
+                                <div className="space-y-2">
+                                    <Label htmlFor="employee" className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                                        Deployment Strategy
+                                    </Label>
+                                    <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
+                                        <SelectTrigger id="employee" className="rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-bold h-12">
+                                            <SelectValue placeholder="Select Strategy" />
+                                        </SelectTrigger>
+                                        <SelectContent className="rounded-2xl border-zinc-100 dark:border-zinc-800 mt-2">
+                                            <SelectItem value="marketplace" className="py-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                                                        <Zap className="h-4 w-4 text-blue-500 fill-current" />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-sm">Task Marketplace</span>
+                                                        <span className="text-[10px] text-zinc-400 uppercase font-black">Open Assignment</span>
+                                                    </div>
+                                                </div>
+                                            </SelectItem>
+                                            {employees.map((emp) => (
+                                                <SelectItem key={emp.id} value={emp.id} className="py-3">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                                            <Users className="h-4 w-4 text-primary" />
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold text-sm">{emp.full_name}</span>
+                                                            <span className="text-[10px] text-zinc-400 uppercase font-black">{emp.department || 'Staff'}</span>
+                                                        </div>
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="priority" className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                                            Priority
+                                        </Label>
+                                        <Select value={priority} onValueChange={setPriority}>
+                                            <SelectTrigger id="priority" className="rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-bold">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="rounded-xl">
+                                                <SelectItem value="urgent">🔴 Urgent</SelectItem>
+                                                <SelectItem value="high">🟠 High</SelectItem>
+                                                <SelectItem value="medium">🟡 Medium</SelectItem>
+                                                <SelectItem value="low">🟢 Low</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="dueDate" className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                                            Due Date
+                                        </Label>
+                                        <Input
+                                            id="dueDate"
+                                            type="date"
+                                            value={dueDate}
+                                            onChange={(e) => setDueDate(e.target.value)}
+                                            className="rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-bold"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Subtasks Section */}
+                        <div className="space-y-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                                    Action Items (Subtasks)
+                                </Label>
+                                <Badge variant="secondary" className="text-[10px] font-black uppercase px-2 h-5 rounded-lg bg-zinc-100 text-zinc-500">
+                                    {subtasks.length} Breakdown
+                                </Badge>
+                            </div>
+
+                            <div className="flex gap-2">
+                                <Input
+                                    placeholder="e.g., Draft initial design..."
+                                    value={subtaskInput}
+                                    onChange={(e) => setSubtaskInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            addSubtask();
+                                        }
+                                    }}
+                                    className="rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-medium h-11"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={addSubtask}
+                                    className="rounded-xl border-zinc-200 h-11 px-4 font-bold"
+                                >
+                                    <PlusCircle className="h-4 w-4 mr-2" />
+                                    Add
+                                </Button>
+                            </div>
+
+                            <div className="space-y-2 max-h-[160px] overflow-y-auto pr-2 custom-scrollbar">
+                                {subtasks.map((st, i) => (
+                                    <div key={i} className="flex items-center gap-3 bg-zinc-50/80 dark:bg-zinc-900/80 p-3 rounded-xl border border-zinc-100 dark:border-zinc-800 group animate-in slide-in-from-left-2 duration-300">
+                                        <div className="h-5 w-5 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex-shrink-0" />
+                                        <span className="flex-1 text-sm font-bold text-zinc-700 dark:text-zinc-300">{st.title}</span>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-red-500 hover:bg-red-50"
+                                            onClick={() => removeSubtask(i)}
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                                {subtasks.length === 0 && (
+                                    <div className="text-center py-8 rounded-2xl border-2 border-dashed border-zinc-100/50">
+                                        <p className="text-xs font-bold text-zinc-300 uppercase tracking-widest">No breakdown provided</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div className="p-8 pt-4 bg-zinc-50/50 dark:bg-zinc-800/20 border-t border-zinc-100 dark:border-zinc-800">
+                        <DialogFooter className="gap-2">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => setIsOpen(false)}
+                                disabled={isSubmitting}
+                                className="font-bold text-zinc-500 rounded-xl"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="bg-primary hover:bg-primary/90 text-white font-black px-8 rounded-2xl shadow-xl shadow-primary/20 h-12 min-w-[160px]"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        {initialData ? "Updating..." : "Creating..."}
+                                    </>
+                                ) : (
+                                    initialData ? "Update Task" : "Create Task"
+                                )}
+                            </Button>
+                        </DialogFooter>
+                    </div>
                 </form>
             </DialogContent>
         </Dialog>

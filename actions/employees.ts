@@ -103,7 +103,7 @@ export async function getAllEmployees() {
     const { data: profiles, error } = await supabase
         .from("profiles")
         .select("*")
-        .eq("role", "employee")
+        .eq("is_active", true)
         .eq("organization_id", organizationId)
         .order("full_name", { ascending: true });
 

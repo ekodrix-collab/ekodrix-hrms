@@ -41,10 +41,19 @@ export interface Task {
     priority: string;
     status: string;
     due_date: string;
+    projects: { name: string } | null;
+    assignment_status?: string;
+    is_open_assignment?: boolean;
     profiles: {
+        id: string;
         full_name: string;
         avatar_url: string | null;
+        role: string;
     } | null;
+    subtasks?: { title: string; completed: boolean }[];
+    user_id?: string;
+    assignee?: { id: string; avatar_url: string | null; full_name: string; } | null;
+    rejected_user_ids?: string[];
 }
 
 export interface AttendanceRecord {
@@ -102,4 +111,24 @@ export interface Standup {
     notes: string | null;
     created_at: string;
     updated_at: string | null;
+}
+
+export interface Employee {
+    id: string;
+    full_name: string;
+    email: string;
+    avatar_url: string | null;
+    department?: string | null;
+    role: string;
+    tasks?: Task[];
+}
+
+export interface Project {
+    id: string;
+    name: string;
+    description?: string;
+    status: string;
+    priority: string;
+    deadline?: string;
+    tasks?: Task[];
 }

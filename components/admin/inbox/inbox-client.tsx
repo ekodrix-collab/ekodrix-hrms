@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { approveTaskClaimAction } from "@/actions/tasks";
 
 interface InboxClientProps {
     initialItems: InboxItem[];
@@ -34,6 +35,20 @@ export function InboxClient({ initialItems }: InboxClientProps) {
             toast.success("Inbox item updated");
         } else {
             toast.error(res.message || "Failed to update item");
+        }
+        setLoading(null);
+    };
+
+    const handleApproveClaim = async (taskId: string, inboxId: string) => {
+        setLoading(inboxId);
+        const res = await approveTaskClaimAction(taskId);
+        if (res.ok) {
+            setItems(prev => prev.map(item =>
+                item.id === inboxId ? { ...item, is_handled: true } : item
+            ));
+            toast.success("Task claim approved!");
+        } else {
+            toast.error(res.message || "Failed to approve claim");
         }
         setLoading(null);
     };
@@ -97,6 +112,17 @@ export function InboxClient({ initialItems }: InboxClientProps) {
                                         </div>
 
                                         <div className="flex items-center gap-2">
+                                            {item.entity_type === 'task_review' && !item.is_handled && (
+                                                <Button
+                                                    size="sm"
+                                                    className="h-9 px-4 font-black rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/20 active:scale-95 transition-all"
+                                                    onClick={() => handleApproveClaim(item.entity_id!.toString(), item.id)}
+                                                    disabled={loading === item.id}
+                                                >
+                                                    <Check className="h-4 w-4 mr-2" />
+                                                    Approve Claim
+                                                </Button>
+                                            )}
                                             <Link href={getLink(item)}>
                                                 <Button variant="ghost" size="sm" className="h-9 px-3 font-bold rounded-xl text-zinc-500 hover:text-primary hover:bg-primary/5">
                                                     Open <ChevronRight className="h-3.5 w-3.5 ml-1" />
