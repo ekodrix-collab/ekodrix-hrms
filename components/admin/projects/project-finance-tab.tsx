@@ -32,8 +32,6 @@ import {
     History,
     MessageSquare,
     PieChart,
-    Wallet,
-    Calendar,
     ArrowDownRight
 } from "lucide-react";
 import { format } from "date-fns";
@@ -45,7 +43,6 @@ import {
     DialogDescription,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
     DialogFooter
 } from "@/components/ui/dialog";
 import {
@@ -59,6 +56,25 @@ import type { Project } from "@/types/dashboard";
 
 interface ProjectFinanceTabProps {
     project: Project;
+}
+
+interface ProjectLedgerItem {
+    id: string;
+    type: "revenue" | "expense";
+    amount: number | string;
+    title: string;
+    category: string;
+    date: string;
+}
+
+interface VerdictItem {
+    id: string;
+    content: string;
+    created_at: string;
+    profiles?: {
+        avatar_url?: string | null;
+        full_name?: string | null;
+    } | null;
 }
 
 export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
@@ -203,7 +219,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                                    {history?.map((item: any, idx: number) => (
+                                    {(history as ProjectLedgerItem[] | undefined)?.map((item, idx: number) => (
                                         <motion.tr
                                             key={item.id}
                                             initial={{ opacity: 0, y: 10 }}
@@ -249,7 +265,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                         </CardHeader>
                         <CardContent className="space-y-4 relative z-10">
                             <AnimatePresence mode="popLayout">
-                                {verdicts?.data?.slice(0, 3).map((verdict: any) => (
+                                {(verdicts?.data as VerdictItem[] | undefined)?.slice(0, 3).map((verdict) => (
                                     <motion.div
                                         key={verdict.id}
                                         layout
@@ -257,7 +273,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                         animate={{ opacity: 1, scale: 1 }}
                                         className="bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/20"
                                     >
-                                        <p className="text-xs font-medium leading-relaxed mb-2">"{verdict.content}"</p>
+                                        <p className="text-xs font-medium leading-relaxed mb-2">&quot;{verdict.content}&quot;</p>
                                         <div className="flex justify-between items-center">
                                             <div className="flex items-center gap-2">
                                                 <Avatar className="h-5 w-5 border border-white/20">
@@ -272,7 +288,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                 ))}
                             </AnimatePresence>
 
-                            {(!verdicts?.data || verdicts.data.length === 0) && (
+                            {(!verdicts?.data || (verdicts.data as VerdictItem[]).length === 0) && (
                                 <p className="text-xs italic opacity-60 text-center py-4">No verdicts logged yet.</p>
                             )}
 
@@ -326,7 +342,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Log Finance Verdict</DialogTitle>
-                        <DialogDescription>Record a strategic financial decision or an important note regarding this project's budget.</DialogDescription>
+                        <DialogDescription>Record a strategic financial decision or an important note regarding this project&apos;s budget.</DialogDescription>
                     </DialogHeader>
                     <div className="py-4">
                         <Label className="text-xs font-black uppercase tracking-widest mb-2 block">Verdict / Decision</Label>
@@ -460,7 +476,21 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
     );
 }
 
-function CompactStatCard({ title, value, icon: Icon, color, description, trend }: any) {
+function CompactStatCard({
+    title,
+    value,
+    icon: Icon,
+    color,
+    description,
+    trend
+}: {
+    title: string;
+    value: string;
+    icon: React.ComponentType<{ className?: string }>;
+    color: string;
+    description: string;
+    trend?: "positive" | "negative";
+}) {
     return (
         <Card className="border border-zinc-100 dark:border-zinc-800 shadow-none bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md overflow-hidden group">
             <CardContent className="p-6">
