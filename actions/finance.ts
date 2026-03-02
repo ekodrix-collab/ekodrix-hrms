@@ -54,7 +54,11 @@ export async function postRevenue(amount: number, source: string, description?: 
     if (error) return { error: error.message };
 
     revalidatePath("/admin/finance");
-    if (projectId) revalidatePath(`/admin/projects/${projectId}`);
+    if (projectId) {
+        revalidatePath(`/admin/projects/${projectId}`);
+        revalidatePath(`/admin/projects/${projectId}/finance`);
+        revalidatePath("/admin/projects/finance");
+    }
     return { success: true, revenue: data };
 }
 
@@ -128,7 +132,11 @@ export async function postBusinessExpense(data: {
     if (error) return { error: error.message };
 
     revalidatePath("/admin/finance");
-    if (data.project_id) revalidatePath(`/admin/projects/${data.project_id}`);
+    if (data.project_id) {
+        revalidatePath(`/admin/projects/${data.project_id}`);
+        revalidatePath(`/admin/projects/${data.project_id}/finance`);
+        revalidatePath("/admin/projects/finance");
+    }
     return { success: true };
 }
 
@@ -308,5 +316,6 @@ export async function postFinanceVerdict(projectId: string, content: string) {
 
     if (error) return { ok: false, message: error.message };
     revalidatePath(`/admin/projects/${projectId}`);
+    revalidatePath(`/admin/projects/${projectId}/finance`);
     return { ok: true, data };
 }

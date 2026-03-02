@@ -30,7 +30,7 @@ export function InboxBell() {
             <Button
                 variant="ghost"
                 size="icon"
-                className="relative h-10 w-10 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="relative h-10 w-10 rounded-full border border-transparent bg-white/60 hover:bg-zinc-100 dark:bg-zinc-900/50 dark:hover:bg-zinc-800"
             >
                 <Inbox className="h-5 w-5" />
                 {unhandledCount > 0 && (

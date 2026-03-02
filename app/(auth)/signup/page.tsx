@@ -13,10 +13,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { durations, easings } from "@/lib/animations";
+import { Sparkles } from "lucide-react";
 
 const schema = z.object({
     organizationName: z.string().min(2, "Organization name must be at least 2 characters"),
-    fullName: z.string().min(2, "Usage name must be at least 2 characters"),
+    fullName: z.string().min(2, "Your name must be at least 2 characters"),
     email: z.string().email("Enter a valid email"),
     password: z.string().min(6, "Password must be at least 6 characters"),
     confirmPassword: z.string()
@@ -47,107 +48,105 @@ export default function SignupPage() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gray-50/50 p-4">
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: durations.slower, ease: easings.easeOut }}
-                className="w-full max-w-md"
-            >
-                <Card className="shadow-lg">
-                    <CardHeader className="space-y-2 text-center">
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ duration: durations.slow, ease: easings.easeOut }}
-                            className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20"
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: durations.slower, ease: easings.easeOut }}
+            className="w-full"
+        >
+            <Card>
+                <CardHeader className="space-y-3 text-center">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: durations.slow, ease: easings.easeOut }}
+                        className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-emerald-500 text-primary-foreground shadow-soft"
+                    >
+                        <Sparkles className="h-5 w-5" />
+                    </motion.div>
+                    <CardTitle className="text-2xl">Create your workspace</CardTitle>
+                    <CardDescription>Get started with WorkFlow Pro for free.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="organizationName">Organization Name</Label>
+                            <Input
+                                id="organizationName"
+                                placeholder="Acme Corp"
+                                {...form.register("organizationName")}
+                            />
+                            {form.formState.errors.organizationName && (
+                                <p className="text-sm text-destructive">{form.formState.errors.organizationName.message}</p>
+                            )}
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="fullName">Your Full Name</Label>
+                            <Input
+                                id="fullName"
+                                placeholder="John Doe"
+                                {...form.register("fullName")}
+                            />
+                            {form.formState.errors.fullName && (
+                                <p className="text-sm text-destructive">{form.formState.errors.fullName.message}</p>
+                            )}
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="email">Work Email</Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                placeholder="you@company.com"
+                                {...form.register("email")}
+                            />
+                            {form.formState.errors.email && (
+                                <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
+                            )}
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="password">Password</Label>
+                            <Input
+                                id="password"
+                                type="password"
+                                {...form.register("password")}
+                            />
+                            {form.formState.errors.password && (
+                                <p className="text-sm text-destructive">{form.formState.errors.password.message}</p>
+                            )}
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="confirmPassword">Confirm Password</Label>
+                            <Input
+                                id="confirmPassword"
+                                type="password"
+                                {...form.register("confirmPassword")}
+                            />
+                            {form.formState.errors.confirmPassword && (
+                                <p className="text-sm text-destructive">{form.formState.errors.confirmPassword.message}</p>
+                            )}
+                        </div>
+
+                        <Button
+                            type="submit"
+                            className="w-full"
+                            disabled={isPending}
                         >
-                            <span className="font-bold text-primary">HR</span>
-                        </motion.div>
-                        <CardTitle className="text-2xl">Create your workspace</CardTitle>
-                        <CardDescription>Get started with WorkFlow Pro for free.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="organizationName">Organization Name</Label>
-                                <Input
-                                    id="organizationName"
-                                    placeholder="Acme Corp"
-                                    {...form.register("organizationName")}
-                                />
-                                {form.formState.errors.organizationName && (
-                                    <p className="text-sm text-destructive">{form.formState.errors.organizationName.message}</p>
-                                )}
-                            </div>
+                            {isPending ? "Creating account..." : "Create Account"}
+                        </Button>
 
-                            <div className="space-y-2">
-                                <Label htmlFor="fullName">Your Full Name</Label>
-                                <Input
-                                    id="fullName"
-                                    placeholder="John Doe"
-                                    {...form.register("fullName")}
-                                />
-                                {form.formState.errors.fullName && (
-                                    <p className="text-sm text-destructive">{form.formState.errors.fullName.message}</p>
-                                )}
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="email">Work Email</Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    placeholder="you@company.com"
-                                    {...form.register("email")}
-                                />
-                                {form.formState.errors.email && (
-                                    <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
-                                )}
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="password">Password</Label>
-                                <Input
-                                    id="password"
-                                    type="password"
-                                    {...form.register("password")}
-                                />
-                                {form.formState.errors.password && (
-                                    <p className="text-sm text-destructive">{form.formState.errors.password.message}</p>
-                                )}
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                                <Input
-                                    id="confirmPassword"
-                                    type="password"
-                                    {...form.register("confirmPassword")}
-                                />
-                                {form.formState.errors.confirmPassword && (
-                                    <p className="text-sm text-destructive">{form.formState.errors.confirmPassword.message}</p>
-                                )}
-                            </div>
-
-                            <Button
-                                type="submit"
-                                className="w-full"
-                                disabled={isPending}
-                            >
-                                {isPending ? "Creating account..." : "Create Account"}
-                            </Button>
-
-                            <div className="pt-2 text-center text-sm text-muted-foreground">
-                                Already have an account?{" "}
-                                <Link href="/login" className="font-medium text-primary hover:underline">
-                                    Sign in
-                                </Link>
-                            </div>
-                        </form>
-                    </CardContent>
-                </Card>
-            </motion.div>
-        </div>
+                        <div className="pt-2 text-center text-sm text-muted-foreground">
+                            Already have an account?{" "}
+                            <Link href="/login" className="font-medium text-primary hover:underline">
+                                Sign in
+                            </Link>
+                        </div>
+                    </form>
+                </CardContent>
+            </Card>
+        </motion.div>
     );
 }
