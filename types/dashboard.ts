@@ -91,6 +91,7 @@ export interface Expense {
     expense_date: string;
     amount: string | number;
     payment_method: string;
+    project_id?: string | null;
     profiles: {
         avatar_url: string | null;
         full_name: string;
@@ -98,6 +99,27 @@ export interface Expense {
     expense_categories: {
         color: string;
         name: string;
+    };
+}
+
+export interface RevenueLog {
+    id: string;
+    amount: number;
+    source: string;
+    description: string | null;
+    received_date: string;
+    project_id: string | null;
+}
+
+export interface FinanceVerdict {
+    id: string;
+    project_id: string;
+    content: string;
+    created_at: string;
+    created_by: string;
+    profiles?: {
+        full_name: string;
+        avatar_url: string | null;
     };
 }
 

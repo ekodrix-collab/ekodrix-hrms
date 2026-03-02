@@ -35,7 +35,7 @@ export async function generateMonthlyAccruals(date: Date) {
     return { success: true, count: accruals.length };
 }
 
-export async function postRevenue(amount: number, source: string, description?: string) {
+export async function postRevenue(amount: number, source: string, description?: string, projectId?: string) {
     const supabase = createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -45,6 +45,7 @@ export async function postRevenue(amount: number, source: string, description?: 
             amount,
             source,
             description,
+            project_id: projectId || null,
             created_by: user?.id
         })
         .select()
@@ -53,6 +54,11 @@ export async function postRevenue(amount: number, source: string, description?: 
     if (error) return { error: error.message };
 
     revalidatePath("/admin/finance");
+    if (projectId) {
+        revalidatePath(`/admin/projects/${projectId}`);
+        revalidatePath(`/admin/projects/${projectId}/finance`);
+        revalidatePath("/admin/projects/finance");
+    }
     return { success: true, revenue: data };
 }
 
@@ -109,6 +115,7 @@ export async function postBusinessExpense(data: {
     description: string;
     category: string;
     payment_method: string;
+    project_id?: string;
 }) {
     const supabase = createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -125,29 +132,74 @@ export async function postBusinessExpense(data: {
     if (error) return { error: error.message };
 
     revalidatePath("/admin/finance");
+    if (data.project_id) {
+        revalidatePath(`/admin/projects/${data.project_id}`);
+        revalidatePath(`/admin/projects/${data.project_id}/finance`);
+        revalidatePath("/admin/projects/finance");
+    }
     return { success: true };
 }
 
-export async function getCompanyFinancials() {
+export async function getCompanyFinancials(projectId?: string) {
     const supabase = createSupabaseServerClient();
 
-    const { data: accruals } = await supabase
+    let accrualQuery = supabase
         .from("salary_accruals")
         .select("amount, paid_amount, remaining_amount");
 
-    const { data: revenue } = await supabase
+    let revenueQuery = supabase
         .from("revenue_logs")
         .select("amount");
 
-    const { data: expenses } = await supabase
+    let expenseQuery = supabase
         .from("expenses")
         .select("amount")
         .eq("status", "approved");
 
-    const totalLiability = accruals?.reduce((acc, curr) => acc + Number(curr.remaining_amount), 0) || 0;
-    const totalSalaryPaid = accruals?.reduce((acc, curr) => acc + Number(curr.paid_amount), 0) || 0;
+    if (projectId) {
+        revenueQuery = revenueQuery.eq("project_id", projectId);
+        expenseQuery = expenseQuery.eq("project_id", projectId);
+        // Accruals are currently company-wide salary, not project-linked usually.
+        // But if we want to show project-specific "net", we might skip accruals or link them.
+        // For now, project financials focus on direct revenue/expenses.
+    }
+
+    const { data: accruals } = await accrualQuery;
+    const { data: revenue } = await revenueQuery;
+    const { data: expenses } = await expenseQuery;
+
+    const totalLiability = projectId ? 0 : (accruals?.reduce((acc, curr) => acc + Number(curr.remaining_amount), 0) || 0);
+    const totalSalaryPaid = projectId ? 0 : (accruals?.reduce((acc, curr) => acc + Number(curr.paid_amount), 0) || 0);
     const totalBusinessExpenses = expenses?.reduce((acc: number, curr) => acc + Number(curr.amount), 0) || 0;
     const totalRevenue = revenue?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
+
+    let projectBreakdown: any[] = [];
+    if (!projectId) {
+        const [{ data: projRevenue }, { data: projExpenses }] = await Promise.all([
+            supabase.from("revenue_logs").select("project_id, amount, projects(name)"),
+            supabase.from("expenses").select("project_id, amount, projects(name)").eq("status", "approved")
+        ]);
+
+        const breakdownMap: Record<string, { id: string; name: string; revenue: number; expenses: number; net: number }> = {};
+
+        projRevenue?.forEach(r => {
+            if (!r.project_id) return;
+            const pId = r.project_id;
+            const pName = (r.projects as any)?.name || "Unknown";
+            if (!breakdownMap[pId]) breakdownMap[pId] = { id: pId, name: pName, revenue: 0, expenses: 0, net: 0 };
+            breakdownMap[pId].revenue += Number(r.amount);
+        });
+
+        projExpenses?.forEach(e => {
+            if (!e.project_id) return;
+            const pId = e.project_id;
+            const pName = (e.projects as any)?.name || "Unknown";
+            if (!breakdownMap[pId]) breakdownMap[pId] = { id: pId, name: pName, revenue: 0, expenses: 0, net: 0 };
+            breakdownMap[pId].expenses += Number(e.amount);
+        });
+
+        projectBreakdown = Object.values(breakdownMap).map(p => ({ ...p, net: p.revenue - p.expenses }));
+    }
 
     return {
         totalLiability,
@@ -155,7 +207,8 @@ export async function getCompanyFinancials() {
         totalSalaryPaid,
         totalBusinessExpenses,
         totalRevenue,
-        netBalance: totalRevenue - (totalSalaryPaid + totalBusinessExpenses)
+        netBalance: totalRevenue - (totalSalaryPaid + totalBusinessExpenses),
+        projectBreakdown
     };
 }
 
@@ -174,19 +227,26 @@ export async function getUserAccruals(userId: string) {
 
 // Categories are hardcoded on frontend now
 
-export async function getFinancialHistory() {
+export async function getFinancialHistory(projectId?: string) {
     const supabase = createSupabaseServerClient();
 
-    const { data: revenue } = await supabase
+    let revenueQuery = supabase
         .from("revenue_logs")
-        .select("id, amount, source, description, received_date, created_at")
+        .select("id, amount, source, description, received_date, created_at, project_id, projects(name)")
         .order("received_date", { ascending: false });
 
-    const { data: expenses } = await supabase
+    let expenseQuery = supabase
         .from("expenses")
-        .select("id, amount, category, description, expense_date, payment_method, created_at")
+        .select("id, amount, category, description, expense_date, payment_method, created_at, project_id, projects(name)")
         .eq("status", "approved")
         .order("expense_date", { ascending: false });
+
+    if (projectId) {
+        revenueQuery = revenueQuery.eq("project_id", projectId);
+        expenseQuery = expenseQuery.eq("project_id", projectId);
+    }
+
+    const [{ data: revenue }, { data: expenses }] = await Promise.all([revenueQuery, expenseQuery]);
 
     // Normalize and merge
     const normalizedRevenue = revenue?.map(r => ({
@@ -198,7 +258,9 @@ export async function getFinancialHistory() {
         date: r.received_date,
         created_at: r.created_at,
         category: "Income",
-        method: "-"
+        method: "-",
+        project_id: r.project_id,
+        project_name: (r.projects as any)?.name
     })) || [];
 
     const normalizedExpenses = expenses?.map(e => ({
@@ -210,7 +272,9 @@ export async function getFinancialHistory() {
         date: e.expense_date,
         created_at: e.created_at,
         category: e.category,
-        method: e.payment_method
+        method: e.payment_method,
+        project_id: e.project_id,
+        project_name: (e.projects as any)?.name
     })) || [];
 
     const history = [...normalizedRevenue, ...normalizedExpenses].sort((a, b) =>
@@ -219,4 +283,39 @@ export async function getFinancialHistory() {
     );
 
     return history;
+}
+
+export async function getFinanceVerdicts(projectId: string) {
+    const supabase = createSupabaseServerClient();
+    const { data, error } = await supabase
+        .from("finance_verdicts")
+        .select(`
+            *,
+            profiles:created_by(full_name, avatar_url)
+        `)
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false });
+
+    if (error) return { ok: false, message: error.message };
+    return { ok: true, data };
+}
+
+export async function postFinanceVerdict(projectId: string, content: string) {
+    const supabase = createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { data, error } = await supabase
+        .from("finance_verdicts")
+        .insert({
+            project_id: projectId,
+            content,
+            created_by: user?.id
+        })
+        .select()
+        .single();
+
+    if (error) return { ok: false, message: error.message };
+    revalidatePath(`/admin/projects/${projectId}`);
+    revalidatePath(`/admin/projects/${projectId}/finance`);
+    return { ok: true, data };
 }

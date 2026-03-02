@@ -58,7 +58,13 @@ export const adminNav: NavGroup[] = [
       { href: "/admin/attendance", label: "Attendance", icon: CalendarDays },
       { href: "/admin/leaves", label: "Leaves", icon: CalendarCheck },
       { href: "/admin/tasks", label: "All Tasks", icon: KanbanSquare },
-      { href: "/admin/finance", label: "Company Finance", icon: CreditCard },
+    ]
+  },
+  {
+    group: "Finance",
+    items: [
+      { href: "/admin/finance", label: "Company Treasury", icon: CreditCard },
+      { href: "/admin/projects/finance", label: "Project Finance", icon: LayoutGrid },
     ]
   },
   {
@@ -98,6 +104,25 @@ export const employeeNav: NavGroup[] = [
   }
 ];
 
+export function flattenNavItems(navGroups: NavGroup[]): NavItem[] {
+  return navGroups.flatMap((group) => group.items).filter((item) => !item.disabled);
+}
+
+export function getNavLabel(pathname: string, navGroups: NavGroup[]): string | null {
+  const navItems = flattenNavItems(navGroups);
+  const exact = navItems.find((item) => pathname === item.href);
+  if (exact) return exact.label;
+
+  const nestedMatch = navItems.find(
+    (item) => pathname.startsWith(`${item.href}/`) && item.href !== "/"
+  );
+  return nestedMatch?.label ?? null;
+}
+
+export function getPrimaryMobileNav(navGroups: NavGroup[]): NavItem[] {
+  return flattenNavItems(navGroups).slice(0, 4);
+}
+
 export function Sidebar() {
   const pathname = usePathname() ?? "";
   const isAdmin = pathname.startsWith("/admin");
@@ -118,30 +143,30 @@ export function Sidebar() {
   });
 
   return (
-    <aside className="hidden w-[280px] shrink-0 border-r border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-black/40 backdrop-blur-3xl md:flex flex-col h-screen sticky top-0">
-      {/* Brand Section */}
-      <div className="h-20 flex items-center px-6 mb-2">
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30 group-hover:scale-110 transition-transform duration-300">
-            <Zap className="h-6 w-6 text-white fill-current" />
+    <aside className="glass-panel sticky top-3 z-20 hidden h-[calc(100vh-1.5rem)] w-[300px] shrink-0 flex-col overflow-hidden rounded-3xl lg:mx-3 lg:flex">
+      <div className="flex h-20 items-center px-6">
+        <Link href="/" className="group flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-emerald-500 text-primary-foreground shadow-soft transition-transform duration-300 group-hover:scale-105">
+            <Zap className="h-6 w-6" />
           </div>
           <div className="flex flex-col">
-            <span className="text-lg font-black leading-none text-zinc-900 dark:text-white uppercase mt-0.5">
+            <span className="mt-0.5 text-lg font-black uppercase leading-none text-zinc-900 dark:text-zinc-100">
               Ekodrix
             </span>
-            <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-primary">HRMS PLATFORM</span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
+              HRMS PLATFORM
+            </span>
           </div>
         </Link>
       </div>
 
-      {/* Navigation Groups */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-8 scrollbar-hide">
+      <div className="flex-1 space-y-7 overflow-y-auto px-4 pb-5 pt-2">
         {navGroups.map((group) => (
-          <div key={group.group} className="space-y-2">
-            <h3 className="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
+          <div key={group.group} className="space-y-2.5">
+            <h3 className="px-4 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400 dark:text-zinc-500">
               {group.group}
             </h3>
-            <ul className="space-y-1">
+            <ul className="space-y-1.5">
               {group.items.map((item) => {
                 const isActive = pathname === item.href;
                 return (
@@ -149,27 +174,26 @@ export function Sidebar() {
                     <Link
                       href={item.disabled ? "#" : item.href}
                       className={cn(
-                        "group relative flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-300",
+                        "group relative flex touch-target items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-300",
                         isActive
-                          ? "bg-primary text-white shadow-lg shadow-primary/20"
-                          : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-100",
+                          ? "bg-primary text-white shadow-soft"
+                          : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100/80 hover:text-zinc-900 dark:hover:bg-zinc-800/80 dark:hover:text-zinc-100",
                         item.disabled && "opacity-40 cursor-not-allowed"
                       )}
                     >
                       <item.icon className={cn(
-                        "h-4 w-4 transition-transform duration-300 group-hover:scale-110",
+                        "h-[18px] w-[18px] transition-transform duration-300 group-hover:scale-110",
                         isActive ? "text-white" : "text-zinc-400 group-hover:text-primary"
                       )} />
                       <span className="flex-1">{item.label}</span>
 
-                      {/* BADGE */}
                       {(item.badgeKey === "adminInbox" && (counts?.adminInbox ?? 0) > 0) && (
-                        <span className="bg-red-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-md min-w-[20px] text-center shadow-sm">
+                        <span className="min-w-[20px] rounded-md bg-red-500 px-1.5 py-0.5 text-center text-[10px] font-black text-white shadow-sm">
                           {counts!.adminInbox}
                         </span>
                       )}
                       {(item.badgeKey === "marketplace" && (counts?.marketplace ?? 0) > 0) && (
-                        <span className="bg-blue-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-md min-w-[20px] text-center shadow-sm">
+                        <span className="min-w-[20px] rounded-md bg-blue-500 px-1.5 py-0.5 text-center text-[10px] font-black text-white shadow-sm">
                           {counts!.marketplace}
                         </span>
                       )}
@@ -177,7 +201,7 @@ export function Sidebar() {
                       {isActive && (
                         <motion.div
                           layoutId="active-indicator"
-                          className="absolute right-2 h-1 w-1 rounded-full bg-white"
+                          className="absolute right-3 h-1.5 w-1.5 rounded-full bg-white"
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                         />
@@ -190,26 +214,26 @@ export function Sidebar() {
           </div>
         ))}
 
-        {/* System Status / Promo Card */}
         <div className="px-2">
-          <div className="rounded-2xl p-4 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">System Performance</span>
+          <div className="rounded-2xl border border-white/60 bg-gradient-to-br from-primary/10 via-emerald-400/5 to-transparent p-4 dark:border-white/10">
+            <div className="mb-2 flex items-center gap-2">
+              <div className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+              <span className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">
+                System Performance
+              </span>
             </div>
-            <div className="h-1.5 w-full bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
               <div className="h-full w-[95%] bg-primary rounded-full" />
             </div>
-            <p className="text-[10px] mt-2 text-zinc-500 font-medium">95.2% System Uptime (Healthy)</p>
+            <p className="mt-2 text-[10px] font-medium text-zinc-500">95.2% System Uptime (Healthy)</p>
           </div>
         </div>
       </div>
 
-      {/* User Profile Section */}
-      <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/20">
-        <div className="relative group">
-          <div className="flex items-center gap-3 p-2 rounded-2xl transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800/50">
-            <Avatar className="h-10 w-10 border-2 border-white dark:border-zinc-800 shadow-sm ring-1 ring-primary/20">
+      <div className="border-t border-white/60 bg-zinc-100/40 p-4 dark:border-white/10 dark:bg-zinc-900/35">
+        <div className="group relative">
+          <div className="flex items-center gap-3 rounded-2xl p-2 transition-colors hover:bg-zinc-100/90 dark:hover:bg-zinc-800/60">
+            <Avatar className="h-10 w-10 border-2 border-white shadow-sm ring-1 ring-primary/20 dark:border-zinc-800">
               <AvatarImage src={user?.profile?.avatar_url} />
               <AvatarFallback className="bg-primary/5 text-primary font-black">
                 {user?.profile?.full_name?.charAt(0) || "U"}
@@ -229,14 +253,12 @@ export function Sidebar() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-full text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
+              className="h-8 w-8 rounded-full text-zinc-500 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/30"
               onClick={() => signOut()}
             >
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
-
-          {/* Hover Tooltip/Popup for Quick Settings could go here */}
         </div>
       </div>
     </aside>

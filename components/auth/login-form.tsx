@@ -6,6 +6,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { Zap } from "lucide-react";
 import { toast } from "sonner";
 import { signInWithPassword } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -46,22 +47,26 @@ export function LoginForm() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: durations.slower, ease: easings.easeOut }}
     >
-      <Card className="shadow-lg">
-        <CardHeader className="space-y-2">
+      <Card>
+        <CardHeader className="space-y-3">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: durations.slow, ease: easings.easeOut }}
-            className="flex items-center gap-2"
+            className="flex items-center gap-3"
           >
-            <div className="h-9 w-9 rounded-lg bg-primary/10 ring-1 ring-primary/20" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-emerald-500 text-primary-foreground shadow-soft">
+              <Zap className="h-5 w-5" />
+            </div>
             <div>
-              <div className="text-sm font-semibold leading-none">Ekodrix</div>
-              <div className="text-xs text-muted-foreground">HRMS</div>
+              <div className="text-sm font-black uppercase leading-none tracking-[0.1em]">Ekodrix</div>
+              <div className="text-[11px] text-muted-foreground">HRMS Workspace</div>
             </div>
           </motion.div>
-          <CardTitle className="text-2xl">Welcome back</CardTitle>
-          <CardDescription>Sign in to continue to your workspace.</CardDescription>
+          <CardTitle className="text-2xl sm:text-[1.85rem]">Welcome back</CardTitle>
+          <CardDescription className="text-sm">
+            Sign in to continue to your workspace.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form
