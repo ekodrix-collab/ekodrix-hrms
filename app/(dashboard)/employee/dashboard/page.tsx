@@ -270,7 +270,6 @@ export default function EmployeeDashboardPage() {
 
   const teamPresent = stats?.teamPresence?.filter((m: TeamMemberPresence) => m.status === 'present') || [];
   const teamOnBreak = stats?.teamPresence?.filter((m: TeamMemberPresence) => m.status === 'on_break') || [];
-  const teamAbsent = stats?.teamPresence?.filter((m: TeamMemberPresence) => m.status === 'absent') || [];
   const teamCompleted = stats?.teamPresence?.filter((m: TeamMemberPresence) => m.status === 'completed') || [];
   // All currently punched-in (working + on break)
   const teamPunchedIn = [...teamPresent, ...teamOnBreak];
