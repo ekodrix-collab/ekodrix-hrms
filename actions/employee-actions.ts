@@ -1,6 +1,7 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 
 export async function getEmployeeDashboardStats(localDate?: string) {
@@ -42,10 +43,49 @@ export async function getEmployeeDashboardStats(localDate?: string) {
         .neq("status", "done")
         .order("position", { ascending: true });
 
-    // 5. Get team presence status from today_attendance view
-    const { data: teamPresence } = await supabase
-        .from("today_attendance")
-        .select("*");
+    // 5. Get team presence: ALL employees who have punched in today (company-wide)
+    // Use admin client to bypass RLS — employees can't normally read other users' attendance
+    const adminClient = createSupabaseAdminClient();
+    const { data: todayAttendanceRecords, error: presenceError } = await adminClient
+        .from("attendance")
+        .select(`
+            user_id,
+            punch_in,
+            punch_out,
+            status,
+            profiles!user_id (
+                id,
+                full_name,
+                avatar_url,
+                role
+            )
+        `)
+        .eq("date", today)
+        .not("punch_in", "is", null)
+        .order("punch_in", { ascending: true });
+
+    if (presenceError) {
+        console.error("Team presence query error:", presenceError.message);
+    }
+
+    // Map into TeamMemberPresence shape
+    const teamPresence = (todayAttendanceRecords || []).map((record: {
+        user_id: string;
+        punch_in: string | null;
+        punch_out: string | null;
+        status: string | null;
+        profiles: { id: string; full_name: string | null; avatar_url: string | null; role: string | null } | { id: string; full_name: string | null; avatar_url: string | null; role: string | null }[] | null;
+    }) => {
+        const profile = Array.isArray(record.profiles) ? record.profiles[0] : record.profiles;
+        const memberStatus = record.status || (record.punch_out ? "completed" : "present");
+        return {
+            id: (profile as { id: string } | null)?.id || record.user_id,
+            full_name: (profile as { full_name: string | null } | null)?.full_name || null,
+            avatar_url: (profile as { avatar_url: string | null } | null)?.avatar_url || null,
+            role: (profile as { role: string | null } | null)?.role || null,
+            status: memberStatus,
+        };
+    });
 
     // 6. Get today's standup
     const { data: todayStandup } = await supabase
