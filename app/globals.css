@@ -4,58 +4,58 @@
 
 @layer base {
   :root {
-    --background: 150 24% 97%;
-    --foreground: 160 34% 12%;
+    --background: 210 24% 97%;
+    --foreground: 222 26% 14%;
     --card: 0 0% 100%;
-    --card-foreground: 160 34% 12%;
+    --card-foreground: 222 26% 14%;
     --popover: 0 0% 100%;
-    --popover-foreground: 160 34% 12%;
-    --primary: 157 78% 33%;
+    --popover-foreground: 222 26% 14%;
+    --primary: 157 64% 32%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 150 32% 93%;
-    --secondary-foreground: 160 38% 16%;
-    --muted: 155 24% 93%;
-    --muted-foreground: 162 14% 39%;
-    --accent: 168 40% 90%;
-    --accent-foreground: 160 38% 16%;
-    --destructive: 4 78% 57%;
+    --secondary: 214 24% 94%;
+    --secondary-foreground: 222 24% 20%;
+    --muted: 214 20% 93%;
+    --muted-foreground: 218 12% 42%;
+    --accent: 158 34% 92%;
+    --accent-foreground: 222 24% 20%;
+    --destructive: 4 73% 55%;
     --destructive-foreground: 0 0% 100%;
-    --success: 156 66% 34%;
+    --success: 155 55% 34%;
     --success-foreground: 0 0% 100%;
-    --warning: 34 94% 54%;
-    --warning-foreground: 32 90% 12%;
-    --border: 156 20% 85%;
-    --input: 156 24% 88%;
-    --ring: 157 76% 34%;
+    --warning: 36 88% 54%;
+    --warning-foreground: 35 78% 14%;
+    --border: 215 18% 84%;
+    --input: 215 18% 84%;
+    --ring: 157 64% 32%;
     --radius-sm: 0.5rem;
-    --radius-md: 0.875rem;
-    --radius-lg: 1.15rem;
+    --radius-md: 0.75rem;
+    --radius-lg: 1rem;
   }
 
   .dark {
-    --background: 168 30% 7%;
-    --foreground: 152 18% 94%;
-    --card: 168 26% 10%;
-    --card-foreground: 152 18% 94%;
-    --popover: 168 26% 10%;
-    --popover-foreground: 152 18% 94%;
-    --primary: 156 76% 45%;
-    --primary-foreground: 160 38% 12%;
-    --secondary: 166 20% 17%;
-    --secondary-foreground: 152 18% 94%;
-    --muted: 166 18% 15%;
-    --muted-foreground: 156 10% 66%;
-    --accent: 170 21% 20%;
-    --accent-foreground: 152 18% 94%;
-    --destructive: 4 75% 45%;
+    --background: 222 23% 10%;
+    --foreground: 210 16% 93%;
+    --card: 222 19% 13%;
+    --card-foreground: 210 16% 93%;
+    --popover: 222 19% 13%;
+    --popover-foreground: 210 16% 93%;
+    --primary: 157 56% 44%;
+    --primary-foreground: 222 24% 12%;
+    --secondary: 222 14% 20%;
+    --secondary-foreground: 210 16% 93%;
+    --muted: 222 12% 18%;
+    --muted-foreground: 214 9% 63%;
+    --accent: 222 13% 22%;
+    --accent-foreground: 210 16% 93%;
+    --destructive: 4 68% 47%;
     --destructive-foreground: 0 0% 100%;
-    --success: 156 73% 44%;
-    --success-foreground: 160 38% 12%;
-    --warning: 37 92% 53%;
-    --warning-foreground: 37 90% 14%;
-    --border: 166 18% 24%;
-    --input: 166 18% 22%;
-    --ring: 156 76% 45%;
+    --success: 156 53% 45%;
+    --success-foreground: 222 24% 12%;
+    --warning: 37 82% 53%;
+    --warning-foreground: 38 72% 14%;
+    --border: 222 12% 28%;
+    --input: 222 12% 26%;
+    --ring: 157 56% 44%;
   }
 
   html,
@@ -70,8 +70,8 @@
   body {
     @apply bg-background text-foreground antialiased;
     background-image:
-      radial-gradient(circle at 16% -10%, hsl(var(--primary) / 0.2), transparent 42%),
-      radial-gradient(circle at 95% 8%, hsl(var(--accent) / 0.4), transparent 36%),
+      radial-gradient(circle at 8% -14%, hsl(var(--muted) / 0.85), transparent 40%),
+      radial-gradient(circle at 96% 4%, hsl(var(--muted) / 0.55), transparent 34%),
       linear-gradient(to bottom, hsl(var(--background)), hsl(var(--background)));
     letter-spacing: 0.01em;
     text-rendering: optimizeLegibility;
@@ -93,7 +93,7 @@
   .font-black,
   b,
   strong {
-    @apply tracking-[0.02em];
+    @apply tracking-[0.015em];
     font-family: var(--font-display), var(--font-outfit), sans-serif;
   }
 
@@ -121,11 +121,15 @@
 
 @layer utilities {
   .glass-panel {
-    @apply border border-white/50 bg-white/75 shadow-xl shadow-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-black/40 dark:shadow-black/30;
+    @apply border border-border/70 bg-card/80 shadow-soft backdrop-blur-xl dark:bg-card/75;
   }
 
   .surface-card {
-    @apply rounded-2xl border border-white/70 bg-white/90 shadow-xl shadow-black/10 backdrop-blur-md dark:border-white/10 dark:bg-zinc-950/70 dark:shadow-black/40;
+    @apply rounded-2xl border border-border/70 bg-card/90 shadow-soft backdrop-blur-sm;
+  }
+
+  .surface-elevated {
+    @apply rounded-2xl border border-border/70 bg-card shadow-lift;
   }
 
   .touch-target {

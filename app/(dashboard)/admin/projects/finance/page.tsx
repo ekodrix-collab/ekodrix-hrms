@@ -153,7 +153,7 @@ export default function AdminProjectsFinancePage() {
           <CardDescription>Select a project to load its detailed finance explorer.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[680px]">
               <thead className="border-y bg-muted/30 text-left text-xs uppercase tracking-[0.08em] text-muted-foreground">
                 <tr>
@@ -189,6 +189,49 @@ export default function AdminProjectsFinancePage() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div className="space-y-2 p-3 md:hidden">
+            {projectRows.map((project) => (
+              <div
+                key={project.id}
+                className={`w-full rounded-xl border p-3 text-left transition-colors ${
+                  activeProjectId === project.id ? "border-primary/30 bg-primary/5" : "hover:bg-muted/20"
+                }`}
+              >
+                <p className="text-sm font-semibold">{project.name}</p>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+                  <div>
+                    <p className="text-muted-foreground">Revenue</p>
+                    <p className="font-semibold">{inr(project.revenue)}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Expense</p>
+                    <p className="font-semibold">{inr(project.expenses)}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Net</p>
+                    <p className={`font-semibold ${project.net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{inr(project.net)}</p>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Button
+                    size="sm"
+                    variant={activeProjectId === project.id ? "default" : "outline"}
+                    className="w-full"
+                    onClick={() => setSelectedProjectId(project.id)}
+                  >
+                    {activeProjectId === project.id ? "Selected" : "Select"}
+                  </Button>
+                  <Link href={`/admin/projects/${project.id}/finance`}>
+                    <Button size="sm" variant="outline" className="w-full">Open</Button>
+                  </Link>
+                </div>
+              </div>
+            ))}
+            {projectRows.length === 0 && (
+              <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">No projects available.</p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -240,7 +283,7 @@ export default function AdminProjectsFinancePage() {
                 <p className="text-sm font-semibold">Recent Transactions</p>
                 <div className="space-y-2">
                   {ledger.slice(0, 8).map((item) => (
-                    <div key={item.id} className="flex items-center justify-between rounded-lg border p-3">
+                    <div key={item.id} className="flex flex-col gap-1 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{item.title}</p>
                         <p className="text-xs text-muted-foreground">{format(new Date(item.date), "MMM dd, yyyy")} - {item.category}</p>
@@ -254,12 +297,20 @@ export default function AdminProjectsFinancePage() {
                 </div>
               </div>
 
-              <Link href={`/admin/projects/${activeProjectId}/finance`}>
-                <Button className="w-full justify-between sm:w-auto">
-                  Open Full Finance Workspace for {activeProject?.name ?? "Project"}
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
+              <div className="surface-card flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">Need full controls and verdicts?</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    Open detailed workspace for {activeProject?.name ?? "selected project"}.
+                  </p>
+                </div>
+                <Link href={`/admin/projects/${activeProjectId}/finance`} className="w-full sm:w-auto">
+                  <Button className="w-full sm:w-auto">
+                    Open Detailed Workspace
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
             </div>
           )}
         </CardContent>

@@ -146,7 +146,7 @@ export function Sidebar() {
     <aside className="glass-panel sticky top-3 z-20 hidden h-[calc(100vh-1.5rem)] w-[300px] shrink-0 flex-col overflow-hidden rounded-3xl lg:mx-3 lg:flex">
       <div className="flex h-20 items-center px-6">
         <Link href="/" className="group flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-emerald-500 text-primary-foreground shadow-soft transition-transform duration-300 group-hover:scale-105">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm transition-transform duration-300 group-hover:scale-105">
             <Zap className="h-6 w-6" />
           </div>
           <div className="flex flex-col">
@@ -215,7 +215,7 @@ export function Sidebar() {
         ))}
 
         <div className="px-2">
-          <div className="rounded-2xl border border-white/60 bg-gradient-to-br from-primary/10 via-emerald-400/5 to-transparent p-4 dark:border-white/10">
+          <div className="rounded-2xl border border-border/70 bg-muted/35 p-4">
             <div className="mb-2 flex items-center gap-2">
               <div className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
               <span className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">
@@ -230,7 +230,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      <div className="border-t border-white/60 bg-zinc-100/40 p-4 dark:border-white/10 dark:bg-zinc-900/35">
+      <div className="border-t border-border/70 bg-muted/25 p-4">
         <div className="group relative">
           <div className="flex items-center gap-3 rounded-2xl p-2 transition-colors hover:bg-zinc-100/90 dark:hover:bg-zinc-800/60">
             <Avatar className="h-10 w-10 border-2 border-white shadow-sm ring-1 ring-primary/20 dark:border-zinc-800">
