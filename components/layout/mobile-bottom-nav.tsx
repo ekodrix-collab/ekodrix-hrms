@@ -16,7 +16,7 @@ export function MobileBottomNav() {
   }
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/55 bg-white/88 backdrop-blur-2xl dark:border-white/10 dark:bg-zinc-950/84 lg:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-card/92 backdrop-blur-2xl lg:hidden">
       <ul className="mx-auto flex max-w-xl items-center justify-between px-2 pb-[max(env(safe-area-inset-bottom),0.55rem)] pt-2">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);

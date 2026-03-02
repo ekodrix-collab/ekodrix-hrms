@@ -12,7 +12,7 @@ export function DashboardShell({
 }>) {
   return (
     <div className="relative min-h-screen overflow-x-clip bg-background">
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_0%,hsl(var(--primary)/0.14),transparent_36%),radial-gradient(circle_at_96%_6%,hsl(var(--accent)/0.28),transparent_34%)]" />
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_0%,hsl(var(--muted)/0.85),transparent_36%),radial-gradient(circle_at_92%_8%,hsl(var(--muted)/0.6),transparent_34%)]" />
       <div className="mx-auto flex min-h-screen w-full max-w-[1800px]">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
