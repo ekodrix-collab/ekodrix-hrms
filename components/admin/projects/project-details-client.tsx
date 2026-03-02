@@ -12,7 +12,7 @@ import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import {
     Calendar, CheckCircle2, Clock, UsersIcon as Users,
-    KanbanSquare, ArrowLeft, ChevronRight, AlertCircle, Edit3, Trash2,
+    KanbanSquare, ArrowLeft, ChevronRight, AlertCircle, Edit3, Trash2, Coins
 } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
@@ -21,6 +21,7 @@ import { AdminTaskForm } from "@/components/tasks/admin-task-form";
 import { approveTaskClaimAction, rejectTaskClaimAction, deleteTaskAction } from "@/actions/tasks";
 import { toast } from "sonner";
 import { XCircle, CheckCircle } from "lucide-react";
+import { ProjectFinanceTab } from "./project-finance-tab";
 import type { Employee, Task, Project } from "@/types/dashboard";
 
 interface ProjectDetailsClientProps {
@@ -117,6 +118,9 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
                         </TabsTrigger>
                         <TabsTrigger value="team" className="rounded-xl px-6 py-2 font-bold data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:shadow-sm transition-all flex items-center gap-2">
                             <Users className="h-4 w-4" />Project Team
+                        </TabsTrigger>
+                        <TabsTrigger value="finance" className="rounded-xl px-6 py-2 font-bold data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:shadow-sm transition-all flex items-center gap-2">
+                            <Coins className="h-4 w-4" />Finance
                         </TabsTrigger>
                     </TabsList>
                     {activeTab === "tasks" && (
@@ -277,6 +281,10 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
                             </Card>
                         ))}
                     </div>
+                </TabsContent>
+
+                <TabsContent value="finance" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <ProjectFinanceTab project={project} />
                 </TabsContent>
             </Tabs>
         </div>

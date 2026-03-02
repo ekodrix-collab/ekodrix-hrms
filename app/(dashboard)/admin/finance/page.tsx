@@ -11,6 +11,7 @@ import {
 } from "@/actions/finance";
 import { getPendingClaims, updateClaimStatus, getExpenseAnalytics } from "@/actions/finance-actions";
 import { getAllEmployees } from "@/actions/employees";
+import { getProjectsAction } from "@/actions/projects";
 import {
     Card,
 
@@ -66,10 +67,11 @@ import {
 
 export default function AdminFinancePage() {
     const queryClient = useQueryClient();
+    const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
     const [isAddingRevenue, setIsAddingRevenue] = useState(false);
     const [isAddingExpense, setIsAddingExpense] = useState(false);
-    const [revenueForm, setRevenueForm] = useState({ amount: "", source: "", description: "" });
-    const [expenseForm, setExpenseForm] = useState({ amount: "", description: "", category_id: "", payment_method: "cash" });
+    const [revenueForm, setRevenueForm] = useState({ amount: "", source: "", description: "", project_id: "" });
+    const [expenseForm, setExpenseForm] = useState({ amount: "", description: "", category_id: "", payment_method: "cash", project_id: "" });
 
 
     const EXPENSE_CATEGORIES = [
@@ -91,9 +93,14 @@ export default function AdminFinancePage() {
         { value: "other", label: "Other" }
     ];
 
+    const { data: projects } = useQuery({
+        queryKey: ["admin-projects"],
+        queryFn: () => getProjectsAction(),
+    });
+
     const { data: financials, isLoading } = useQuery({
-        queryKey: ["company-financials"],
-        queryFn: () => getCompanyFinancials(),
+        queryKey: ["company-financials", selectedProjectId],
+        queryFn: () => getCompanyFinancials(selectedProjectId === "all" ? undefined : selectedProjectId),
     });
 
     const { data: employees } = useQuery({
@@ -102,8 +109,8 @@ export default function AdminFinancePage() {
     });
 
     const { data: ledger } = useQuery({
-        queryKey: ["financial-ledger"],
-        queryFn: () => getFinancialHistory(),
+        queryKey: ["financial-ledger", selectedProjectId],
+        queryFn: () => getFinancialHistory(selectedProjectId === "all" ? undefined : selectedProjectId),
     });
 
     const { data: pendingClaims, refetch: refetchClaims } = useQuery({
@@ -132,13 +139,14 @@ export default function AdminFinancePage() {
     // Categories are now hardcoded
 
     const revenueMutation = useMutation({
-        mutationFn: (data: typeof revenueForm) => postRevenue(Number(data.amount), data.source, data.description) as Promise<{ success: boolean; error?: string }>,
+        mutationFn: (data: typeof revenueForm) => postRevenue(Number(data.amount), data.source, data.description, data.project_id) as Promise<{ success: boolean; error?: string }>,
         onSuccess: (res: { success: boolean; error?: string }) => {
             if (res.success) {
                 toast.success("Revenue posted successfully");
                 setIsAddingRevenue(false);
-                setRevenueForm({ amount: "", source: "", description: "" });
-                queryClient.invalidateQueries({ queryKey: ["company-financials"] });
+                setRevenueForm({ amount: "", source: "", description: "", project_id: "" });
+                queryClient.invalidateQueries({ queryKey: ["company-financials", selectedProjectId] });
+                queryClient.invalidateQueries({ queryKey: ["financial-ledger", selectedProjectId] });
             } else {
                 toast.error(res.error || "Failed to post revenue");
             }
@@ -150,15 +158,16 @@ export default function AdminFinancePage() {
             amount: Number(data.amount),
             description: data.description,
             category: data.category_id,
-            payment_method: data.payment_method
+            payment_method: data.payment_method,
+            project_id: data.project_id
         }) as Promise<{ success: boolean; error?: string }>,
         onSuccess: (res: { success: boolean; error?: string }) => {
             if (res.success) {
                 toast.success("Expense logged successfully");
                 setIsAddingExpense(false);
-                setExpenseForm({ amount: "", description: "", category_id: "", payment_method: "cash" });
-                queryClient.invalidateQueries({ queryKey: ["company-financials"] });
-                queryClient.invalidateQueries({ queryKey: ["financial-ledger"] });
+                setExpenseForm({ amount: "", description: "", category_id: "", payment_method: "cash", project_id: "" });
+                queryClient.invalidateQueries({ queryKey: ["company-financials", selectedProjectId] });
+                queryClient.invalidateQueries({ queryKey: ["financial-ledger", selectedProjectId] });
             } else {
                 toast.error(res.error || "Failed to log expense");
             }
@@ -196,7 +205,21 @@ export default function AdminFinancePage() {
                         Venture Capital View
                     </div>
                     <h1 className="text-4xl font-black tracking-tighter">Company Treasury</h1>
-                    <p className="text-muted-foreground font-medium text-sm">Manage company debt, revenue distribution, and financial health.</p>
+                    <div className="flex items-center gap-4 mt-2">
+                        <p className="text-muted-foreground font-medium text-sm">Manage company debt, revenue distribution, and financial health.</p>
+                        <div className="h-4 w-[1px] bg-zinc-200 dark:bg-zinc-800" />
+                        <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                            <SelectTrigger className="w-[200px] h-8 text-[10px] font-black uppercase tracking-widest border-2 rounded-lg bg-zinc-50 dark:bg-zinc-900">
+                                <SelectValue placeholder="All Projects" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Company-wide Ledger</SelectItem>
+                                {projects?.data?.map((p: any) => (
+                                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -385,6 +408,49 @@ export default function AdminFinancePage() {
                                     )}
                                 </CardContent>
                             </Card>
+
+                            {/* Project Breakdown */}
+                            <Card className="border-none shadow-xl shadow-zinc-200/50 dark:shadow-none bg-white/60 dark:bg-zinc-900/60 backdrop-blur-xl">
+                                <CardHeader>
+                                    <CardTitle className="text-lg flex items-center gap-2">
+                                        <BarChart3 className="h-5 w-5 text-emerald-500" />
+                                        Project Financial Health
+                                    </CardTitle>
+                                    <CardDescription>Profitability by project.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    {financials?.projectBreakdown?.map((proj: any, i: number) => (
+                                        <div key={i} className="space-y-2">
+                                            <div className="flex justify-between items-end">
+                                                <div>
+                                                    <p className="text-[10px] font-black uppercase tracking-tight">{proj.name}</p>
+                                                    <p className="text-[8px] font-bold text-muted-foreground whitespace-nowrap">
+                                                        R: ₹{proj.revenue.toLocaleString()} • E: ₹{proj.expenses.toLocaleString()}
+                                                    </p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className={`text-[10px] font-black ${proj.net >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                        {proj.net >= 0 ? '+' : ''}₹{proj.net.toLocaleString()}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="h-1 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden flex">
+                                                <div
+                                                    className="h-full bg-emerald-500"
+                                                    style={{ width: proj.revenue > 0 ? `${(proj.revenue / (proj.revenue + proj.expenses + 1)) * 100}%` : '0%' }}
+                                                />
+                                                <div
+                                                    className="h-full bg-rose-500"
+                                                    style={{ width: proj.expenses > 0 ? `${(proj.expenses / (proj.revenue + proj.expenses + 1)) * 100}%` : '0%' }}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {(!financials?.projectBreakdown || financials.projectBreakdown.length === 0) && (
+                                        <p className="text-xs text-muted-foreground text-center py-4 italic">No project stats yet.</p>
+                                    )}
+                                </CardContent>
+                            </Card>
                         </div>
 
 
@@ -409,7 +475,7 @@ export default function AdminFinancePage() {
                                                     e.preventDefault();
                                                     revenueMutation.mutate(revenueForm);
                                                 }}>
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                                         <div className="space-y-2">
                                                             <Label className="text-[10px] font-black uppercase tracking-widest opacity-50">Amount</Label>
                                                             <Input
@@ -430,6 +496,20 @@ export default function AdminFinancePage() {
                                                                 required
                                                                 className="h-12 border-2 focus:ring-primary"
                                                             />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label className="text-[10px] font-black uppercase tracking-widest opacity-50">Link to Project</Label>
+                                                            <Select onValueChange={(val) => setRevenueForm({ ...revenueForm, project_id: val })}>
+                                                                <SelectTrigger className="h-12 border-2">
+                                                                    <SelectValue placeholder="General Revenue (No Project)" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="none">General Revenue</SelectItem>
+                                                                    {projects?.data?.map((p: any) => (
+                                                                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
                                                         </div>
                                                     </div>
                                                     <div className="space-y-2">
@@ -487,6 +567,20 @@ export default function AdminFinancePage() {
                                                                 required
                                                                 className="h-12 border-2 focus:ring-rose-500"
                                                             />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label className="text-[10px] font-black uppercase tracking-widest opacity-50">Link to Project</Label>
+                                                            <Select onValueChange={(val) => setExpenseForm({ ...expenseForm, project_id: val })}>
+                                                                <SelectTrigger className="h-12 border-2">
+                                                                    <SelectValue placeholder="Business Expense (No Project)" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="none">General Expense</SelectItem>
+                                                                    {projects?.data?.map((p: any) => (
+                                                                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
                                                         </div>
                                                         <div className="space-y-2">
                                                             <Label className="text-[10px] font-black uppercase tracking-widest opacity-50">Category</Label>
@@ -573,6 +667,7 @@ export default function AdminFinancePage() {
                                                     category: string;
                                                     method: string;
                                                     amount: string | number;
+                                                    project_name?: string;
                                                 }, idx: number) => (
                                                     <motion.tr
                                                         key={item.id}
@@ -590,7 +685,14 @@ export default function AdminFinancePage() {
                                                                     {item.type === 'revenue' ? <ArrowUpRight className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
                                                                 </div>
                                                                 <div>
-                                                                    <p className="text-xs font-black uppercase tracking-tight">{item.title}</p>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <p className="text-xs font-black uppercase tracking-tight">{item.title}</p>
+                                                                        {item.project_name && (
+                                                                            <Badge variant="secondary" className="text-[8px] h-3 px-1 font-bold bg-zinc-100/50">
+                                                                                {item.project_name}
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
                                                                     <p className="text-[10px] font-bold text-muted-foreground">{format(new Date(item.date), "MMM dd, yyyy")}</p>
                                                                 </div>
                                                             </div>
