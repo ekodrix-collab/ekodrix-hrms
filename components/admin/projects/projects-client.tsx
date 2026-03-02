@@ -199,11 +199,18 @@ export function ProjectsClient({ initialProjects }: { initialProjects: Project[]
                                             <Calendar className="h-3.5 w-3.5" />
                                             {project.deadline ? format(new Date(project.deadline), "MMM d, yyyy") : "No Deadline"}
                                         </div>
-                                        <Link href={`/admin/projects/${project.id}`}>
-                                            <Button variant="ghost" size="sm" className="h-9 px-4 font-bold rounded-xl text-primary hover:bg-primary/5 group/btn active:scale-95 transition-all">
-                                                Explore <ChevronRight className="h-4 w-4 ml-1 group-hover/btn:translate-x-1 transition-transform" />
-                                            </Button>
-                                        </Link>
+                                        <div className="flex items-center gap-1">
+                                            <Link href={`/admin/projects/${project.id}/finance`}>
+                                                <Button variant="outline" size="sm" className="h-9 px-3 font-bold rounded-xl">
+                                                    Finance
+                                                </Button>
+                                            </Link>
+                                            <Link href={`/admin/projects/${project.id}`}>
+                                                <Button variant="ghost" size="sm" className="h-9 px-4 font-bold rounded-xl text-primary hover:bg-primary/5 group/btn active:scale-95 transition-all">
+                                                    Explore <ChevronRight className="h-4 w-4 ml-1 group-hover/btn:translate-x-1 transition-transform" />
+                                                </Button>
+                                            </Link>
+                                        </div>
                                     </div>
                                 </div>
                             </CardContent>

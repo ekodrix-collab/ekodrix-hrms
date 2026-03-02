@@ -66,7 +66,12 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-outfit)", "Inter", "sans-serif"],
-        outfit: ["var(--font-outfit)", "sans-serif"]
+        outfit: ["var(--font-outfit)", "sans-serif"],
+        display: ["var(--font-display)", "var(--font-outfit)", "sans-serif"]
+      },
+      boxShadow: {
+        soft: "0 10px 30px -16px rgba(0, 0, 0, 0.22)",
+        lift: "0 18px 40px -20px rgba(0, 0, 0, 0.28)"
       }
     }
   },

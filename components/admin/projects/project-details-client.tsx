@@ -12,7 +12,7 @@ import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import {
     Calendar, CheckCircle2, Clock, UsersIcon as Users,
-    KanbanSquare, ArrowLeft, ChevronRight, AlertCircle, Edit3, Trash2,
+    KanbanSquare, ArrowLeft, ChevronRight, AlertCircle, Edit3, Trash2
 } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
@@ -119,13 +119,20 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
                             <Users className="h-4 w-4" />Project Team
                         </TabsTrigger>
                     </TabsList>
-                    {activeTab === "tasks" && (
-                        <AdminTaskForm
-                            employees={employees}
-                            projectId={project.id}
-                            onSuccess={() => router.refresh()}
-                        />
-                    )}
+                    <div className="flex items-center gap-2">
+                        <Link href={`/admin/projects/${project.id}/finance`}>
+                            <Button variant="outline" className="font-bold">
+                                Finance Workspace
+                            </Button>
+                        </Link>
+                        {activeTab === "tasks" && (
+                            <AdminTaskForm
+                                employees={employees}
+                                projectId={project.id}
+                                onSuccess={() => router.refresh()}
+                            />
+                        )}
+                    </div>
                 </div>
 
                 <TabsContent value="tasks" className="space-y-4">
@@ -278,6 +285,7 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
                         ))}
                     </div>
                 </TabsContent>
+
             </Tabs>
         </div>
     );
