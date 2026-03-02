@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
-import { Search, Sparkles } from "lucide-react";
+import { CalendarDays, Search } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { InboxBell } from "@/components/admin/inbox/inbox-bell";
@@ -24,7 +24,7 @@ export function Header() {
   }).format(new Date());
 
   return (
-    <header className="sticky top-0 z-30 border-b border-white/55 bg-white/70 backdrop-blur-2xl dark:border-white/10 dark:bg-black/35">
+    <header className="sticky top-0 z-30 border-b border-border/70 bg-card/78 backdrop-blur-2xl">
       <div className="flex h-16 items-center gap-3 px-3 sm:px-4 lg:h-[74px] lg:px-8">
         <MobileNav />
 
@@ -33,7 +33,7 @@ export function Header() {
             {currentLabel}
           </p>
           <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            <CalendarDays className="h-3.5 w-3.5 text-primary" />
             <span>{todayLabel}</span>
           </div>
         </div>

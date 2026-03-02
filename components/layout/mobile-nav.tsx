@@ -49,18 +49,18 @@ export function MobileNav() {
         <Button
           variant="outline"
           size="icon"
-          className="h-10 w-10 border-white/50 bg-white/70 text-zinc-700 shadow-sm dark:border-white/10 dark:bg-zinc-900/55 dark:text-zinc-200 lg:hidden"
+          className="h-10 w-10 border-border/70 bg-card/90 text-zinc-700 shadow-sm dark:text-zinc-200 lg:hidden"
         >
           <Menu className="h-5 w-5" />
         </Button>
       </DialogTrigger>
       <DialogContent
-        className="left-0 top-0 h-dvh w-[88vw] max-w-[360px] translate-x-0 translate-y-0 rounded-none border-r border-white/55 bg-white/95 p-0 shadow-2xl shadow-black/20 backdrop-blur-2xl duration-300 dark:border-white/10 dark:bg-zinc-950/88 [&>button]:hidden"
+        className="left-0 top-0 h-dvh w-[88vw] max-w-[360px] translate-x-0 translate-y-0 rounded-none border-r border-border/70 bg-card/95 p-0 shadow-2xl shadow-black/20 backdrop-blur-2xl duration-300 dark:bg-card/92 [&>button]:hidden"
       >
         <div className="flex h-full flex-col">
-          <div className="flex h-20 items-center justify-between border-b border-white/50 px-5 dark:border-white/10">
+          <div className="flex h-20 items-center justify-between border-b border-border/70 px-5">
             <Link href="/" className="group flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-emerald-500 text-primary-foreground shadow-soft">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
                 <Zap className="h-5 w-5" />
               </div>
               <div className="flex flex-col">
@@ -127,7 +127,7 @@ export function MobileNav() {
             ))}
           </div>
 
-          <div className="border-t border-white/50 bg-zinc-100/60 p-4 dark:border-white/10 dark:bg-zinc-900/60">
+          <div className="border-t border-border/70 bg-muted/30 p-4">
             <div className="flex items-center gap-3 rounded-2xl p-2">
               <Avatar className="h-10 w-10 border-2 border-white shadow-sm ring-1 ring-primary/20 dark:border-zinc-800">
                 <AvatarImage src={user?.profile?.avatar_url} />

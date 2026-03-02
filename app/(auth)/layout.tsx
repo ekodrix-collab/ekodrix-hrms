@@ -5,7 +5,7 @@ export default function AuthLayout({
 }>) {
   return (
     <div className="relative min-h-screen overflow-hidden bg-background">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_-6%,hsl(var(--primary)/0.2),transparent_42%),radial-gradient(circle_at_94%_8%,hsl(var(--accent)/0.34),transparent_35%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_-6%,hsl(var(--muted)/0.85),transparent_42%),radial-gradient(circle_at_94%_8%,hsl(var(--muted)/0.58),transparent_35%)]" />
       <div className="relative mx-auto grid min-h-screen w-full max-w-6xl lg:grid-cols-[1.1fr_0.9fr]">
         <section className="hidden border-r border-white/55 p-10 lg:flex lg:flex-col lg:justify-between dark:border-white/10">
           <div className="space-y-6">

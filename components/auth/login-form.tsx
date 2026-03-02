@@ -6,7 +6,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Zap } from "lucide-react";
+import { Eye, EyeOff, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { signInWithPassword } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ type FormValues = z.infer<typeof schema>;
 
 export function LoginForm() {
   const [isPending, startTransition] = React.useTransition();
+  const [showPassword, setShowPassword] = React.useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -99,7 +100,7 @@ export function LoginForm() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2, duration: durations.normal, ease: easings.easeOut }}
-              className="space-y-2"
+              className="relative space-y-2"
             >
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
@@ -112,10 +113,19 @@ export function LoginForm() {
               </div>
               <Input
                 id="password"
-                type="password"
+                type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
+                className="pr-11"
                 {...form.register("password")}
               />
+              <button
+                type="button"
+                className="absolute right-3 top-[38px] text-muted-foreground hover:text-foreground"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
               {form.formState.errors.password?.message ? (
                 <p className="text-sm text-destructive">{form.formState.errors.password.message}</p>
               ) : null}
