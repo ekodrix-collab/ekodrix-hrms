@@ -69,7 +69,7 @@ export function NotificationBell() {
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="relative h-10 w-10 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    className="relative h-10 w-10 rounded-full border border-transparent bg-white/60 hover:bg-zinc-100 dark:bg-zinc-900/50 dark:hover:bg-zinc-800"
                 >
                     <Bell className="h-5 w-5" />
                     {unreadCount > 0 && (
@@ -83,7 +83,7 @@ export function NotificationBell() {
                 </Button>
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent align="end" className="w-[380px] max-h-[500px] overflow-y-auto">
+            <DropdownMenuContent align="end" className="w-[min(92vw,24rem)] max-h-[500px] overflow-y-auto sm:w-[380px]">
                 <DropdownMenuLabel className="flex items-center justify-between">
                     <span>Notifications</span>
                     {unreadCount > 0 && (

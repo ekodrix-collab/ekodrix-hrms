@@ -45,12 +45,10 @@ export function ForgotPasswordForm() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: durations.slower, ease: easings.easeOut }}
     >
-      <Card className="shadow-lg">
+      <Card>
         <CardHeader className="space-y-2">
           <CardTitle className="text-2xl">Reset password</CardTitle>
-          <CardDescription>
-            We’ll email you a secure reset link.
-          </CardDescription>
+          <CardDescription>We will email you a secure reset link.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -83,4 +81,3 @@ export function ForgotPasswordForm() {
     </motion.div>
   );
 }
-

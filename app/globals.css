@@ -4,70 +4,63 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 150 24% 97%;
+    --foreground: 160 34% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 160 34% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    /* Ekodrix brand (green) */
-    --primary: 142.1 76.2% 36.3%;
-    --primary-foreground: 355.7 100% 97.3%;
-
-    --secondary: 150 40% 96.1%;
-    --secondary-foreground: 150 47.4% 11.2%;
-    --muted: 150 40% 96.1%;
-    --muted-foreground: 150 16.3% 46.9%;
-    --accent: 150 40% 96.1%;
-    --accent-foreground: 150 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 150 40% 98%;
-
-    --success: 142.1 76.2% 36.3%;
-    --success-foreground: 355.7 100% 97.3%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 48 96% 89%;
-
-    --border: 150 31.8% 91.4%;
-    --input: 150 31.8% 91.4%;
-    --ring: 142.1 76.2% 36.3%;
-
-    --radius-sm: 0.375rem;
-    --radius-md: 0.5rem;
-    --radius-lg: 0.75rem;
+    --popover-foreground: 160 34% 12%;
+    --primary: 157 78% 33%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 150 32% 93%;
+    --secondary-foreground: 160 38% 16%;
+    --muted: 155 24% 93%;
+    --muted-foreground: 162 14% 39%;
+    --accent: 168 40% 90%;
+    --accent-foreground: 160 38% 16%;
+    --destructive: 4 78% 57%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 156 66% 34%;
+    --success-foreground: 0 0% 100%;
+    --warning: 34 94% 54%;
+    --warning-foreground: 32 90% 12%;
+    --border: 156 20% 85%;
+    --input: 156 24% 88%;
+    --ring: 157 76% 34%;
+    --radius-sm: 0.5rem;
+    --radius-md: 0.875rem;
+    --radius-lg: 1.15rem;
   }
 
   .dark {
-    --background: 150 84% 4.9%;
-    --foreground: 150 40% 98%;
-    --card: 150 84% 4.9%;
-    --card-foreground: 150 40% 98%;
-    --popover: 150 84% 4.9%;
-    --popover-foreground: 150 40% 98%;
+    --background: 168 30% 7%;
+    --foreground: 152 18% 94%;
+    --card: 168 26% 10%;
+    --card-foreground: 152 18% 94%;
+    --popover: 168 26% 10%;
+    --popover-foreground: 152 18% 94%;
+    --primary: 156 76% 45%;
+    --primary-foreground: 160 38% 12%;
+    --secondary: 166 20% 17%;
+    --secondary-foreground: 152 18% 94%;
+    --muted: 166 18% 15%;
+    --muted-foreground: 156 10% 66%;
+    --accent: 170 21% 20%;
+    --accent-foreground: 152 18% 94%;
+    --destructive: 4 75% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 156 73% 44%;
+    --success-foreground: 160 38% 12%;
+    --warning: 37 92% 53%;
+    --warning-foreground: 37 90% 14%;
+    --border: 166 18% 24%;
+    --input: 166 18% 22%;
+    --ring: 156 76% 45%;
+  }
 
-    --primary: 142.1 70.6% 45.3%;
-    --primary-foreground: 150 47.4% 11.2%;
-
-    --secondary: 150 32.6% 17.5%;
-    --secondary-foreground: 150 40% 98%;
-    --muted: 150 32.6% 17.5%;
-    --muted-foreground: 150 20.2% 65.1%;
-    --accent: 150 32.6% 17.5%;
-    --accent-foreground: 150 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 150 40% 98%;
-
-    --success: 142.1 70.6% 45.3%;
-    --success-foreground: 150 47.4% 11.2%;
-    --warning: 48 96% 53%;
-    --warning-foreground: 48 96% 89%;
-
-    --border: 150 32.6% 17.5%;
-    --input: 150 32.6% 17.5%;
-    --ring: 142.1 70.6% 45.3%;
+  html,
+  body {
+    min-height: 100%;
   }
 
   * {
@@ -75,7 +68,19 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased tracking-[0.015em];
+    @apply bg-background text-foreground antialiased;
+    background-image:
+      radial-gradient(circle at 16% -10%, hsl(var(--primary) / 0.2), transparent 42%),
+      radial-gradient(circle at 95% 8%, hsl(var(--accent) / 0.4), transparent 36%),
+      linear-gradient(to bottom, hsl(var(--background)), hsl(var(--background)));
+    letter-spacing: 0.01em;
+    text-rendering: optimizeLegibility;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.22);
+    color: hsl(var(--foreground));
   }
 
   h1,
@@ -88,6 +93,42 @@
   .font-black,
   b,
   strong {
-    @apply tracking-[0.025em];
+    @apply tracking-[0.02em];
+    font-family: var(--font-display), var(--font-outfit), sans-serif;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: hsl(var(--muted-foreground) / 0.32);
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.45);
+    background-clip: content-box;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply border border-white/50 bg-white/75 shadow-xl shadow-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-black/40 dark:shadow-black/30;
+  }
+
+  .surface-card {
+    @apply rounded-2xl border border-white/70 bg-white/90 shadow-xl shadow-black/10 backdrop-blur-md dark:border-white/10 dark:bg-zinc-950/70 dark:shadow-black/40;
+  }
+
+  .touch-target {
+    min-height: 44px;
   }
 }

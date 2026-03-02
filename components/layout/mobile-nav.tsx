@@ -3,110 +3,158 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, Zap } from "lucide-react";
-import { motion } from "framer-motion";
+import { Menu, LogOut, X, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-    Dialog,
-    DialogContent,
-    DialogTrigger,
-    DialogTitle,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
+import { useQuery } from "@tanstack/react-query";
+import { getCurrentUser, signOut } from "@/actions/auth";
+import { getSidebarCountsAction } from "@/actions/sidebar";
 import { adminNav, employeeNav } from "./sidebar";
 
 export function MobileNav() {
-    const [open, setOpen] = React.useState(false);
-    const pathname = usePathname() ?? "";
-    const isAdmin = pathname.startsWith("/admin");
-    const navGroups = isAdmin ? adminNav : employeeNav;
+  const [open, setOpen] = React.useState(false);
+  const pathname = usePathname() ?? "";
+  const isAdmin = pathname.startsWith("/admin");
+  const navGroups = isAdmin ? adminNav : employeeNav;
 
-    // Close sheet on path change
-    React.useEffect(() => {
-        setOpen(false);
-    }, [pathname]);
+  const { data: user } = useQuery({
+    queryKey: ["current-user"],
+    queryFn: () => getCurrentUser(),
+  });
 
-    return (
-        <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="md:hidden h-10 w-10 text-zinc-600 dark:text-zinc-400"
-                >
-                    <Menu className="h-6 w-6" />
-                </Button>
-            </DialogTrigger>
-            <DialogContent
-                className="fixed left-0 top-0 bottom-0 w-[280px] h-full p-0 border-r border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-black/40 backdrop-blur-3xl focus-visible:outline-none"
-                style={{
-                    transform: "none",
-                    left: 0,
-                    top: 0,
-                }}
-            >
-                <div className="flex flex-col h-full">
-                    {/* Brand Section */}
-                    <div className="h-20 flex items-center px-6 mb-2">
-                        <Link href="/" className="flex items-center gap-3 group">
-                            <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
-                                <Zap className="h-6 w-6 text-white fill-current" />
-                            </div>
-                            <div className="flex flex-col">
-                                <DialogTitle className="text-lg font-black leading-none text-zinc-900 dark:text-white uppercase mt-0.5">
-                                    Ekodrix
-                                </DialogTitle>
-                                <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-primary">HRMS PLATFORM</span>
-                            </div>
+  const { data: counts } = useQuery({
+    queryKey: ["sidebar-counts"],
+    queryFn: async () => {
+      const res = await getSidebarCountsAction();
+      return res.ok ? res.data : { adminInbox: 0, marketplace: 0 };
+    },
+    refetchInterval: 30000,
+  });
+
+  React.useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-10 w-10 border-white/50 bg-white/70 text-zinc-700 shadow-sm dark:border-white/10 dark:bg-zinc-900/55 dark:text-zinc-200 lg:hidden"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent
+        className="left-0 top-0 h-dvh w-[88vw] max-w-[360px] translate-x-0 translate-y-0 rounded-none border-r border-white/55 bg-white/95 p-0 shadow-2xl shadow-black/20 backdrop-blur-2xl duration-300 dark:border-white/10 dark:bg-zinc-950/88 [&>button]:hidden"
+      >
+        <div className="flex h-full flex-col">
+          <div className="flex h-20 items-center justify-between border-b border-white/50 px-5 dark:border-white/10">
+            <Link href="/" className="group flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-emerald-500 text-primary-foreground shadow-soft">
+                <Zap className="h-5 w-5" />
+              </div>
+              <div className="flex flex-col">
+                <DialogTitle className="mt-0.5 text-base font-black uppercase leading-none text-zinc-900 dark:text-zinc-100">
+                  Ekodrix
+                </DialogTitle>
+                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">HRMS PLATFORM</span>
+              </div>
+            </Link>
+            <DialogClose asChild>
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-zinc-500">
+                <X className="h-4 w-4" />
+              </Button>
+            </DialogClose>
+          </div>
+
+          <div className="flex-1 space-y-7 overflow-y-auto px-4 py-4">
+            {navGroups.map((group) => (
+              <div key={group.group} className="space-y-2">
+                <h3 className="px-3 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400 dark:text-zinc-500">
+                  {group.group}
+                </h3>
+                <ul className="space-y-1.5">
+                  {group.items.map((item) => {
+                    const isActive = pathname === item.href;
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          href={item.disabled ? "#" : item.href}
+                          className={cn(
+                            "group relative flex touch-target items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all",
+                            isActive
+                              ? "bg-primary text-white shadow-soft"
+                              : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800/80 dark:hover:text-zinc-100",
+                            item.disabled && "opacity-40 cursor-not-allowed"
+                          )}
+                        >
+                          <item.icon
+                            className={cn(
+                              "h-4 w-4 transition-transform duration-300 group-hover:scale-110",
+                              isActive ? "text-white" : "text-zinc-400 group-hover:text-primary"
+                            )}
+                          />
+                          <span className="flex-1">{item.label}</span>
+
+                          {(item.badgeKey === "adminInbox" && (counts?.adminInbox ?? 0) > 0) && (
+                            <span className="min-w-[20px] rounded-md bg-red-500 px-1.5 py-0.5 text-center text-[10px] font-black text-white">
+                              {counts!.adminInbox}
+                            </span>
+                          )}
+                          {(item.badgeKey === "marketplace" && (counts?.marketplace ?? 0) > 0) && (
+                            <span className="min-w-[20px] rounded-md bg-blue-500 px-1.5 py-0.5 text-center text-[10px] font-black text-white">
+                              {counts!.marketplace}
+                            </span>
+                          )}
+
+                          {isActive && <span className="absolute right-2 h-1.5 w-1.5 rounded-full bg-white" />}
                         </Link>
-                    </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
 
-                    {/* Navigation Groups */}
-                    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-8 scrollbar-hide">
-                        {navGroups.map((group) => (
-                            <div key={group.group} className="space-y-2">
-                                <h3 className="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
-                                    {group.group}
-                                </h3>
-                                <ul className="space-y-1">
-                                    {group.items.map((item) => {
-                                        const isActive = pathname === item.href;
-                                        return (
-                                            <li key={item.href}>
-                                                <Link
-                                                    href={item.disabled ? "#" : item.href}
-                                                    className={cn(
-                                                        "group relative flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-300",
-                                                        isActive
-                                                            ? "bg-primary text-white shadow-lg shadow-primary/20"
-                                                            : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-100",
-                                                        item.disabled && "opacity-40 cursor-not-allowed"
-                                                    )}
-                                                >
-                                                    <item.icon className={cn(
-                                                        "h-4 w-4 transition-transform duration-300 group-hover:scale-110",
-                                                        isActive ? "text-white" : "text-zinc-400 group-hover:text-primary"
-                                                    )} />
-                                                    <span>{item.label}</span>
-
-                                                    {isActive && (
-                                                        <motion.div
-                                                            layoutId="active-indicator-mobile"
-                                                            className="absolute right-2 h-1 w-1 rounded-full bg-white"
-                                                            initial={{ opacity: 0 }}
-                                                            animate={{ opacity: 1 }}
-                                                        />
-                                                    )}
-                                                </Link>
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </DialogContent>
-        </Dialog>
-    );
+          <div className="border-t border-white/50 bg-zinc-100/60 p-4 dark:border-white/10 dark:bg-zinc-900/60">
+            <div className="flex items-center gap-3 rounded-2xl p-2">
+              <Avatar className="h-10 w-10 border-2 border-white shadow-sm ring-1 ring-primary/20 dark:border-zinc-800">
+                <AvatarImage src={user?.profile?.avatar_url} />
+                <AvatarFallback className="bg-primary/10 font-black text-primary">
+                  {user?.profile?.full_name?.charAt(0) || "U"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-black uppercase text-zinc-900 dark:text-zinc-100">
+                  {user?.profile?.full_name || "Syncing Profile..."}
+                </p>
+                <p className="truncate text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                  {user?.profile?.role || "Employee"}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 rounded-full text-zinc-500 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/30"
+                onClick={() => signOut()}
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
