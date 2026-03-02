@@ -277,7 +277,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                         <div className="flex justify-between items-center">
                                             <div className="flex items-center gap-2">
                                                 <Avatar className="h-5 w-5 border border-white/20">
-                                                    <AvatarImage src={verdict.profiles?.avatar_url} />
+                                                    <AvatarImage src={verdict.profiles?.avatar_url ?? undefined} />
                                                     <AvatarFallback className="text-[8px] font-black text-primary">{verdict.profiles?.full_name?.charAt(0)}</AvatarFallback>
                                                 </Avatar>
                                                 <span className="text-[10px] font-bold opacity-80">{verdict.profiles?.full_name}</span>
