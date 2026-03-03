@@ -18,7 +18,8 @@ import {
   ListTodo,
   CalendarCheck,
   Inbox,
-  LayoutGrid
+  LayoutGrid,
+  KeyRound
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -68,6 +69,12 @@ export const adminNav: NavGroup[] = [
     ]
   },
   {
+    group: "Knowledge",
+    items: [
+      { href: "/admin/vaults", label: "Vaults", icon: KeyRound },
+    ]
+  },
+  {
     group: "Organization",
     items: [
       { href: "/admin/departments", label: "Departments", icon: Briefcase, disabled: true },
@@ -87,6 +94,7 @@ export const employeeNav: NavGroup[] = [
       { href: "/employee/leaves", label: "My Leaves", icon: CalendarCheck },
       { href: "/employee/tasks", label: "My Tasks", icon: KanbanSquare },
       { href: "/employee/finance", label: "My Earnings", icon: CreditCard },
+      { href: "/employee/vaults", label: "Vaults", icon: KeyRound },
     ]
   },
   {
