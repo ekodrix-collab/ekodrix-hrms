@@ -107,15 +107,19 @@ function SortableTaskCard({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="mb-3 select-none">
+    <div ref={setNodeRef} style={style} className="mb-3 select-none">
       <Card
         onClick={() => task.subtasks && task.subtasks.length > 0 && setIsExpanded(!isExpanded)}
-        className={`cursor-grab active:cursor-grabbing border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm hover:shadow-lg hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-all duration-200 ${isDragging ? 'shadow-xl scale-105 rotate-1' : ''} group relative overflow-hidden ${task.subtasks && task.subtasks.length > 0 ? 'cursor-pointer' : ''}`}
+        className={`border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm hover:shadow-lg hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-all duration-200 ${isDragging ? 'shadow-xl scale-105 rotate-1' : ''} group relative overflow-hidden ${task.subtasks && task.subtasks.length > 0 ? 'cursor-pointer' : ''}`}
       >
         <div className={`absolute left-0 top-0 bottom-0 w-1 ${task.priority === "high" ? "bg-red-500" : task.priority === "medium" ? "bg-orange-500" : "bg-blue-500"}`} />
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
-            <div className="mt-1 opacity-50 group-hover:opacity-100 transition-opacity">
+            <div
+              {...attributes}
+              {...listeners}
+              className="mt-1 opacity-50 group-hover:opacity-100 transition-opacity touch-none cursor-grab active:cursor-grabbing"
+            >
               <GripVertical className="h-4 w-4 text-zinc-400" />
             </div>
             <div className="flex-1 min-w-0">
@@ -265,7 +269,7 @@ function TaskColumn({
   return (
     <Card
       ref={setNodeRef}
-      className={`border border-zinc-100 dark:border-zinc-800 transition-colors duration-200 ${isOver ? 'bg-primary/5 dark:bg-primary/10' : 'bg-white/40 dark:bg-zinc-900/40'} backdrop-blur-md flex flex-col h-full min-h-[600px] shadow-sm`}
+      className={`border border-zinc-100 dark:border-zinc-800 transition-colors duration-200 ${isOver ? 'bg-primary/5 dark:bg-primary/10' : 'bg-white/40 dark:bg-zinc-900/40'} backdrop-blur-md flex flex-col min-h-[500px] md:min-h-[600px] shadow-sm`}
     >
       <CardHeader className={`pb-4 border-b border-zinc-100 dark:border-zinc-800`}>
         <CardTitle className="text-sm font-bold flex items-center justify-between">
@@ -517,13 +521,13 @@ export default function EmployeeTasksPage() {
   }
 
   return (
-    <div className="bg-[#fafafa] dark:bg-black/95 transition-colors duration-500 min-h-screen overflow-hidden">
+    <div className="bg-[#fafafa] dark:bg-black/95 transition-colors duration-500 min-h-screen overflow-x-hidden">
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-500/5 rounded-full blur-[120px]" />
       </div>
 
-      <div className="relative h-screen flex flex-col px-4 md:px-8 max-w-[1800px] mx-auto animate-in fade-in duration-700">
+      <div className="relative min-h-screen md:h-screen flex flex-col px-4 md:px-8 max-w-[1800px] mx-auto animate-in fade-in duration-700">
         <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pt-6 pb-4">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -695,45 +699,54 @@ export default function EmployeeTasksPage() {
         )}
 
         <main className="flex-1 min-h-0 pb-8">
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-500 md:hidden">
+            Swipe left or right to view all columns
+          </p>
           <DndContext
             sensors={sensors}
             collisionDetection={closestCorners}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="grid md:grid-cols-3 gap-6 h-full">
-              <TaskColumn
-                title="To Do"
-                status="todo"
-                tasks={todoTasks}
-                color="text-zinc-500"
-                icon={Clock}
-                onEdit={handleEditTask}
-                onDelete={handleDeleteTask}
-                onToggleSubtask={handleToggleSubtask}
-              />
+            <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scroll-smooth scrollbar-hide overscroll-x-contain [touch-action:pan-x] md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:snap-none">
+              <div className="w-[88vw] max-w-[380px] shrink-0 snap-start md:w-auto md:max-w-none md:shrink">
+                <TaskColumn
+                  title="To Do"
+                  status="todo"
+                  tasks={todoTasks}
+                  color="text-zinc-500"
+                  icon={Clock}
+                  onEdit={handleEditTask}
+                  onDelete={handleDeleteTask}
+                  onToggleSubtask={handleToggleSubtask}
+                />
+              </div>
 
-              <TaskColumn
-                title="In Progress"
-                status="in_progress"
-                tasks={inProgressTasks}
-                color="text-primary"
-                icon={Calendar}
-                onEdit={handleEditTask}
-                onDelete={handleDeleteTask}
-                onToggleSubtask={handleToggleSubtask}
-              />
+              <div className="w-[88vw] max-w-[380px] shrink-0 snap-start md:w-auto md:max-w-none md:shrink">
+                <TaskColumn
+                  title="In Progress"
+                  status="in_progress"
+                  tasks={inProgressTasks}
+                  color="text-primary"
+                  icon={Calendar}
+                  onEdit={handleEditTask}
+                  onDelete={handleDeleteTask}
+                  onToggleSubtask={handleToggleSubtask}
+                />
+              </div>
 
-              <TaskColumn
-                title="Done"
-                status="done"
-                tasks={doneTasks}
-                color="text-green-500"
-                icon={CheckCircle2}
-                onEdit={handleEditTask}
-                onDelete={handleDeleteTask}
-                onToggleSubtask={handleToggleSubtask}
-              />
+              <div className="w-[88vw] max-w-[380px] shrink-0 snap-start md:w-auto md:max-w-none md:shrink">
+                <TaskColumn
+                  title="Done"
+                  status="done"
+                  tasks={doneTasks}
+                  color="text-green-500"
+                  icon={CheckCircle2}
+                  onEdit={handleEditTask}
+                  onDelete={handleDeleteTask}
+                  onToggleSubtask={handleToggleSubtask}
+                />
+              </div>
             </div>
 
             <DragOverlay>
