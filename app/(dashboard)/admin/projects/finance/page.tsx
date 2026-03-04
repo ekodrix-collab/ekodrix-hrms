@@ -34,6 +34,7 @@ type ProjectItem = { id: string; name: string };
 type ProjectBreakdown = { id: string; name: string; revenue: number; expenses: number; net: number };
 type FinancialsResult = { projectBreakdown: ProjectBreakdown[] };
 type LedgerItem = { id: string; title: string; type: "revenue" | "expense"; date: string; amount: number | string; category: string };
+type ExpenseForm = { amount: string; description: string; category: string; payment_method: string };
 
 const inr = (value: number) =>
   `INR ${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(Number(value) || 0)}`;
@@ -44,7 +45,7 @@ export default function AdminProjectsFinancePage() {
   const [revenueOpen, setRevenueOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [revenueForm, setRevenueForm] = useState({ amount: "", source: "", description: "" });
-  const [expenseForm, setExpenseForm] = useState({
+  const [expenseForm, setExpenseForm] = useState<ExpenseForm>({
     amount: "",
     description: "",
     category: EXPENSE_CATEGORIES[0],
@@ -385,8 +386,8 @@ function ProjectExpenseDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectName: string;
-  form: { amount: string; description: string; category: string; payment_method: string };
-  setForm: Dispatch<SetStateAction<{ amount: string; description: string; category: string; payment_method: string }>>;
+  form: ExpenseForm;
+  setForm: Dispatch<SetStateAction<ExpenseForm>>;
   mutation: { mutate: () => void; isPending: boolean };
 }) {
   return (

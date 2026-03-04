@@ -51,6 +51,13 @@ type LedgerItem = {
   amount: number | string;
 };
 
+type ExpenseForm = {
+  amount: string;
+  description: string;
+  category: string;
+  payment_method: string;
+};
+
 type PendingClaim = {
   id: string;
   amount: number;
@@ -75,7 +82,7 @@ export default function AdminFinancePage() {
   const [revenueOpen, setRevenueOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [revenueForm, setRevenueForm] = useState({ amount: "", source: "", description: "" });
-  const [expenseForm, setExpenseForm] = useState({
+  const [expenseForm, setExpenseForm] = useState<ExpenseForm>({
     amount: "",
     description: "",
     category: EXPENSE_CATEGORIES[0],
@@ -328,8 +335,8 @@ function ExpenseDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  form: { amount: string; description: string; category: string; payment_method: string };
-  setForm: Dispatch<SetStateAction<{ amount: string; description: string; category: string; payment_method: string }>>;
+  form: ExpenseForm;
+  setForm: Dispatch<SetStateAction<ExpenseForm>>;
   mutation: { mutate: () => void; isPending: boolean };
 }) {
   return (
