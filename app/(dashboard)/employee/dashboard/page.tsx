@@ -465,6 +465,12 @@ export default function EmployeeDashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-black text-orange-600">🔥 {stats?.streak || 0} days</div>
+                  <Badge
+                    variant="outline"
+                    className="mt-2 h-5 w-fit border-orange-200 bg-orange-50 px-2 text-[9px] font-black uppercase tracking-widest text-orange-700 dark:border-orange-900/40 dark:bg-orange-950/20 dark:text-orange-300"
+                  >
+                    Excludes Sundays
+                  </Badge>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Keep it going!</p>
                 </CardContent>
               </Card>

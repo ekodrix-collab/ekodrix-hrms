@@ -4,10 +4,12 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getOrgContext } from "@/lib/auth-utils";
 import { revalidatePath } from "next/cache";
 import { Expense } from "@/types/common";
+import { normalizeExpenseCategory } from "@/lib/finance-categories";
 
 export async function createExpenseClaim(formData: FormData) {
     const amount = parseFloat(formData.get("amount") as string);
-    const category = formData.get("category") as string;
+    const rawCategory = formData.get("category") as string;
+    const category = normalizeExpenseCategory(rawCategory);
     const description = formData.get("description") as string;
     const date = formData.get("date") as string;
     // For now we will just mock the receipt URL or handle it if upload implementation exists
@@ -55,7 +57,12 @@ export async function getMyClaims() {
 
     if (error) return { ok: false, message: error.message };
 
-    return { ok: true, data: claims || [] };
+    const normalizedClaims = (claims || []).map((claim: { category: string | null }) => ({
+        ...claim,
+        category: normalizeExpenseCategory(claim.category)
+    }));
+
+    return { ok: true, data: normalizedClaims };
 }
 
 // Admin Actions
@@ -81,12 +88,18 @@ export async function getPendingClaims() {
     // Filter by org manually if needed, or rely on RLS + join 
     // (Assuming RLS policies are set up correctly for admins to see all org expenses)
 
-    return { ok: true, data: claims || [] };
+    const normalizedClaims = (claims || []).map((claim: { category: string | null }) => ({
+        ...claim,
+        category: normalizeExpenseCategory(claim.category)
+    }));
+
+    return { ok: true, data: normalizedClaims };
 }
 
 export async function updateClaimStatus(claimId: string, status: "approved" | "rejected", reason?: string) {
     const supabase = createSupabaseServerClient();
     const { organizationId } = await getOrgContext();
+    if (!organizationId) return { ok: false, message: "Organization context missing" };
 
     // meaningful verification of admin status should be done here or via RLS
 
@@ -150,7 +163,7 @@ export async function getExpenseAnalytics() {
     // 2. Category Breakdown
     const categoryMap: Record<string, number> = {};
     (expenses as unknown as Expense[])?.forEach((exp) => {
-        const cat = exp.category || "Uncategorized";
+        const cat = normalizeExpenseCategory(exp.category);
         categoryMap[cat] = (categoryMap[cat] || 0) + Number(exp.amount);
     });
 

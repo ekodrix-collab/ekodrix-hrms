@@ -32,8 +32,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { UnpaidAccrual } from "@/types/dashboard";
+import { EXPENSE_CATEGORIES } from "@/lib/finance-categories";
 
-const CATEGORIES = ["Salary Payments", "Office Rent", "Electricity", "WiFi & Internet", "Marketing & Ads", "Miscellaneous"];
 const METHODS = [
   { value: "cash", label: "Cash" },
   { value: "upi", label: "UPI" },
@@ -55,6 +55,7 @@ type PendingClaim = {
   id: string;
   amount: number;
   description: string;
+  category: string;
   expense_date: string;
   profiles: { full_name: string; avatar_url: string | null } | null;
 };
@@ -77,7 +78,7 @@ export default function AdminFinancePage() {
   const [expenseForm, setExpenseForm] = useState({
     amount: "",
     description: "",
-    category: CATEGORIES[0],
+    category: EXPENSE_CATEGORIES[0],
     payment_method: "cash"
   });
 
@@ -130,7 +131,7 @@ export default function AdminFinancePage() {
       if (res.success) {
         toast.success("Expense logged.");
         setExpenseOpen(false);
-        setExpenseForm({ amount: "", description: "", category: CATEGORIES[0], payment_method: "cash" });
+        setExpenseForm({ amount: "", description: "", category: EXPENSE_CATEGORIES[0], payment_method: "cash" });
         queryClient.invalidateQueries({ queryKey: ["company-financials"] });
         queryClient.invalidateQueries({ queryKey: ["financial-ledger"] });
       } else toast.error(res.error ?? "Failed to log expense");
@@ -215,7 +216,7 @@ export default function AdminFinancePage() {
                     </Avatar>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold">{claim.profiles?.full_name ?? "Employee"}</p>
-                      <p className="truncate text-xs text-muted-foreground">{claim.description} - {format(new Date(claim.expense_date), "MMM dd, yyyy")}</p>
+                      <p className="truncate text-xs text-muted-foreground">{claim.description} - {format(new Date(claim.expense_date), "MMM dd, yyyy")} - {claim.category}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -345,7 +346,7 @@ function ExpenseDialog({
             <Label>Category</Label>
             <Select value={form.category} onValueChange={(v) => setForm((p) => ({ ...p, category: v }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              <SelectContent>{EXPENSE_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="space-y-2">

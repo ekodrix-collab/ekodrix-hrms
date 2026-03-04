@@ -21,8 +21,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { EXPENSE_CATEGORIES } from "@/lib/finance-categories";
 
-const CATEGORIES = ["Salary Payments", "Office Rent", "Electricity", "WiFi & Internet", "Marketing & Ads", "Miscellaneous"];
 const METHODS = [
   { value: "cash", label: "Cash" },
   { value: "upi", label: "UPI" },
@@ -47,7 +47,7 @@ export default function AdminProjectsFinancePage() {
   const [expenseForm, setExpenseForm] = useState({
     amount: "",
     description: "",
-    category: CATEGORIES[0],
+    category: EXPENSE_CATEGORIES[0],
     payment_method: "cash"
   });
 
@@ -127,7 +127,7 @@ export default function AdminProjectsFinancePage() {
       if (res.success) {
         toast.success("Project expense logged.");
         setExpenseOpen(false);
-        setExpenseForm({ amount: "", description: "", category: CATEGORIES[0], payment_method: "cash" });
+        setExpenseForm({ amount: "", description: "", category: EXPENSE_CATEGORIES[0], payment_method: "cash" });
         queryClient.invalidateQueries({ queryKey: ["company-financials-project-breakdown"] });
         queryClient.invalidateQueries({ queryKey: ["project-finance-explorer", activeProjectId] });
         queryClient.invalidateQueries({ queryKey: ["project-ledger-explorer", activeProjectId] });
@@ -403,7 +403,7 @@ function ProjectExpenseDialog({
             <Label>Category</Label>
             <Select value={form.category} onValueChange={(v) => setForm((p) => ({ ...p, category: v }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              <SelectContent>{EXPENSE_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="space-y-2">

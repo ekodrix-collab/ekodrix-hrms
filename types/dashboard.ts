@@ -88,6 +88,7 @@ export interface AbsentEmployee {
 export interface Expense {
     id: string;
     description: string;
+    category?: string | null;
     expense_date: string;
     amount: string | number;
     payment_method: string;
@@ -96,7 +97,7 @@ export interface Expense {
         avatar_url: string | null;
         full_name: string;
     };
-    expense_categories: {
+    expense_categories?: {
         color: string;
         name: string;
     };
