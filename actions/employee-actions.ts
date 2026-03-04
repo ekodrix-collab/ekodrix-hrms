@@ -11,6 +11,21 @@ export async function getEmployeeDashboardStats(localDate?: string) {
 
     const today = localDate || new Date().toISOString().slice(0, 10);
 
+    // Week definition: Monday to Saturday. Sunday is excluded.
+    const [year, month, day] = today.split("-").map(Number);
+    const currentDateUtc = new Date(Date.UTC(year, month - 1, day));
+    const dayOfWeek = currentDateUtc.getUTCDay(); // 0=Sun, 1=Mon, ... 6=Sat
+    const daysSinceMonday = (dayOfWeek + 6) % 7; // Mon=0, Tue=1, ... Sun=6
+
+    const weekStartDate = new Date(currentDateUtc);
+    weekStartDate.setUTCDate(currentDateUtc.getUTCDate() - daysSinceMonday);
+
+    const weekEndDate = new Date(weekStartDate);
+    weekEndDate.setUTCDate(weekStartDate.getUTCDate() + 5); // Saturday
+
+    const weekStart = weekStartDate.toISOString().slice(0, 10);
+    const weekEnd = weekEndDate.toISOString().slice(0, 10);
+
     // 1. Get today's hours from attendance
     const { data: attendance } = await supabase
         .from("attendance")
@@ -31,7 +46,8 @@ export async function getEmployeeDashboardStats(localDate?: string) {
         .from("attendance")
         .select("total_hours")
         .eq("user_id", user.id)
-        .gte("date", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+        .gte("date", weekStart)
+        .lte("date", weekEnd);
 
     const weeklyHours = weeklyAttendance?.reduce((acc, curr) => acc + Number(curr.total_hours || 0), 0) || 0;
 

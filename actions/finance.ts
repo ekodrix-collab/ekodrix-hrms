@@ -2,7 +2,17 @@
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { Expense } from "@/types/common";
+import { normalizeExpenseCategory } from "@/lib/finance-categories";
+
+type ProjectRelation = { name: string } | { name: string }[] | null;
+type ProjectBreakdownItem = { id: string; name: string; revenue: number; expenses: number; net: number };
+
+function getProjectName(projects: ProjectRelation, fallback = "Unknown") {
+    if (Array.isArray(projects)) {
+        return projects[0]?.name || fallback;
+    }
+    return projects?.name || fallback;
+}
 
 export async function generateMonthlyAccruals(date: Date) {
     const supabase = createSupabaseServerClient();
@@ -124,6 +134,7 @@ export async function postBusinessExpense(data: {
         .from("expenses")
         .insert({
             ...data,
+            category: normalizeExpenseCategory(data.category),
             paid_by: user?.id,
             created_by: user?.id,
             status: 'approved' // Admin expenses are auto-approved
@@ -143,7 +154,7 @@ export async function postBusinessExpense(data: {
 export async function getCompanyFinancials(projectId?: string) {
     const supabase = createSupabaseServerClient();
 
-    let accrualQuery = supabase
+    const accrualQuery = supabase
         .from("salary_accruals")
         .select("amount, paid_amount, remaining_amount");
 
@@ -173,7 +184,7 @@ export async function getCompanyFinancials(projectId?: string) {
     const totalBusinessExpenses = expenses?.reduce((acc: number, curr) => acc + Number(curr.amount), 0) || 0;
     const totalRevenue = revenue?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
 
-    let projectBreakdown: any[] = [];
+    let projectBreakdown: ProjectBreakdownItem[] = [];
     if (!projectId) {
         const [{ data: projRevenue }, { data: projExpenses }] = await Promise.all([
             supabase.from("revenue_logs").select("project_id, amount, projects(name)"),
@@ -185,7 +196,7 @@ export async function getCompanyFinancials(projectId?: string) {
         projRevenue?.forEach(r => {
             if (!r.project_id) return;
             const pId = r.project_id;
-            const pName = (r.projects as any)?.name || "Unknown";
+            const pName = getProjectName(r.projects);
             if (!breakdownMap[pId]) breakdownMap[pId] = { id: pId, name: pName, revenue: 0, expenses: 0, net: 0 };
             breakdownMap[pId].revenue += Number(r.amount);
         });
@@ -193,7 +204,7 @@ export async function getCompanyFinancials(projectId?: string) {
         projExpenses?.forEach(e => {
             if (!e.project_id) return;
             const pId = e.project_id;
-            const pName = (e.projects as any)?.name || "Unknown";
+            const pName = getProjectName(e.projects);
             if (!breakdownMap[pId]) breakdownMap[pId] = { id: pId, name: pName, revenue: 0, expenses: 0, net: 0 };
             breakdownMap[pId].expenses += Number(e.amount);
         });
@@ -260,7 +271,7 @@ export async function getFinancialHistory(projectId?: string) {
         category: "Income",
         method: "-",
         project_id: r.project_id,
-        project_name: (r.projects as any)?.name
+        project_name: getProjectName(r.projects)
     })) || [];
 
     const normalizedExpenses = expenses?.map(e => ({
@@ -268,13 +279,13 @@ export async function getFinancialHistory(projectId?: string) {
         type: 'expense',
         amount: e.amount,
         title: e.description,
-        subtitle: e.category,
+        subtitle: normalizeExpenseCategory(e.category),
         date: e.expense_date,
         created_at: e.created_at,
-        category: e.category,
+        category: normalizeExpenseCategory(e.category),
         method: e.payment_method,
         project_id: e.project_id,
-        project_name: (e.projects as any)?.name
+        project_name: getProjectName(e.projects)
     })) || [];
 
     const history = [...normalizedRevenue, ...normalizedExpenses].sort((a, b) =>

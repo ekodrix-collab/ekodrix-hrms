@@ -75,8 +75,8 @@ export default function AdminExpensesPage() {
                       <span className="text-[11px] font-bold">{expense.profiles?.full_name}</span>
                     </div>
                     <Badge variant="outline" className="gap-2 font-black text-[9px] uppercase tracking-widest">
-                      <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: expense.expense_categories?.color }} />
-                      {expense.expense_categories?.name}
+                      <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: expense.expense_categories?.color || "hsl(var(--muted-foreground))" }} />
+                      {expense.category || expense.expense_categories?.name || "Uncategorized"}
                     </Badge>
                   </div>
 
@@ -132,8 +132,8 @@ export default function AdminExpensesPage() {
                       </td>
                       <td className="px-6">
                         <Badge variant="outline" className="gap-2 font-black text-[9px] uppercase tracking-widest border-zinc-200 dark:border-zinc-800">
-                          <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: expense.expense_categories?.color }} />
-                          {expense.expense_categories?.name}
+                          <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: expense.expense_categories?.color || "hsl(var(--muted-foreground))" }} />
+                          {expense.category || expense.expense_categories?.name || "Uncategorized"}
                         </Badge>
                       </td>
                       <td className="px-6">
