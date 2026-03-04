@@ -293,8 +293,11 @@ export default function EmployeeTodoPage() {
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                 >
-                    <div className="grid md:grid-cols-3 gap-6">
-                        <div>
+                    <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-500 md:hidden">
+                        Swipe left or right to view all columns
+                    </p>
+                    <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scroll-smooth scrollbar-hide overscroll-x-contain [touch-action:pan-x] md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:snap-none">
+                        <div className="w-[88vw] max-w-[380px] shrink-0 snap-start md:w-auto md:max-w-none md:shrink">
                             <TodoColumn
                                 title="To Do"
                                 status="todo"
@@ -303,7 +306,7 @@ export default function EmployeeTodoPage() {
                             />
                         </div>
 
-                        <div>
+                        <div className="w-[88vw] max-w-[380px] shrink-0 snap-start md:w-auto md:max-w-none md:shrink">
                             <TodoColumn
                                 title="In Progress"
                                 status="in_progress"
@@ -312,7 +315,7 @@ export default function EmployeeTodoPage() {
                             />
                         </div>
 
-                        <div>
+                        <div className="w-[88vw] max-w-[380px] shrink-0 snap-start md:w-auto md:max-w-none md:shrink">
                             <TodoColumn
                                 title="Done"
                                 status="done"
