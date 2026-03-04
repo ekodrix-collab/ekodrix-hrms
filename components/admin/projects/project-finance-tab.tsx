@@ -53,6 +53,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import type { Project } from "@/types/dashboard";
+import { EXPENSE_CATEGORIES } from "@/lib/finance-categories";
 
 interface ProjectFinanceTabProps {
     project: Project;
@@ -77,6 +78,8 @@ interface VerdictItem {
     } | null;
 }
 
+const DEFAULT_EXPENSE_CATEGORY = "Miscellaneous";
+
 export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
     const queryClient = useQueryClient();
     const [isVerdictOpen, setIsVerdictOpen] = useState(false);
@@ -85,7 +88,12 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
     const [isExpenseOpen, setIsExpenseOpen] = useState(false);
 
     const [revenueForm, setRevenueForm] = useState({ amount: "", source: "", description: "" });
-    const [expenseForm, setExpenseForm] = useState({ amount: "", description: "", category: "Miscellaneous", payment_method: "upi" });
+    const [expenseForm, setExpenseForm] = useState({
+        amount: "",
+        description: "",
+        category: DEFAULT_EXPENSE_CATEGORY,
+        payment_method: "upi"
+    });
 
     const { data: financials, isLoading: loadingFin } = useQuery({
         queryKey: ["project-financials", project.id],
@@ -143,7 +151,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
             if (res.success) {
                 toast.success("Expense logged successfully");
                 setIsExpenseOpen(false);
-                setExpenseForm({ amount: "", description: "", category: "Miscellaneous", payment_method: "upi" });
+                setExpenseForm({ amount: "", description: "", category: DEFAULT_EXPENSE_CATEGORY, payment_method: "upi" });
                 queryClient.invalidateQueries({ queryKey: ["project-financials", project.id] });
                 queryClient.invalidateQueries({ queryKey: ["project-history", project.id] });
             } else {
@@ -442,10 +450,11 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="Marketing">Marketing</SelectItem>
-                                        <SelectItem value="Software">Software</SelectItem>
-                                        <SelectItem value="Salaries">Project Labor</SelectItem>
-                                        <SelectItem value="Miscellaneous">Misc</SelectItem>
+                                        {EXPENSE_CATEGORIES.map((category) => (
+                                            <SelectItem key={category} value={category}>
+                                                {category}
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>

@@ -33,6 +33,7 @@ import { createExpenseClaim, getMyClaims } from "@/actions/finance-actions";
 import { toast } from "sonner";
 import { UnpaidAccrual } from "@/types/dashboard";
 import { Expense } from "@/types/common";
+import { EXPENSE_CATEGORIES } from "@/lib/finance-categories";
 
 interface ExpenseClaim extends Expense {
     id: string;
@@ -316,11 +317,11 @@ export default function EmployeeFinancePage() {
                                                             <SelectValue placeholder="Select category" />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem value="Travel">Travel</SelectItem>
-                                                            <SelectItem value="Meals">Meals</SelectItem>
-                                                            <SelectItem value="Equipment">Equipment</SelectItem>
-                                                            <SelectItem value="Software">Software</SelectItem>
-                                                            <SelectItem value="Other">Other</SelectItem>
+                                                            {EXPENSE_CATEGORIES.map((category) => (
+                                                                <SelectItem key={category} value={category}>
+                                                                    {category}
+                                                                </SelectItem>
+                                                            ))}
                                                         </SelectContent>
                                                     </Select>
                                                 </div>

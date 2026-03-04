@@ -21,8 +21,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { EXPENSE_CATEGORIES } from "@/lib/finance-categories";
 
-const CATEGORIES = ["Salary Payments", "Office Rent", "Electricity", "WiFi & Internet", "Marketing & Ads", "Miscellaneous"];
 const METHODS = [
   { value: "cash", label: "Cash" },
   { value: "upi", label: "UPI" },
@@ -34,6 +34,7 @@ type ProjectItem = { id: string; name: string };
 type ProjectBreakdown = { id: string; name: string; revenue: number; expenses: number; net: number };
 type FinancialsResult = { projectBreakdown: ProjectBreakdown[] };
 type LedgerItem = { id: string; title: string; type: "revenue" | "expense"; date: string; amount: number | string; category: string };
+type ExpenseForm = { amount: string; description: string; category: string; payment_method: string };
 
 const inr = (value: number) =>
   `INR ${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(Number(value) || 0)}`;
@@ -44,10 +45,10 @@ export default function AdminProjectsFinancePage() {
   const [revenueOpen, setRevenueOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [revenueForm, setRevenueForm] = useState({ amount: "", source: "", description: "" });
-  const [expenseForm, setExpenseForm] = useState({
+  const [expenseForm, setExpenseForm] = useState<ExpenseForm>({
     amount: "",
     description: "",
-    category: CATEGORIES[0],
+    category: EXPENSE_CATEGORIES[0],
     payment_method: "cash"
   });
 
@@ -127,7 +128,7 @@ export default function AdminProjectsFinancePage() {
       if (res.success) {
         toast.success("Project expense logged.");
         setExpenseOpen(false);
-        setExpenseForm({ amount: "", description: "", category: CATEGORIES[0], payment_method: "cash" });
+        setExpenseForm({ amount: "", description: "", category: EXPENSE_CATEGORIES[0], payment_method: "cash" });
         queryClient.invalidateQueries({ queryKey: ["company-financials-project-breakdown"] });
         queryClient.invalidateQueries({ queryKey: ["project-finance-explorer", activeProjectId] });
         queryClient.invalidateQueries({ queryKey: ["project-ledger-explorer", activeProjectId] });
@@ -385,8 +386,8 @@ function ProjectExpenseDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectName: string;
-  form: { amount: string; description: string; category: string; payment_method: string };
-  setForm: Dispatch<SetStateAction<{ amount: string; description: string; category: string; payment_method: string }>>;
+  form: ExpenseForm;
+  setForm: Dispatch<SetStateAction<ExpenseForm>>;
   mutation: { mutate: () => void; isPending: boolean };
 }) {
   return (
@@ -403,7 +404,7 @@ function ProjectExpenseDialog({
             <Label>Category</Label>
             <Select value={form.category} onValueChange={(v) => setForm((p) => ({ ...p, category: v }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              <SelectContent>{EXPENSE_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
