@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { TaskStatus } from "@/store/task-store";
 
 export async function createTaskAction(formData: FormData) {
@@ -314,10 +315,11 @@ export async function getTasksAction() {
 
 export async function getOpenTasksAction() {
   const supabase = createSupabaseServerClient();
+  const adminClient = createSupabaseAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Not authenticated" };
 
-  // Fetch tasks that are 'open' OR 'pending_approval' (if requested by current user)
+  // Fetch only open marketplace tasks.
   const { data, error } = await supabase
     .from("tasks")
     .select(`
@@ -325,71 +327,136 @@ export async function getOpenTasksAction() {
       projects(name),
       assignee:profiles!user_id(full_name, avatar_url)
     `)
-    .or(`assignment_status.eq.open,user_id.eq.${user.id}`)
+    .eq("is_open_assignment", true)
+    .eq("assignment_status", "open")
     .order("created_at", { ascending: false });
 
   if (error) return { ok: false, message: error.message };
-  return { ok: true, data };
+  const tasks = data || [];
+  if (!tasks.length) return { ok: true, data: [] };
+
+  const taskIds = tasks.map((task) => task.id);
+  const { data: claimRows } = await adminClient
+    .from("admin_inbox")
+    .select("entity_id, metadata, created_at")
+    .eq("entity_type", "task_review")
+    .eq("is_handled", false)
+    .in("entity_id", taskIds);
+
+  const claimsByTask = new Map<string, { id: string; name: string }[]>();
+  for (const row of claimRows || []) {
+    const metadata = row.metadata as { claimant_id?: string; claimant_name?: string } | null;
+    const claimantId = metadata?.claimant_id;
+    if (!claimantId) continue;
+
+    const claimantName = metadata?.claimant_name || "Employee";
+    const list = claimsByTask.get(row.entity_id) || [];
+    if (!list.some((entry) => entry.id === claimantId)) {
+      list.push({ id: claimantId, name: claimantName });
+      claimsByTask.set(row.entity_id, list);
+    }
+  }
+
+  const enriched = tasks.map((task) => {
+    const claimants = claimsByTask.get(task.id) || [];
+    const claimedByOthers = claimants.filter((c) => c.id !== user.id).map((c) => c.name);
+    return {
+      ...task,
+      claimants,
+      claimed_by_others: claimedByOthers,
+      has_my_claim: claimants.some((c) => c.id === user.id),
+    };
+  });
+
+  // UX requirement: show unclaimed tasks first.
+  enriched.sort((a, b) => {
+    const aClaimed = (a.claimants?.length || 0) > 0 ? 1 : 0;
+    const bClaimed = (b.claimants?.length || 0) > 0 ? 1 : 0;
+    if (aClaimed !== bClaimed) return aClaimed - bClaimed;
+    const aTime = new Date(a.created_at || 0).getTime();
+    const bTime = new Date(b.created_at || 0).getTime();
+    return bTime - aTime;
+  });
+
+  return { ok: true, data: enriched };
 }
 
 export async function claimOpenTaskAction(taskId: string) {
   const supabase = createSupabaseServerClient();
+  const adminClient = createSupabaseAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Not authenticated" };
 
-  // Get user profile for inbox title
-  const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).single();
-  // Get task title for inbox description
-  const { data: task } = await supabase.from("tasks").select("title").eq("id", taskId).single();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .single();
 
-  const { error } = await supabase
+  const { data: task, error: taskError } = await supabase
     .from("tasks")
-    .update({
-      user_id: user.id,
-      assignment_status: "pending_approval"
-    })
+    .select("id, title, priority, is_open_assignment, assignment_status")
     .eq("id", taskId);
-  // Removed .eq("assignment_status", "open") to allow re-claiming from 'open' state even if previously rejected
+  const taskRow = task?.[0];
 
-  if (error) return { ok: false, message: error.message };
+  if (taskError || !taskRow) return { ok: false, message: taskError?.message || "Task not found" };
+  if (!taskRow.is_open_assignment) return { ok: false, message: "This is not a marketplace task" };
+  if (taskRow.assignment_status === "assigned") return { ok: false, message: "Task already assigned" };
 
-  // Create or Update Admin Inbox item for this task claim
-  const { data: existingInbox } = await supabase
+  const { data: existingClaims } = await adminClient
     .from("admin_inbox")
     .select("id")
-    .eq("entity_id", taskId)
     .eq("entity_type", "task_review")
-    .maybeSingle();
+    .eq("entity_id", taskId)
+    .eq("is_handled", false)
+    .contains("metadata", { claimant_id: user.id })
+    .limit(1);
 
-  if (existingInbox) {
-    await supabase
-      .from("admin_inbox")
-      .update({
-        is_handled: false,
-        title: `Task Re-claim: ${profile?.full_name || 'Employee'}`,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", existingInbox.id);
-  } else {
-    await supabase.from("admin_inbox").insert({
-      title: `Task Claim: ${profile?.full_name || 'Employee'}`,
-      description: `Wants to claim: "${task?.title || 'a task'}"`,
-      entity_type: 'task_review',
-      entity_id: taskId,
-      priority: 'medium'
-    });
+  if (existingClaims && existingClaims.length > 0) {
+    return { ok: false, message: "You already requested this task" };
   }
+
+  const claimerName = profile?.full_name || "Employee";
+  const { error: claimError } = await adminClient.from("admin_inbox").insert({
+    title: `Task Claim: ${claimerName}`,
+    description: `Wants to claim: "${taskRow.title || "a task"}"`,
+    entity_type: "task_review",
+    entity_id: taskId,
+    priority: taskRow.priority || "medium",
+    is_handled: false,
+    metadata: {
+      claimant_id: user.id,
+      claimant_name: claimerName,
+      task_id: taskId,
+      task_title: taskRow.title || "",
+    },
+  });
+
+  if (claimError) return { ok: false, message: claimError.message };
 
   revalidatePath("/employee/tasks");
   revalidatePath("/admin/inbox");
-  revalidatePath("/employee/marketplace"); // Important for re-claim UI refresh
+  revalidatePath("/employee/marketplace");
   return { ok: true };
 }
 
 export async function getMyClaimedTasksAction() {
   const supabase = createSupabaseServerClient();
+  const adminClient = createSupabaseAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Not authenticated" };
+
+  const { data: claims, error: claimsError } = await adminClient
+    .from("admin_inbox")
+    .select("entity_id, metadata, created_at")
+    .eq("entity_type", "task_review")
+    .eq("is_handled", false)
+    .contains("metadata", { claimant_id: user.id })
+    .order("created_at", { ascending: false });
+
+  if (claimsError) return { ok: false, message: claimsError.message };
+  const taskIds = Array.from(new Set((claims || []).map((claim) => claim.entity_id)));
+  if (!taskIds.length) return { ok: true, data: [] };
 
   const { data, error } = await supabase
     .from("tasks")
@@ -398,8 +465,7 @@ export async function getMyClaimedTasksAction() {
       projects(name),
       assignee:profiles!user_id(full_name, avatar_url)
     `)
-    .eq("user_id", user.id)
-    .eq("assignment_status", "pending_approval")
+    .in("id", taskIds)
     .order("updated_at", { ascending: false });
 
   if (error) return { ok: false, message: error.message };
@@ -471,8 +537,9 @@ export async function getAllEmployeesAction() {
   return { ok: true, data: data || [] };
 }
 
-export async function approveTaskClaimAction(taskId: string) {
+export async function approveTaskClaimAction(taskId: string, claimantId?: string) {
   const supabase = createSupabaseServerClient();
+  const adminClient = createSupabaseAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Not authenticated" };
 
@@ -480,33 +547,75 @@ export async function approveTaskClaimAction(taskId: string) {
   const { data: profile } = await supabase.from("profiles").select("role, full_name").eq("id", user.id).single();
   if (profile?.role !== 'admin') return { ok: false, message: "Admin access required" };
 
-  // Get task info for notification
-  const { data: task } = await supabase.from("tasks").select("title, user_id").eq("id", taskId).single();
+  const { data: task } = await supabase
+    .from("tasks")
+    .select("title, user_id")
+    .eq("id", taskId)
+    .single();
+
+  const { data: pendingClaims } = await adminClient
+    .from("admin_inbox")
+    .select("id, metadata")
+    .eq("entity_id", taskId)
+    .eq("entity_type", "task_review")
+    .eq("is_handled", false);
+
+  let selectedClaimantId = claimantId || task?.user_id || null;
+  if (!selectedClaimantId && pendingClaims && pendingClaims.length > 0) {
+    const metadata = pendingClaims[0].metadata as { claimant_id?: string } | null;
+    selectedClaimantId = metadata?.claimant_id || null;
+  }
+
+  if (!selectedClaimantId) return { ok: false, message: "No claimant available to approve" };
 
   const { error } = await supabase
     .from("tasks")
     .update({
       assignment_status: "assigned",
+      user_id: selectedClaimantId,
       assigned_by: user.id
     })
     .eq("id", taskId);
 
   if (error) return { ok: false, message: error.message };
 
-  // Mark Admin Inbox items as handled
-  await supabase
+  // Mark all pending claims for this task as handled once one claimant is approved.
+  await adminClient
     .from("admin_inbox")
     .update({ is_handled: true, updated_at: new Date().toISOString() })
     .eq("entity_id", taskId)
-    .eq("entity_type", "task_review");
+    .eq("entity_type", "task_review")
+    .eq("is_handled", false);
 
-  // Create notification for employee
-  if (task?.user_id) {
+  const claimantIds = new Set<string>();
+  for (const claim of pendingClaims || []) {
+    const metadata = claim.metadata as { claimant_id?: string } | null;
+    if (metadata?.claimant_id) claimantIds.add(metadata.claimant_id);
+  }
+  claimantIds.add(selectedClaimantId);
+
+  for (const requestedUserId of claimantIds) {
+    const approved = requestedUserId === selectedClaimantId;
+    await supabase.from("notifications").insert({
+      user_id: requestedUserId,
+      type: approved ? "task_assigned" : "task_rejected",
+      title: approved ? "Task Claim Approved" : "Task Claim Closed",
+      message: approved
+        ? `${profile?.full_name} approved your claim for: "${task?.title || "Task"}"`
+        : `${profile?.full_name} assigned "${task?.title || "Task"}" to another employee.`,
+      entity_type: "task",
+      entity_id: taskId,
+      is_read: false
+    });
+  }
+
+  // Backward-compatible notification path for legacy claim flow records.
+  if (claimantIds.size === 0 && task?.user_id) {
     await supabase.from("notifications").insert({
       user_id: task.user_id,
       type: "task_assigned",
       title: "Task Claim Approved",
-      message: `${profile?.full_name} approved your claim for: "${task.title}"`,
+      message: `${profile?.full_name} approved your claim for: "${task?.title || "Task"}"`,
       entity_type: "task",
       entity_id: taskId,
       is_read: false
