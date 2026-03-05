@@ -94,6 +94,8 @@ export default function EmployeeAttendancePage() {
       if (res.ok) {
         setBreak(false);
         toast.success("Resumed work");
+        queryClient.invalidateQueries({ queryKey: ["attendance-status"] });
+        queryClient.invalidateQueries({ queryKey: ["attendance-history"] });
       } else {
         toast.error(res.message || "Failed to resume work");
       }
@@ -102,6 +104,8 @@ export default function EmployeeAttendancePage() {
       if (res.ok) {
         setBreak(true);
         toast.success("Break started");
+        queryClient.invalidateQueries({ queryKey: ["attendance-status"] });
+        queryClient.invalidateQueries({ queryKey: ["attendance-history"] });
       } else {
         toast.error(res.message || "Failed to start break");
       }

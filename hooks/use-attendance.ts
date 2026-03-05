@@ -1,28 +1,15 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useAttendanceStore } from "@/store/attendance-store";
 import { autoPunchOutAction, getAttendanceStatusAction } from "@/actions/attendance";
 import { toast } from "sonner";
 
-/**
- * Get today's date string in IST (YYYY-MM-DD)
- */
-function getTodayIST(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).format(new Date());
-}
-
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 export function useAttendance() {
   const store = useAttendanceStore();
-  const autoClosedRef = useRef(false);
 
   const { data: attendanceStatus, isLoading } = useQuery({
     queryKey: ["attendance-status"],
@@ -35,23 +22,48 @@ export function useAttendance() {
 
   // Synchronize store with query data
   useEffect(() => {
-    if (attendanceStatus) {
-      if (attendanceStatus.status === "on_break") {
-        const { punchIn } = attendanceStatus;
-        store.setStatus("on_break");
-        if (punchIn) store.setPunchIn(punchIn);
-      } else if (attendanceStatus.status === "working") {
-        const { punchIn } = attendanceStatus;
-        store.setStatus("working");
-        if (punchIn) store.setPunchIn(punchIn);
-      } else if (attendanceStatus.status === "completed") {
-        const { punchIn, punchOut } = attendanceStatus;
-        store.setStatus("completed");
-        if (punchIn) store.setPunchIn(punchIn);
-        if (punchOut) store.setPunchOut(punchOut);
-      } else {
-        store.setStatus("offline");
+    if (!attendanceStatus) return;
+
+    const snapshot = useAttendanceStore.getState();
+
+    if (attendanceStatus.status === "on_break") {
+      const { punchIn } = attendanceStatus;
+      if (punchIn && snapshot.punchInAt !== punchIn) {
+        snapshot.setPunchIn(punchIn);
       }
+      if (useAttendanceStore.getState().status !== "on_break") {
+        useAttendanceStore.getState().setStatus("on_break");
+      }
+      return;
+    }
+
+    if (attendanceStatus.status === "working") {
+      const { punchIn } = attendanceStatus;
+      if (punchIn) {
+        if (snapshot.punchInAt !== punchIn || snapshot.status !== "working") {
+          snapshot.setPunchIn(punchIn);
+        }
+      } else if (snapshot.status !== "working") {
+        snapshot.setStatus("working");
+      }
+      return;
+    }
+
+    if (attendanceStatus.status === "completed") {
+      const { punchIn, punchOut } = attendanceStatus;
+      if (punchIn && (snapshot.punchInAt !== punchIn || snapshot.status !== "working")) {
+        snapshot.setPunchIn(punchIn);
+      }
+      if (punchOut && (useAttendanceStore.getState().punchOutAt !== punchOut || useAttendanceStore.getState().status !== "completed")) {
+        useAttendanceStore.getState().setPunchOut(punchOut);
+      } else if (!punchOut && useAttendanceStore.getState().status !== "completed") {
+        useAttendanceStore.getState().setStatus("completed");
+      }
+      return;
+    }
+
+    if (snapshot.status !== "offline") {
+      snapshot.setStatus("offline");
     }
   }, [attendanceStatus]);
 
