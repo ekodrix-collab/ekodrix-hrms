@@ -20,10 +20,25 @@ interface AttendanceState {
 export const useAttendanceStore = create<AttendanceState>((set) => ({
   status: "offline",
   focusTaskIds: [],
-  setStatus: (status) => set({ status }),
-  setPunchIn: (iso) => set({ punchInAt: iso, status: "working" }),
-  setPunchOut: (iso) => set({ punchOutAt: iso, status: "completed" }),
-  setBreak: (isOnBreak) => set({ status: isOnBreak ? "on_break" : "working" }),
+  setStatus: (status) =>
+    set((state) => (state.status === status ? state : { status })),
+  setPunchIn: (iso) =>
+    set((state) =>
+      state.punchInAt === iso && state.status === "working"
+        ? state
+        : { punchInAt: iso, status: "working" }
+    ),
+  setPunchOut: (iso) =>
+    set((state) =>
+      state.punchOutAt === iso && state.status === "completed"
+        ? state
+        : { punchOutAt: iso, status: "completed" }
+    ),
+  setBreak: (isOnBreak) =>
+    set((state) => {
+      const nextStatus = isOnBreak ? "on_break" : "working";
+      return state.status === nextStatus ? state : { status: nextStatus };
+    }),
   setPlan: ({ blockers, focusTaskIds }) => set({ blockers, focusTaskIds })
 }));
 
