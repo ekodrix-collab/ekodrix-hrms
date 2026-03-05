@@ -319,7 +319,8 @@ export async function getOpenTasksAction() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Not authenticated" };
 
-  // Fetch only open marketplace tasks.
+  // Fetch marketplace tasks that are currently available or pending review.
+  // This keeps "claimed by me/others" visible in marketplace below unclaimed.
   const { data, error } = await supabase
     .from("tasks")
     .select(`
@@ -328,7 +329,7 @@ export async function getOpenTasksAction() {
       assignee:profiles!user_id(full_name, avatar_url)
     `)
     .eq("is_open_assignment", true)
-    .eq("assignment_status", "open")
+    .in("assignment_status", ["open", "pending_approval"])
     .order("created_at", { ascending: false });
 
   if (error) return { ok: false, message: error.message };
@@ -359,20 +360,43 @@ export async function getOpenTasksAction() {
 
   const enriched = tasks.map((task) => {
     const claimants = claimsByTask.get(task.id) || [];
+
+    // Backward compatibility for legacy pending_approval rows where user_id carried claimant.
+    if (task.assignment_status === "pending_approval" && task.user_id) {
+      const exists = claimants.some((entry) => entry.id === task.user_id);
+      if (!exists) {
+        claimants.push({
+          id: task.user_id,
+          name: task.assignee?.full_name || "Employee",
+        });
+      }
+    }
+
     const claimedByOthers = claimants.filter((c) => c.id !== user.id).map((c) => c.name);
+    const hasMyClaim = claimants.some((c) => c.id === user.id);
+
     return {
       ...task,
       claimants,
       claimed_by_others: claimedByOthers,
-      has_my_claim: claimants.some((c) => c.id === user.id),
+      has_my_claim: hasMyClaim,
     };
   });
 
-  // UX requirement: show unclaimed tasks first.
+  // UX requirement: show unclaimed first, then my-claimed, then claimed-by-others.
   enriched.sort((a, b) => {
-    const aClaimed = (a.claimants?.length || 0) > 0 ? 1 : 0;
-    const bClaimed = (b.claimants?.length || 0) > 0 ? 1 : 0;
-    if (aClaimed !== bClaimed) return aClaimed - bClaimed;
+    const getBucket = (task: typeof a) => {
+      const hasClaimants = (task.claimants?.length || 0) > 0;
+      const hasMine = !!task.has_my_claim;
+      if (!hasClaimants) return 0;
+      if (hasMine) return 1;
+      return 2;
+    };
+
+    const aBucket = getBucket(a);
+    const bBucket = getBucket(b);
+    if (aBucket !== bBucket) return aBucket - bBucket;
+
     const aTime = new Date(a.created_at || 0).getTime();
     const bTime = new Date(b.created_at || 0).getTime();
     return bTime - aTime;

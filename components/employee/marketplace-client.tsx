@@ -141,7 +141,7 @@ export function MarketplaceClient({ initialTasks, currentUserId }: MarketplaceCl
                                             <Clock className="h-3.5 w-3.5" />
                                             {task.due_date ? format(new Date(task.due_date), 'MMM d') : 'No Deadline'}
                                         </div>
-                                        {task.assignment_status === "open" && claimedByOthers.length > 0 && (
+                                        {task.assignment_status !== "assigned" && claimedByOthers.length > 0 && (
                                             <Badge variant="outline" className="text-[9px] font-black uppercase border-amber-200 bg-amber-50/70 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
                                                 Claimed by {claimedByLabel}
                                             </Badge>
@@ -155,7 +155,7 @@ export function MarketplaceClient({ initialTasks, currentUserId }: MarketplaceCl
                                         </div>
                                     )}
 
-                                    {task.assignment_status === "open" && hasMyClaim && (
+                                    {task.assignment_status !== "assigned" && hasMyClaim && (
                                         <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-500 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 rounded-xl border border-amber-100 dark:border-amber-900/50">
                                             <Clock className="h-3.5 w-3.5 animate-pulse" />
                                             Requested
