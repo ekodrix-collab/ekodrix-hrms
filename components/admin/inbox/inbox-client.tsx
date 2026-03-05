@@ -39,13 +39,15 @@ export function InboxClient({ initialItems }: InboxClientProps) {
         setLoading(null);
     };
 
-    const handleApproveClaim = async (taskId: string, inboxId: string) => {
+    const handleApproveClaim = async (taskId: string, inboxId: string, claimantId?: string) => {
         setLoading(inboxId);
-        const res = await approveTaskClaimAction(taskId);
+        const res = await approveTaskClaimAction(taskId, claimantId);
         if (res.ok) {
-            setItems(prev => prev.map(item =>
-                item.id === inboxId ? { ...item, is_handled: true } : item
-            ));
+            setItems(prev => prev.map(item => (
+                item.entity_type === "task_review" && item.entity_id === taskId
+                    ? { ...item, is_handled: true }
+                    : item
+            )));
             toast.success("Task claim approved!");
         } else {
             toast.error(res.message || "Failed to approve claim");
@@ -116,7 +118,11 @@ export function InboxClient({ initialItems }: InboxClientProps) {
                                                 <Button
                                                     size="sm"
                                                     className="h-9 px-4 font-black rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/20 active:scale-95 transition-all"
-                                                    onClick={() => handleApproveClaim(item.entity_id!.toString(), item.id)}
+                                                    onClick={() => handleApproveClaim(
+                                                        item.entity_id!.toString(),
+                                                        item.id,
+                                                        item.metadata?.claimant_id
+                                                    )}
                                                     disabled={loading === item.id}
                                                 >
                                                     <Check className="h-4 w-4 mr-2" />

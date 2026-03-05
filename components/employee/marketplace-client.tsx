@@ -1,9 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import {
     Zap,
     Clock,
@@ -11,7 +18,8 @@ import {
     LayoutGrid,
     Search,
     ShieldAlert,
-    CheckCircle2
+    CheckCircle2,
+    ListChecks
 } from "lucide-react";
 import { claimOpenTaskAction } from "@/actions/tasks";
 import { toast } from "sonner";
@@ -24,15 +32,21 @@ interface MarketplaceClientProps {
 }
 
 export function MarketplaceClient({ initialTasks, currentUserId }: MarketplaceClientProps) {
+    const router = useRouter();
     const [tasks, setTasks] = useState(initialTasks);
     const [claimingId, setClaimingId] = useState<string | null>(null);
+    const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+    useEffect(() => {
+        setTasks(initialTasks);
+    }, [initialTasks]);
 
     const handleClaim = async (taskId: string) => {
         setClaimingId(taskId);
         const res = await claimOpenTaskAction(taskId);
         if (res.ok) {
             toast.success("Claim request sent to admin!");
-            setTasks(prev => prev.filter(t => t.id !== taskId));
+            router.refresh();
         } else {
             toast.error(res.message);
         }
@@ -65,7 +79,16 @@ export function MarketplaceClient({ initialTasks, currentUserId }: MarketplaceCl
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {tasks.map((task) => (
+                {tasks.map((task) => {
+                    const claimants = task.claimants || [];
+                    const hasMyClaim = !!currentUserId && claimants.some((c) => c.id === currentUserId);
+                    const claimedByOthers = claimants.filter((c) => c.id !== currentUserId).map((c) => c.name);
+                    const claimedByLabel =
+                        claimedByOthers.length > 1
+                            ? `${claimedByOthers[0]} +${claimedByOthers.length - 1}`
+                            : claimedByOthers[0];
+
+                    return (
                     <Card key={task.id} className="group border-zinc-100 dark:border-zinc-800 bg-white/40 dark:bg-zinc-900/40 backdrop-blur-sm hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500 rounded-[2rem] overflow-hidden">
                         <CardContent className="p-0">
                             <div className="p-6 md:p-8 space-y-6">
@@ -100,6 +123,16 @@ export function MarketplaceClient({ initialTasks, currentUserId }: MarketplaceCl
                                             </Badge>
                                         </div>
                                     )}
+
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 px-0 text-[11px] font-black uppercase tracking-wider text-primary hover:bg-transparent hover:text-primary/80"
+                                        onClick={() => setSelectedTask(task)}
+                                    >
+                                        View Details
+                                    </Button>
                                 </div>
 
                                 <div className="pt-6 flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800/50">
@@ -108,19 +141,24 @@ export function MarketplaceClient({ initialTasks, currentUserId }: MarketplaceCl
                                             <Clock className="h-3.5 w-3.5" />
                                             {task.due_date ? format(new Date(task.due_date), 'MMM d') : 'No Deadline'}
                                         </div>
+                                        {task.assignment_status !== "assigned" && claimedByOthers.length > 0 && (
+                                            <Badge variant="outline" className="text-[9px] font-black uppercase border-amber-200 bg-amber-50/70 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+                                                Claimed by {claimedByLabel}
+                                            </Badge>
+                                        )}
                                     </div>
-
-                                    {task.assignment_status === 'pending_approval' && (
-                                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-500 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 rounded-xl border border-amber-100 dark:border-amber-900/50">
-                                            <Clock className="h-3.5 w-3.5 animate-pulse" />
-                                            Requested
-                                        </div>
-                                    )}
 
                                     {task.assignment_status === 'assigned' && task.user_id === currentUserId && (
                                         <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-500 bg-emerald-50 dark:bg-emerald-950/20 px-3 py-2 rounded-xl border border-emerald-100 dark:border-emerald-900/50">
                                             <CheckCircle2 className="h-3.5 w-3.5" />
                                             Approved
+                                        </div>
+                                    )}
+
+                                    {task.assignment_status !== "assigned" && hasMyClaim && (
+                                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-500 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 rounded-xl border border-amber-100 dark:border-amber-900/50">
+                                            <Clock className="h-3.5 w-3.5 animate-pulse" />
+                                            Requested
                                         </div>
                                     )}
 
@@ -143,7 +181,9 @@ export function MarketplaceClient({ initialTasks, currentUserId }: MarketplaceCl
                                         </div>
                                     )}
 
-                                    {task.assignment_status === 'open' && (!currentUserId || !task.rejected_user_ids?.includes(currentUserId)) && (
+                                    {task.assignment_status === 'open' &&
+                                        !hasMyClaim &&
+                                        (!currentUserId || !task.rejected_user_ids?.includes(currentUserId)) && (
                                         <Button
                                             onClick={() => handleClaim(task.id)}
                                             disabled={claimingId === task.id}
@@ -157,7 +197,8 @@ export function MarketplaceClient({ initialTasks, currentUserId }: MarketplaceCl
                             </div>
                         </CardContent>
                     </Card>
-                ))}
+                    );
+                })}
 
                 {tasks.length === 0 && (
                     <div className="col-span-full py-24 text-center border-2 border-dashed border-zinc-100 dark:border-zinc-800 rounded-[3rem] bg-zinc-50/10">
@@ -169,6 +210,79 @@ export function MarketplaceClient({ initialTasks, currentUserId }: MarketplaceCl
                     </div>
                 )}
             </div>
+
+            <Dialog open={!!selectedTask} onOpenChange={(open) => !open && setSelectedTask(null)}>
+                <DialogContent className="sm:max-w-2xl max-h-[88vh] overflow-y-auto rounded-3xl border-zinc-200 dark:border-zinc-800">
+                    {selectedTask && (
+                        <div className="space-y-6">
+                            <DialogHeader>
+                                <DialogTitle className="text-2xl font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100">
+                                    {selectedTask.title}
+                                </DialogTitle>
+                            </DialogHeader>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="outline" className="text-[10px] uppercase font-black tracking-widest text-primary border-primary/20 bg-primary/5">
+                                    Open Assignment
+                                </Badge>
+                                <Badge variant="outline" className="text-[10px] uppercase font-black tracking-widest text-zinc-500 border-zinc-200/70 dark:border-zinc-700">
+                                    {selectedTask.priority}
+                                </Badge>
+                                <Badge variant="outline" className="text-[10px] uppercase font-black tracking-widest text-zinc-500 border-zinc-200/70 dark:border-zinc-700">
+                                    {selectedTask.due_date ? format(new Date(selectedTask.due_date), "MMM d, yyyy") : "No Deadline"}
+                                </Badge>
+                            </div>
+
+                            <div className="rounded-2xl border border-zinc-200/70 dark:border-zinc-800 p-4 space-y-2">
+                                <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-zinc-500">
+                                    <LayoutGrid className="h-3.5 w-3.5 text-primary" />
+                                    Project
+                                </div>
+                                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                                    {selectedTask.projects?.name || "General"}
+                                </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-zinc-200/70 dark:border-zinc-800 p-4 space-y-2">
+                                <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-zinc-500">
+                                    <Clock className="h-3.5 w-3.5 text-primary" />
+                                    Description
+                                </div>
+                                <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
+                                    {selectedTask.description || "No description provided for this task."}
+                                </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-zinc-200/70 dark:border-zinc-800 p-4 space-y-3">
+                                <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-zinc-500">
+                                    <ListChecks className="h-3.5 w-3.5 text-primary" />
+                                    Subtasks
+                                </div>
+
+                                {selectedTask.subtasks && selectedTask.subtasks.length > 0 ? (
+                                    <ul className="space-y-2">
+                                        {selectedTask.subtasks.map((subtask, idx) => (
+                                            <li
+                                                key={`${selectedTask.id}-subtask-${idx}`}
+                                                className="flex items-start gap-2 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 px-3 py-2"
+                                            >
+                                                <span className="mt-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary">
+                                                    {idx + 1}
+                                                </span>
+                                                <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                                                    {subtask.title}
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="text-sm text-zinc-500">No subtasks added for this task.</p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div >
     );
 }

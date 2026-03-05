@@ -58,6 +58,8 @@ export async function getProjectsAction() {
       task_count:tasks(count),
       completed_count:tasks(count)
     `)
+        // Apply filter only to the embedded "completed_count" relation alias.
+        .eq("completed_count.status", "done")
         .order("created_at", { ascending: false });
 
     if (error) return { ok: false, message: error.message };
