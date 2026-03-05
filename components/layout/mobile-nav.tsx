@@ -55,7 +55,7 @@ export function MobileNav() {
         </Button>
       </DialogTrigger>
       <DialogContent
-        className="left-0 top-0 h-dvh w-[88vw] max-w-[360px] translate-x-0 translate-y-0 rounded-none border-r border-border/70 bg-card/95 p-0 shadow-2xl shadow-black/20 backdrop-blur-2xl duration-300 dark:bg-card/92 [&>button]:hidden"
+        className="inset-y-0 left-0 h-auto max-h-screen w-[88vw] max-w-[360px] translate-x-0 translate-y-0 overflow-hidden rounded-none border-r border-border/70 bg-card/95 p-0 shadow-2xl shadow-black/20 backdrop-blur-2xl duration-300 dark:bg-card/92 [&>button]:hidden"
       >
         <div className="flex h-full flex-col">
           <div className="flex h-20 items-center justify-between border-b border-border/70 px-5">
@@ -77,7 +77,7 @@ export function MobileNav() {
             </DialogClose>
           </div>
 
-          <div className="flex-1 space-y-7 overflow-y-auto px-4 py-4">
+          <div className="min-h-0 flex-1 space-y-7 overflow-y-auto px-4 py-4">
             {navGroups.map((group) => (
               <div key={group.group} className="space-y-2">
                 <h3 className="px-3 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400 dark:text-zinc-500">
@@ -127,7 +127,7 @@ export function MobileNav() {
             ))}
           </div>
 
-          <div className="border-t border-border/70 bg-muted/30 p-4">
+          <div className="border-t border-border/70 bg-muted/30 px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-4">
             <div className="flex items-center gap-3 rounded-2xl p-2">
               <Avatar className="h-10 w-10 border-2 border-white shadow-sm ring-1 ring-primary/20 dark:border-zinc-800">
                 <AvatarImage src={user?.profile?.avatar_url} />
