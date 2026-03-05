@@ -54,6 +54,9 @@ export interface Task {
     user_id?: string;
     assignee?: { id: string; avatar_url: string | null; full_name: string; } | null;
     rejected_user_ids?: string[];
+    claimants?: { id: string; name: string }[];
+    claimed_by_others?: string[];
+    has_my_claim?: boolean;
 }
 
 export interface AttendanceRecord {

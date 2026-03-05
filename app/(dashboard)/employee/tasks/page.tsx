@@ -31,7 +31,9 @@ import {
   Trash2,
   ChevronDown,
   X,
-  ShieldAlert
+  ShieldAlert,
+  Eye,
+  ListChecks
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,12 +86,14 @@ function SortableTaskCard({
   task,
   onEdit,
   onDelete,
-  onToggleSubtask
+  onToggleSubtask,
+  onView
 }: {
   task: TaskItem & { assigned_by?: string };
   onEdit: (task: TaskItem) => void;
   onDelete: (id: string) => void;
   onToggleSubtask: (taskId: string, index: number, completed: boolean) => void;
+  onView: (task: TaskItem) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
@@ -126,6 +130,17 @@ function SortableTaskCard({
               <div className="flex items-start justify-between gap-2">
                 <h4 className={`font-bold text-sm mb-1 truncate ${task.status === "done" ? "text-zinc-400 line-through" : "text-zinc-900 dark:text-zinc-100"}`}>{task.title}</h4>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-zinc-400 hover:text-primary hover:bg-primary/10 dark:hover:bg-primary/20"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onView(task);
+                    }}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
                   {task.subtasks && task.subtasks.length > 0 && (
                     <Button
                       variant="ghost"
@@ -251,7 +266,8 @@ function TaskColumn({
   icon: Icon,
   onEdit,
   onDelete,
-  onToggleSubtask
+  onToggleSubtask,
+  onView
 }: {
   title: string;
   status: TaskStatus;
@@ -261,6 +277,7 @@ function TaskColumn({
   onEdit: (task: TaskItem) => void;
   onDelete: (id: string) => void;
   onToggleSubtask: (taskId: string, index: number, completed: boolean) => void;
+  onView: (task: TaskItem) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: status,
@@ -284,7 +301,7 @@ function TaskColumn({
           </Badge>
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-3 flex-1 overflow-y-auto max-h-[calc(100vh-320px)] scrollbar-hide">
+      <CardContent className="px-3 pb-3 pt-4 flex-1 overflow-y-auto max-h-[calc(100vh-320px)] scrollbar-hide">
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tasks.length === 0 ? (
             <div className="text-center py-12 border-2 border-dashed border-zinc-100 dark:border-zinc-800 rounded-xl">
@@ -298,6 +315,7 @@ function TaskColumn({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onToggleSubtask={onToggleSubtask}
+                onView={onView}
               />
             ))
           )}
@@ -331,6 +349,7 @@ export default function EmployeeTasksPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
+  const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [newSubtasks, setNewSubtasks] = useState<Subtask[]>([]);
@@ -498,6 +517,10 @@ export default function EmployeeTasksPage() {
       toast.success("Task deleted");
       queryClient.invalidateQueries({ queryKey: ["employee-tasks"] });
     }
+  };
+
+  const handleViewTask = (task: TaskItem) => {
+    setSelectedTask(task);
   };
 
   const searchLower = searchQuery.toLowerCase();
@@ -682,7 +705,17 @@ export default function EmployeeTasksPage() {
               <Clock className="h-4 w-4" /> My Pending Claims
             </h2>
             <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide snap-x">
-              {claimedTasksData.map((task: { id: string; title: string; priority: string; }) => (
+              {claimedTasksData.map((task: {
+                id: string;
+                title: string;
+                priority: string;
+                description?: string;
+                due_date?: string;
+                status?: string;
+                position?: number;
+                subtasks?: Subtask[];
+                created_at?: string;
+              }) => (
                 <div key={task.id} className="snap-start shrink-0 w-[300px] bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/50 p-4 rounded-2xl flex flex-col gap-3">
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 line-clamp-1">{task.title}</h3>
@@ -692,6 +725,27 @@ export default function EmployeeTasksPage() {
                     <ShieldAlert className="h-3 w-3" />
                     Waiting for Admin Approval
                   </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-fit px-0 text-[10px] font-black uppercase tracking-[0.12em] text-primary hover:bg-transparent hover:text-primary/80"
+                    onClick={() =>
+                      handleViewTask({
+                        id: task.id,
+                        title: task.title,
+                        description: task.description,
+                        priority: (task.priority as TaskItem["priority"]) || "medium",
+                        due_date: task.due_date,
+                        status: (task.status as TaskStatus) || "todo",
+                        position: task.position ?? 0,
+                        subtasks: task.subtasks,
+                        created_at: task.created_at || new Date().toISOString(),
+                      })
+                    }
+                  >
+                    View Details
+                  </Button>
                 </div>
               ))}
             </div>
@@ -719,6 +773,7 @@ export default function EmployeeTasksPage() {
                   onEdit={handleEditTask}
                   onDelete={handleDeleteTask}
                   onToggleSubtask={handleToggleSubtask}
+                  onView={handleViewTask}
                 />
               </div>
 
@@ -732,6 +787,7 @@ export default function EmployeeTasksPage() {
                   onEdit={handleEditTask}
                   onDelete={handleDeleteTask}
                   onToggleSubtask={handleToggleSubtask}
+                  onView={handleViewTask}
                 />
               </div>
 
@@ -745,6 +801,7 @@ export default function EmployeeTasksPage() {
                   onEdit={handleEditTask}
                   onDelete={handleDeleteTask}
                   onToggleSubtask={handleToggleSubtask}
+                  onView={handleViewTask}
                 />
               </div>
             </div>
@@ -867,6 +924,69 @@ export default function EmployeeTasksPage() {
                     </Button>
                   </DialogFooter>
                 </form>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!selectedTask} onOpenChange={(open) => !open && setSelectedTask(null)}>
+              <DialogContent className="sm:max-w-2xl max-h-[88vh] overflow-y-auto rounded-3xl border-zinc-200 dark:border-zinc-800">
+                {selectedTask && (
+                  <div className="space-y-6">
+                    <DialogHeader>
+                      <DialogTitle className="text-2xl font-black text-zinc-900 dark:text-zinc-100">
+                        {selectedTask.title}
+                      </DialogTitle>
+                      <DialogDescription>
+                        Full task details to review scope, deadlines, and checklist.
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <TaskPriorityBadge priority={selectedTask.priority} />
+                      <Badge variant="outline" className="text-[10px] uppercase font-black tracking-widest">
+                        {selectedTask.status.replace("_", " ")}
+                      </Badge>
+                      <Badge variant="outline" className="text-[10px] uppercase font-black tracking-widest">
+                        {selectedTask.due_date ? format(new Date(selectedTask.due_date), "MMM d, yyyy") : "No Deadline"}
+                      </Badge>
+                    </div>
+
+                    <div className="rounded-2xl border border-zinc-200/70 dark:border-zinc-800 p-4 space-y-2">
+                      <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-zinc-500">
+                        <Clock className="h-3.5 w-3.5 text-primary" />
+                        Description
+                      </div>
+                      <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
+                        {selectedTask.description || "No description provided for this task."}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-zinc-200/70 dark:border-zinc-800 p-4 space-y-3">
+                      <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-zinc-500">
+                        <ListChecks className="h-3.5 w-3.5 text-primary" />
+                        Subtasks
+                      </div>
+                      {selectedTask.subtasks && selectedTask.subtasks.length > 0 ? (
+                        <ul className="space-y-2">
+                          {selectedTask.subtasks.map((subtask, idx) => (
+                            <li
+                              key={`${selectedTask.id}-detail-subtask-${idx}`}
+                              className="flex items-start gap-2 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 px-3 py-2"
+                            >
+                              <span className="mt-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary">
+                                {idx + 1}
+                              </span>
+                              <span className={`text-sm ${subtask.completed ? "text-zinc-400 line-through" : "text-zinc-700 dark:text-zinc-300"}`}>
+                                {subtask.title}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-zinc-500">No subtasks added for this task.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </DialogContent>
             </Dialog>
           </DndContext>
