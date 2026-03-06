@@ -33,7 +33,8 @@ import {
   X,
   ShieldAlert,
   Eye,
-  ListChecks
+  ListChecks,
+  FolderSearch
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -80,6 +81,8 @@ interface TaskItem {
   position: number;
   subtasks?: Subtask[];
   created_at: string;
+  project?: { name: string } | null;
+  projects?: { name: string } | null;
 }
 
 function SortableTaskCard({
@@ -97,6 +100,7 @@ function SortableTaskCard({
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
+  const projectName = task.project?.name || task.projects?.name || "Internal";
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -236,6 +240,10 @@ function SortableTaskCard({
               )}
 
               <div className="flex items-center gap-2 flex-wrap mt-2">
+                <Badge variant="outline" className="text-[9px] uppercase font-black px-1.5 h-4 border-blue-200 bg-blue-50/60 text-blue-700 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-400">
+                  <FolderSearch className="h-2.5 w-2.5 mr-1" />
+                  {projectName}
+                </Badge>
                 <Badge variant="outline" className={`text-[9px] uppercase font-black px-1.5 h-4 ${priorityColors[task.priority]}`}>
                   {task.priority}
                 </Badge>
@@ -711,6 +719,7 @@ export default function EmployeeTasksPage() {
                 priority: string;
                 description?: string;
                 due_date?: string;
+                projects?: { name: string } | null;
                 status?: string;
                 position?: number;
                 subtasks?: Subtask[];
@@ -724,6 +733,10 @@ export default function EmployeeTasksPage() {
                   <div className="flex items-center gap-1.5 text-[10px] font-black uppercase text-amber-600 dark:text-amber-500">
                     <ShieldAlert className="h-3 w-3" />
                     Waiting for Admin Approval
+                  </div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
+                    <FolderSearch className="h-3 w-3" />
+                    {task.projects?.name || "Internal"}
                   </div>
                   <Button
                     type="button"
@@ -741,6 +754,7 @@ export default function EmployeeTasksPage() {
                         position: task.position ?? 0,
                         subtasks: task.subtasks,
                         created_at: task.created_at || new Date().toISOString(),
+                        projects: task.projects ?? null,
                       })
                     }
                   >
@@ -942,6 +956,10 @@ export default function EmployeeTasksPage() {
 
                     <div className="flex flex-wrap items-center gap-2">
                       <TaskPriorityBadge priority={selectedTask.priority} />
+                      <Badge variant="outline" className="text-[10px] uppercase font-black tracking-widest border-blue-200 bg-blue-50/60 text-blue-700 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-400">
+                        <FolderSearch className="h-3 w-3 mr-1" />
+                        {selectedTask.project?.name || selectedTask.projects?.name || "Internal"}
+                      </Badge>
                       <Badge variant="outline" className="text-[10px] uppercase font-black tracking-widest">
                         {selectedTask.status.replace("_", " ")}
                       </Badge>
