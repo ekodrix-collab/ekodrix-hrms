@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getAllTasks } from "@/actions/dashboard";
 import type { Task } from "@/types/dashboard";
 import { getAllEmployees } from "@/actions/employees";
+import { getOrganizationEmployees } from "@/actions/invitations";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +22,7 @@ import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskStatsBar } from "@/components/tasks/task-stats-bar";
 import { toast } from "sonner";
 import { approveTaskClaimAction, rejectTaskClaimAction } from "@/actions/tasks";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -31,6 +32,17 @@ import {
   DropdownMenuTrigger,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+
+const isUnclaimedTask = (task: Task) => task.assignment_status === "open" && !task.user_id;
+
+const getTaskSortRank = (task: Task) => {
+  if (isUnclaimedTask(task)) return 0;
+  if (task.status === "todo") return 1;
+  if (task.status === "in_progress") return 2;
+  if (task.status === "review") return 3;
+  if (task.status === "done") return 4;
+  return 5;
+};
 
 export default function AdminTasksPage() {
   const { data: tasks, isLoading, refetch } = useQuery({
@@ -42,36 +54,141 @@ export default function AdminTasksPage() {
     queryKey: ["admin-employees"],
     queryFn: () => getAllEmployees(),
   });
+  const { data: organizationEmployees = [] } = useQuery({
+    queryKey: ["admin-organization-employees"],
+    queryFn: async () => {
+      const res = await getOrganizationEmployees();
+      return res.employees ?? [];
+    },
+  });
 
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [projectFilter, setProjectFilter] = useState<string>("all");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
+  const [assigneeSearchQuery, setAssigneeSearchQuery] = useState("");
+
+  const projectOptions = useMemo(() => {
+    if (!tasks) return [];
+    const uniqueProjectNames = new Set<string>();
+    tasks.forEach((task: Task) => {
+      const projectName = task.projects?.name?.trim();
+      if (projectName) uniqueProjectNames.add(projectName);
+    });
+    return Array.from(uniqueProjectNames).sort((a, b) => a.localeCompare(b));
+  }, [tasks]);
+
+  const projectScopedAssigneeIds = useMemo(() => {
+    const ids = new Set<string>();
+    (tasks || []).forEach((task: Task) => {
+      const inSelectedProject =
+        projectFilter === "all" ||
+        (projectFilter === "internal" ? !task.projects?.name : task.projects?.name === projectFilter);
+
+      if (inSelectedProject && task.profiles?.id) {
+        ids.add(task.profiles.id);
+      }
+    });
+    return ids;
+  }, [tasks, projectFilter]);
+
+  const assigneeOptions = useMemo(() => {
+    const byId = new Map<string, { id: string; full_name?: string; avatar_url?: string }>();
+
+    (organizationEmployees || []).forEach((emp: { id: string; full_name?: string; avatar_url?: string }) => {
+      if (!emp?.id) return;
+      byId.set(emp.id, emp);
+    });
+
+    (employees || []).forEach((emp: { id: string; full_name?: string; avatar_url?: string }) => {
+      if (!emp?.id) return;
+      byId.set(emp.id, emp);
+    });
+
+    (tasks || []).forEach((task: Task) => {
+      const id = task.profiles?.id;
+      if (!id) return;
+      if (!byId.has(id)) {
+        byId.set(id, {
+          id,
+          full_name: task.profiles?.full_name,
+          avatar_url: task.profiles?.avatar_url || undefined,
+        });
+      }
+    });
+
+    const allOptions = Array.from(byId.values()).sort((a, b) =>
+      (a.full_name || "").localeCompare(b.full_name || "")
+    );
+
+    if (projectFilter === "all") return allOptions;
+    return allOptions.filter((emp) => projectScopedAssigneeIds.has(emp.id));
+  }, [organizationEmployees, employees, tasks, projectFilter, projectScopedAssigneeIds]);
+
+  useEffect(() => {
+    if (assigneeFilter === "all" || assigneeFilter === "unassigned") return;
+    const stillValid = assigneeOptions.some((emp) => emp.id === assigneeFilter);
+    if (!stillValid) {
+      setAssigneeFilter("all");
+    }
+  }, [assigneeFilter, assigneeOptions]);
+
+  const filteredAssignees = useMemo(() => {
+    const needle = assigneeSearchQuery.trim().toLowerCase();
+    if (!needle) return assigneeOptions;
+    return assigneeOptions.filter((emp: { full_name?: string }) =>
+      (emp.full_name || "").toLowerCase().includes(needle)
+    );
+  }, [assigneeOptions, assigneeSearchQuery]);
 
   const filteredTasks = useMemo(() => {
     if (!tasks) return [];
-    return tasks.filter((task: Task) => {
-      const matchesSearch =
-        task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        task.description?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus = statusFilter === "all" || task.status === statusFilter;
-      const matchesPriority = priorityFilter === "all" || task.priority === priorityFilter;
-      const matchesAssignee =
-        assigneeFilter === "all" ||
-        (assigneeFilter === "unassigned" && !task.profiles) ||
-        task.profiles?.id === assigneeFilter;
-      return matchesSearch && matchesStatus && matchesPriority && matchesAssignee;
-    });
-  }, [tasks, searchQuery, statusFilter, priorityFilter, assigneeFilter]);
+    const searchLower = searchQuery.trim().toLowerCase();
+    return tasks
+      .map((task: Task, index: number) => ({ task, index }))
+      .filter(({ task }) => {
+        const matchesSearch =
+          !searchLower ||
+          task.title.toLowerCase().includes(searchLower) ||
+          task.description?.toLowerCase().includes(searchLower) ||
+          task.profiles?.full_name?.toLowerCase().includes(searchLower) ||
+          task.projects?.name?.toLowerCase().includes(searchLower);
+        const matchesStatus = statusFilter === "all" || task.status === statusFilter;
+        const matchesPriority = priorityFilter === "all" || task.priority === priorityFilter;
+        const matchesProject =
+          projectFilter === "all" ||
+          (projectFilter === "internal" ? !task.projects?.name : task.projects?.name === projectFilter);
+        const matchesAssignee =
+          assigneeFilter === "all" ||
+          (assigneeFilter === "unassigned" && !task.profiles) ||
+          task.profiles?.id === assigneeFilter;
 
-  const hasActiveFilters = searchQuery || statusFilter !== "all" || priorityFilter !== "all" || assigneeFilter !== "all";
+        return matchesSearch && matchesStatus && matchesPriority && matchesProject && matchesAssignee;
+      })
+      .sort((a, b) => {
+        const rankDiff = getTaskSortRank(a.task) - getTaskSortRank(b.task);
+        if (rankDiff !== 0) return rankDiff;
+        return a.index - b.index;
+      })
+      .map(({ task }) => task);
+  }, [tasks, searchQuery, statusFilter, priorityFilter, projectFilter, assigneeFilter]);
+
+  const hasActiveFilters =
+    searchQuery ||
+    statusFilter !== "all" ||
+    priorityFilter !== "all" ||
+    projectFilter !== "all" ||
+    assigneeFilter !== "all";
 
   const clearFilters = () => {
     setSearchQuery("");
     setStatusFilter("all");
     setPriorityFilter("all");
+    setProjectFilter("all");
     setAssigneeFilter("all");
+    setAssigneeSearchQuery("");
   };
 
   const handleApproveClaim = async (taskId: string) => {
@@ -121,7 +238,7 @@ export default function AdminTasksPage() {
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search tasks by title or description..."
+            placeholder="Search task, employee, or project..."
             className="pl-10 h-10 rounded-xl border-none bg-zinc-50 dark:bg-zinc-800/50 focus-visible:ring-blue-500/20 font-medium"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -169,6 +286,34 @@ export default function AdminTasksPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* Project Filter */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 rounded-xl border-zinc-200 dark:border-zinc-800 gap-2 font-bold px-3 max-w-[180px]">
+                <FolderSearch className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                <span className="text-xs truncate">
+                  {projectFilter === "all" ? "Any Project" : projectFilter === "internal" ? "Internal" : projectFilter}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 opacity-50 shrink-0" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="rounded-xl w-64 p-1 max-h-80 overflow-y-auto mt-1 shadow-2xl">
+              <DropdownMenuLabel className="text-[10px] uppercase tracking-widest opacity-50 px-2 py-1.5 font-black">Project</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => setProjectFilter("all")} className="rounded-lg font-bold">All Projects</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setProjectFilter("internal")} className="rounded-lg font-medium">Internal / No Project</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {projectOptions.map((projectName) => (
+                <DropdownMenuItem
+                  key={projectName}
+                  onClick={() => setProjectFilter(projectName)}
+                  className="rounded-lg font-medium truncate"
+                >
+                  {projectName}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           {/* Assignee Filter */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -177,17 +322,26 @@ export default function AdminTasksPage() {
                 <span className="text-xs">
                   {assigneeFilter === "all" ? "Any Assignee" :
                     assigneeFilter === "unassigned" ? "Unassigned" :
-                      employees.find((e: { id: string; full_name?: string }) => e.id === assigneeFilter)?.full_name?.split(" ")[0] || "Assignee"}
+                      assigneeOptions.find((e: { id: string; full_name?: string }) => e.id === assigneeFilter)?.full_name?.split(" ")[0] || "Assignee"}
                 </span>
                 <ChevronDown className="h-3.5 w-3.5 opacity-50" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="rounded-xl w-56 p-1 max-h-80 overflow-y-auto mt-1 shadow-2xl">
               <DropdownMenuLabel className="text-[10px] uppercase tracking-widest opacity-50 px-2 py-1.5 font-black">Member</DropdownMenuLabel>
+              <div className="px-2 pb-2">
+                <Input
+                  placeholder="Search employee..."
+                  className="h-8 text-xs rounded-lg"
+                  value={assigneeSearchQuery}
+                  onChange={(e) => setAssigneeSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
+              </div>
               <DropdownMenuItem onClick={() => setAssigneeFilter("all")} className="rounded-lg font-bold">All Members</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setAssigneeFilter("unassigned")} className="rounded-lg font-bold text-blue-600">Unassigned / Marketplace</DropdownMenuItem>
               <DropdownMenuSeparator />
-              {employees.map((emp: { id: string; full_name?: string; avatar_url?: string }) => (
+              {filteredAssignees.map((emp: { id: string; full_name?: string; avatar_url?: string }) => (
                 <DropdownMenuItem key={emp.id} onClick={() => setAssigneeFilter(emp.id)} className="rounded-lg gap-2">
                   <Avatar className="h-5 w-5">
                     <AvatarImage src={emp.avatar_url} />
@@ -196,6 +350,9 @@ export default function AdminTasksPage() {
                   <span className="font-medium text-sm truncate">{emp.full_name}</span>
                 </DropdownMenuItem>
               ))}
+              {filteredAssignees.length === 0 && (
+                <div className="px-2 py-3 text-xs font-medium text-zinc-500">No employee found.</div>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 
