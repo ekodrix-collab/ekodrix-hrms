@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { TaskStatsBar } from "@/components/tasks/task-stats-bar";
@@ -12,7 +14,7 @@ import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import {
     Calendar, CheckCircle2, Clock, UsersIcon as Users,
-    KanbanSquare, ArrowLeft, ChevronRight, AlertCircle, Edit3, Trash2
+    KanbanSquare, ArrowLeft, ChevronRight, AlertCircle, Edit3, Trash2, Search, XCircle, CheckCircle
 } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
@@ -20,7 +22,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AdminTaskForm } from "@/components/tasks/admin-task-form";
 import { approveTaskClaimAction, rejectTaskClaimAction, deleteTaskAction } from "@/actions/tasks";
 import { toast } from "sonner";
-import { XCircle, CheckCircle } from "lucide-react";
 import type { Employee, Task, Project } from "@/types/dashboard";
 
 interface ProjectDetailsClientProps {
@@ -28,10 +29,25 @@ interface ProjectDetailsClientProps {
     employees: Employee[];
 }
 
+type TaskFilterStatus = "all" | "marketplace" | "todo" | "in_progress" | "done";
+
+const isUnclaimedTask = (task: Task) => task.assignment_status === "open" && !task.user_id;
+
+const getTaskSortRank = (task: Task) => {
+    if (isUnclaimedTask(task)) return 0;
+    if (task.status === "todo") return 1;
+    if (task.status === "in_progress") return 2;
+    if (task.status === "done") return 3;
+    return 4;
+};
+
 export function ProjectDetailsClient({ project, employees }: ProjectDetailsClientProps) {
     const router = useRouter();
     const [activeTab, setActiveTab] = useState("tasks");
     const [isActionLoading, setIsActionLoading] = useState<string | null>(null);
+    const [statusFilter, setStatusFilter] = useState<TaskFilterStatus>("all");
+    const [assigneeFilter, setAssigneeFilter] = useState("all");
+    const [search, setSearch] = useState("");
 
     const handleApprove = async (taskId: string) => {
         setIsActionLoading(taskId);
@@ -52,6 +68,68 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
     const totalTasks = project.tasks?.length || 0;
     const completedTasks = project.tasks?.filter((t: Task) => t.status === "done").length || 0;
     const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+    const employeeMap = useMemo(
+        () => new Map(employees.map((emp) => [emp.id, emp.full_name])),
+        [employees]
+    );
+
+    const assigneeOptions = useMemo(() => {
+        const seen = new Set<string>();
+        const options: Array<{ id: string; name: string }> = [];
+
+        for (const task of project.tasks ?? []) {
+            if (!task.user_id || seen.has(task.user_id)) continue;
+            seen.add(task.user_id);
+            options.push({
+                id: task.user_id,
+                name: employeeMap.get(task.user_id) || task.assignee?.full_name || "Unknown",
+            });
+        }
+
+        return options.sort((a, b) => a.name.localeCompare(b.name));
+    }, [employeeMap, project.tasks]);
+
+    const filteredTasks = useMemo(() => {
+        const searchTerm = search.trim().toLowerCase();
+        const selectedEmployeeName = assigneeFilter !== "all"
+            ? (employeeMap.get(assigneeFilter) || "").toLowerCase()
+            : "";
+
+        return (project.tasks ?? [])
+            .map((task, index) => ({ task, index }))
+            .filter(({ task }) => {
+                const matchesStatus = statusFilter === "all"
+                    || (statusFilter === "marketplace" && isUnclaimedTask(task))
+                    || (statusFilter === "todo" && !isUnclaimedTask(task) && task.status === "todo")
+                    || (statusFilter === "in_progress" && task.status === "in_progress")
+                    || (statusFilter === "done" && task.status === "done");
+
+                const matchesEmployee = assigneeFilter === "all"
+                    || task.user_id === assigneeFilter
+                    || (!!selectedEmployeeName && (task.assignee?.full_name || "").toLowerCase() === selectedEmployeeName);
+
+                const searchableText = [
+                    task.title,
+                    task.description || "",
+                    task.priority || "",
+                    task.status || "",
+                    task.assignment_status || "",
+                    task.assignee?.full_name || "",
+                    isUnclaimedTask(task) ? "unassigned marketplace" : "",
+                ]
+                    .join(" ")
+                    .toLowerCase();
+                const matchesSearch = !searchTerm || searchableText.includes(searchTerm);
+
+                return matchesStatus && matchesEmployee && matchesSearch;
+            })
+            .sort((a, b) => {
+                const rankDiff = getTaskSortRank(a.task) - getTaskSortRank(b.task);
+                if (rankDiff !== 0) return rankDiff;
+                return a.index - b.index;
+            })
+            .map(({ task }) => task);
+    }, [assigneeFilter, employeeMap, project.tasks, search, statusFilter]);
 
     return (
         <div className="space-y-8">
@@ -138,12 +216,55 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
                 <TabsContent value="tasks" className="space-y-4">
                     {/* Tasks Stats Bar */}
                     {totalTasks > 0 && (
-                        <TaskStatsBar tasks={project.tasks ?? []} />
+                        <TaskStatsBar tasks={filteredTasks} />
                     )}
 
                     {totalTasks > 0 ? (
+                        <>
+                            <div className="flex flex-col lg:flex-row gap-3 items-center bg-white/40 dark:bg-zinc-900/40 p-3 rounded-[1.5rem] border border-zinc-100 dark:border-zinc-800 backdrop-blur-md shadow-sm">
+                                <div className="relative w-full lg:flex-1">
+                                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Search task title, description, or employee name..."
+                                        className="pl-10 h-10 rounded-xl border-none bg-zinc-50 dark:bg-zinc-800/50 focus-visible:ring-primary/20 font-medium"
+                                        value={search}
+                                        onChange={(e) => setSearch(e.target.value)}
+                                    />
+                                </div>
+                                <div className="w-full sm:w-[220px]">
+                                    <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as TaskFilterStatus)}>
+                                        <SelectTrigger className="h-10 rounded-xl border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 font-semibold">
+                                            <SelectValue placeholder="Filter by status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All statuses</SelectItem>
+                                            <SelectItem value="marketplace">Marketplace</SelectItem>
+                                            <SelectItem value="todo">Todo</SelectItem>
+                                            <SelectItem value="in_progress">In Progress</SelectItem>
+                                            <SelectItem value="done">Completed</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="w-full sm:w-[220px]">
+                                    <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+                                        <SelectTrigger className="h-10 rounded-xl border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 font-semibold">
+                                            <SelectValue placeholder="Filter by employee" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All employees</SelectItem>
+                                            {assigneeOptions.map((emp) => (
+                                                <SelectItem key={emp.id} value={emp.id}>
+                                                    {emp.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            {filteredTasks.length > 0 ? (
                         <div className="grid grid-cols-1 gap-4">
-                            {project.tasks?.map((task: Task) => (
+                                {filteredTasks.map((task: Task) => (
                                 <div key={task.id} className="group bg-white/40 dark:bg-zinc-900/40 p-5 rounded-[1.5rem] border border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-4 hover:bg-white dark:hover:bg-zinc-900 transition-all flex-wrap md:flex-nowrap">
                                     {/* Status icon */}
                                     <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${task.status === "done" ? "bg-green-500/10 text-green-500" : "bg-primary/10 text-primary"}`}>
@@ -253,6 +374,14 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
                                 </div>
                             ))}
                         </div>
+                            ) : (
+                                <div className="py-20 text-center border-2 border-dashed border-zinc-100 dark:border-zinc-800 rounded-[3rem] bg-zinc-50/10">
+                                    <KanbanSquare className="h-12 w-12 text-zinc-200 mx-auto mb-4" />
+                                    <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">No Tasks Match</h3>
+                                    <p className="text-zinc-500 font-medium mt-1">Try changing status, employee filter, or search text.</p>
+                                </div>
+                            )}
+                        </>
                     ) : (
                         <div className="py-20 text-center border-2 border-dashed border-zinc-100 dark:border-zinc-800 rounded-[3rem] bg-zinc-50/10">
                             <KanbanSquare className="h-12 w-12 text-zinc-200 mx-auto mb-4" />
