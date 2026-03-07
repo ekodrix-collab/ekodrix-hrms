@@ -10,6 +10,7 @@ export interface Project {
     status: 'active' | 'completed' | 'on_hold' | 'planned';
     priority: 'urgent' | 'high' | 'medium' | 'low';
     deadline: string | null;
+    contract_amount?: number | null;
     created_at: string;
     updated_at: string;
     created_by: string;
@@ -29,6 +30,7 @@ type ProjectRow = {
     status: 'active' | 'completed' | 'on_hold' | 'planned';
     priority: 'urgent' | 'high' | 'medium' | 'low';
     deadline: string | null;
+    contract_amount?: number | null;
     created_at: string;
     updated_at: string;
     created_by: string;

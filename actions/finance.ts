@@ -330,3 +330,41 @@ export async function postFinanceVerdict(projectId: string, content: string) {
     revalidatePath(`/admin/projects/${projectId}/finance`);
     return { ok: true, data };
 }
+
+export async function getProjectContractAmount(projectId: string) {
+    const supabase = createSupabaseServerClient();
+    const { data, error } = await supabase
+        .from("projects")
+        .select("contract_amount")
+        .eq("id", projectId)
+        .single();
+
+    if (error) return { ok: false, message: error.message, amount: 0 };
+    return { ok: true, amount: Number(data?.contract_amount ?? 0) };
+}
+
+export async function updateProjectContractAmount(projectId: string, amount: number) {
+    const supabase = createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, message: "Not authenticated" };
+
+    const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+    if (profile?.role !== "admin") return { ok: false, message: "Admin access required" };
+
+    const { error } = await supabase
+        .from("projects")
+        .update({ contract_amount: amount, updated_at: new Date().toISOString() })
+        .eq("id", projectId);
+
+    if (error) return { ok: false, message: error.message };
+
+    revalidatePath(`/admin/projects/${projectId}`);
+    revalidatePath(`/admin/projects/${projectId}/finance`);
+    revalidatePath("/admin/projects/finance");
+    return { ok: true };
+}
