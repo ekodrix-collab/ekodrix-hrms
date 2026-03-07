@@ -53,17 +53,17 @@ export default async function EmployeeDetailsPage({ params }: { params: { id: st
                     </TabsList>
                 </div>
 
-                <TabsContent value="attendance" className="mt-0 space-y-6">
+                <TabsContent value="attendance" className="space-y-6">
                     <AttendanceCalendar logs={attendance.logs} />
                     <EmployeeAttendanceReport logs={attendance.logs} employeeId={id} />
                 </TabsContent>
-                <TabsContent value="standups" className="mt-0">
+                <TabsContent value="standups">
                     <EmployeeStandups standups={standups.standups} />
                 </TabsContent>
-                <TabsContent value="tasks" className="mt-0">
+                <TabsContent value="tasks">
                     <EmployeeTasks tasks={tasks.tasks} />
                 </TabsContent>
-                <TabsContent value="compensation" className="mt-0">
+                <TabsContent value="compensation">
                     <EmployeeCompensation profile={profile} />
                 </TabsContent>
             </Tabs>
