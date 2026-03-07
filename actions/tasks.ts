@@ -8,7 +8,6 @@ import type { TaskStatus } from "@/store/task-store";
 type TaskSubtask = {
   title: string;
   completed: boolean;
-  [key: string]: unknown;
 };
 
 async function isAssignedProjectManager(

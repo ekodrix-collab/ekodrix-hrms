@@ -152,10 +152,10 @@ export interface Employee {
 export interface Project {
     id: string;
     name: string;
-    description?: string;
+    description?: string | null;
     status: string;
     priority: string;
-    deadline?: string;
+    deadline?: string | null;
     project_manager_id?: string | null;
     project_manager?: {
         id: string;

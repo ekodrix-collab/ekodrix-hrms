@@ -24,8 +24,17 @@ export interface Project {
 
 type ProjectRow = {
     id: string;
+    name: string;
+    description: string | null;
+    status: 'active' | 'completed' | 'on_hold' | 'planned';
+    priority: 'urgent' | 'high' | 'medium' | 'low';
+    deadline: string | null;
     created_at: string;
+    updated_at: string;
+    created_by: string;
     project_manager_id: string | null;
+    task_count?: { count: number }[];
+    completed_count?: { count: number }[];
     [key: string]: unknown;
 };
 
@@ -182,7 +191,7 @@ export async function getProjectsAction() {
             .order("created_at", { ascending: false });
 
         if (error) return { ok: false, message: error.message };
-        const withManagers = await attachProjectManagerProfiles(supabase, data || []);
+        const withManagers = await attachProjectManagerProfiles(supabase, (data || []) as unknown as ProjectRow[]);
         return { ok: true, data: withManagers };
     }
 
@@ -203,7 +212,7 @@ export async function getProjectsAction() {
     if (managedRes.error) return { ok: false, message: managedRes.error.message };
     if (taskProjectRes.error) return { ok: false, message: taskProjectRes.error.message };
 
-    const managedProjects = managedRes.data || [];
+    const managedProjects = (managedRes.data || []) as unknown as ProjectRow[];
     const managedProjectIds = new Set(managedProjects.map((project) => project.id));
 
     const taskProjectIds = Array.from(
@@ -224,7 +233,7 @@ export async function getProjectsAction() {
             .order("created_at", { ascending: false });
 
         if (projectError) return { ok: false, message: projectError.message };
-        taskProjects = projectRows || [];
+        taskProjects = (projectRows || []) as unknown as ProjectRow[];
     }
 
     const merged = [...managedProjects, ...taskProjects].sort((a, b) => {

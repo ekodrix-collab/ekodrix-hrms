@@ -47,11 +47,11 @@ export default async function EmployeeProjectDetailPage({ params }: { params: { 
     }
 
     const tasks = project.tasks ?? [];
-    const myTasks = tasks.filter((t: { user_id?: string; assignee?: { id: string } }) => t.user_id === user?.id || t.assignee?.id === user?.id);
+    const myTasks = tasks.filter((t) => t.user_id === user?.id || t.assignee?.id === user?.id);
     const allTasks = myTasks.length > 0 ? myTasks : tasks;
 
     const totalTasks = allTasks.length;
-    const completedTasks = allTasks.filter((t: { status?: string }) => t.status === "done").length;
+    const completedTasks = allTasks.filter((t) => t.status === "done").length;
     const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
     return (
