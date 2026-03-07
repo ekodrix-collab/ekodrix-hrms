@@ -156,5 +156,14 @@ export interface Project {
     status: string;
     priority: string;
     deadline?: string;
+    project_manager_id?: string | null;
+    project_manager?: {
+        id: string;
+        full_name: string | null;
+        email?: string | null;
+        avatar_url?: string | null;
+    } | null;
+    can_manage_project?: boolean;
+    is_project_manager?: boolean;
     tasks?: Task[];
 }

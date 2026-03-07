@@ -1,8 +1,19 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getOrgContext } from "@/lib/auth-utils";
 import type { Blocker, Activity } from "@/types/dashboard";
+
+type RelatedProfile = {
+    full_name?: string | null;
+    avatar_url?: string | null;
+};
+
+function normalizeProfileRelation(value: RelatedProfile | RelatedProfile[] | null | undefined): RelatedProfile | null {
+    if (!value) return null;
+    return Array.isArray(value) ? (value[0] ?? null) : value;
+}
 
 export async function getAttendanceLogs(date?: string) {
     const supabase = createSupabaseServerClient();
@@ -160,13 +171,16 @@ export async function getUrgentBlockers(): Promise<Blocker[]> {
         .not('blockers', 'is', null)
         .limit(5);
 
-    return (standups || []).map(s => ({
+    return (standups || []).map(s => {
+        const profile = normalizeProfileRelation(s.profiles as RelatedProfile | RelatedProfile[] | null);
+        return ({
         id: s.id,
         title: "Team Blocker",
         description: s.blockers || "",
         priority: "high" as const,
-        userName: (s.profiles as any)?.full_name || "Unknown",
-    }));
+        userName: profile?.full_name || "Unknown",
+    });
+    });
 }
 
 export async function getDepartmentDistribution() {
@@ -205,20 +219,24 @@ export async function getRecentActivities(): Promise<Activity[]> {
         .order('created_at', { ascending: false })
         .limit(25);
 
-    return (logs || []).map(log => ({
+    return (logs || []).map(log => {
+        const profile = normalizeProfileRelation(log.profiles as RelatedProfile | RelatedProfile[] | null);
+        return ({
         id: log.id,
         action: log.action,
         type: log.entity_type,
         time: log.created_at,
         user: {
-            name: (log.profiles as any)?.full_name || "System",
-            avatar: (log.profiles as any)?.avatar_url || null,
+            name: profile?.full_name || "System",
+            avatar: profile?.avatar_url || null,
         }
-    }));
+    });
+    });
 }
 
 export async function getAllTasks() {
     const supabase = createSupabaseServerClient();
+    const adminClient = createSupabaseAdminClient();
     const { organizationId } = await getOrgContext();
     if (!organizationId) return [];
 
@@ -238,7 +256,50 @@ export async function getAllTasks() {
         return [];
     }
 
-    return tasks || [];
+    const taskRows = tasks || [];
+    if (taskRows.length === 0) return [];
+
+    const taskIds = taskRows.map((task) => task.id);
+    const { data: claimRows } = await adminClient
+        .from("admin_inbox")
+        .select("entity_id, metadata, created_at")
+        .eq("entity_type", "task_review")
+        .eq("is_handled", false)
+        .in("entity_id", taskIds);
+
+    const claimsByTask = new Map<string, { id: string; name: string }[]>();
+    for (const row of claimRows || []) {
+        const metadata = row.metadata as { claimant_id?: string; claimant_name?: string } | null;
+        const claimantId = metadata?.claimant_id;
+        if (!claimantId) continue;
+
+        const claimantName = metadata?.claimant_name || "Employee";
+        const list = claimsByTask.get(row.entity_id) || [];
+        if (!list.some((entry) => entry.id === claimantId)) {
+            list.push({ id: claimantId, name: claimantName });
+            claimsByTask.set(row.entity_id, list);
+        }
+    }
+
+    return taskRows.map((task) => {
+        const claimants = [...(claimsByTask.get(task.id) || [])];
+
+        // Legacy compatibility: older flows may keep claimant in user_id while pending.
+        if (task.assignment_status === "pending_approval" && task.user_id) {
+            const exists = claimants.some((entry) => entry.id === task.user_id);
+            if (!exists) {
+                claimants.push({
+                    id: task.user_id,
+                    name: task.profiles?.full_name || "Employee",
+                });
+            }
+        }
+
+        return {
+            ...task,
+            claimants,
+        };
+    });
 }
 
 export async function getAllExpenses() {

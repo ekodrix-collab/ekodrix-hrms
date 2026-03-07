@@ -12,11 +12,8 @@ export default async function EmployeeProjectsPage() {
     const supabase = createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    // Fetch projects
+    // Fetch projects relevant to this user (assigned tasks or PM assignment)
     const result = await getProjectsAction();
-
-    // For now, we fetch all active projects. 
-    // In a future refinement, we might filter projects where the user has at least one task.
     const projects = result.ok ? result.data : [];
 
     return (
