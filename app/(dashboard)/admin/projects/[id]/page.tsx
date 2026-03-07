@@ -24,6 +24,7 @@ export default async function ProjectDetailsPage({ params }: { params: { id: str
             <ProjectDetailsClient
                 project={projectRes.data as unknown as Project}
                 employees={employeesRes.ok ? (employeesRes.data as unknown as Employee[] ?? []) : []}
+                canAssignProjectManager
             />
         </div>
     );

@@ -1,4 +1,6 @@
 import { getProjectDetailsAction } from "@/actions/projects";
+import { getAllEmployeesAction } from "@/actions/tasks";
+import { ProjectDetailsClient } from "@/components/admin/projects/project-details-client";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -13,7 +15,7 @@ import { ArrowLeft, Calendar, CheckCircle2, ChevronRight, Clock, KanbanSquare, U
 import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import type { Task } from "@/types/dashboard";
+import type { Employee, Project, Task } from "@/types/dashboard";
 
 export const metadata: Metadata = {
     title: "Project Details | Ekodrix",
@@ -27,13 +29,29 @@ export default async function EmployeeProjectDetailPage({ params }: { params: { 
     const result = await getProjectDetailsAction(params.id);
     if (!result.ok || !result.data) return notFound();
 
-    const project = result.data;
+    const project = result.data as Project;
+    if (project.can_manage_project) {
+        const employeesRes = await getAllEmployeesAction();
+        return (
+            <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+                <ProjectDetailsClient
+                    project={project}
+                    employees={employeesRes.ok ? (employeesRes.data as unknown as Employee[] ?? []) : []}
+                    homePath="/employee/projects"
+                    showFinanceWorkspace={false}
+                    canManageTasks
+                    canAssignProjectManager={false}
+                />
+            </div>
+        );
+    }
+
     const tasks = project.tasks ?? [];
-    const myTasks = tasks.filter((t: { user_id?: string; assignee?: { id: string } }) => t.user_id === user?.id || t.assignee?.id === user?.id);
+    const myTasks = tasks.filter((t) => t.user_id === user?.id || t.assignee?.id === user?.id);
     const allTasks = myTasks.length > 0 ? myTasks : tasks;
 
     const totalTasks = allTasks.length;
-    const completedTasks = allTasks.filter((t: { status?: string }) => t.status === "done").length;
+    const completedTasks = allTasks.filter((t) => t.status === "done").length;
     const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
     return (

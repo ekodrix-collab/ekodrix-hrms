@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -21,24 +22,64 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Plus, Rocket } from "lucide-react";
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Check, ChevronDown, Plus, Rocket, Users } from "lucide-react";
 import { createProjectAction } from "@/actions/projects";
+import { getAllEmployeesAction } from "@/actions/tasks";
 import { toast } from "sonner";
+
+interface EmployeeOption {
+    id: string;
+    full_name: string | null;
+    email: string;
+    department?: string | null;
+}
 
 export function CreateProjectDialog({ onSuccess }: { onSuccess?: () => void }) {
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [selectedManagerId, setSelectedManagerId] = useState("none");
+    const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
+
+    const { data: employees = [] } = useQuery({
+        queryKey: ["project-create-employees"],
+        queryFn: async () => {
+            const res = await getAllEmployeesAction();
+            if (!res.ok) return [];
+            return (res.data ?? []) as EmployeeOption[];
+        },
+        staleTime: 60_000,
+    });
+
+    const toggleTeamMember = (employeeId: string) => {
+        setSelectedTeamIds((prev) => (
+            prev.includes(employeeId)
+                ? prev.filter((id) => id !== employeeId)
+                : [...prev, employeeId]
+        ));
+    };
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setLoading(true);
 
         const formData = new FormData(e.currentTarget);
+        formData.set("projectManagerId", selectedManagerId === "none" ? "" : selectedManagerId);
+        formData.set("teamMemberIds", JSON.stringify(selectedTeamIds));
         const res = await createProjectAction(formData);
 
         if (res.ok) {
             toast.success("Project created successfully!");
             setOpen(false);
+            setSelectedManagerId("none");
+            setSelectedTeamIds([]);
             onSuccess?.();
         } else {
             toast.error(res.message || "Failed to create project");
@@ -54,7 +95,7 @@ export function CreateProjectDialog({ onSuccess }: { onSuccess?: () => void }) {
                     New Project
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px] rounded-[2rem] border-zinc-100 dark:border-zinc-800 p-8">
+            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto rounded-[2rem] border-zinc-100 dark:border-zinc-800 p-8">
                 <DialogHeader>
                     <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
                         <Rocket className="h-6 w-6 text-primary" />
@@ -118,6 +159,70 @@ export function CreateProjectDialog({ onSuccess }: { onSuccess?: () => void }) {
                                 className="rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-medium h-10"
                             />
                         </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="font-bold text-xs uppercase tracking-tighter text-zinc-500">
+                            Project Manager
+                        </Label>
+                        <Select value={selectedManagerId} onValueChange={setSelectedManagerId}>
+                            <SelectTrigger className="rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-medium h-10">
+                                <SelectValue placeholder="Select manager" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-zinc-100 dark:border-zinc-800">
+                                <SelectItem value="none">Unassigned</SelectItem>
+                                {employees.map((employee) => (
+                                    <SelectItem key={employee.id} value={employee.id}>
+                                        {employee.full_name || employee.email}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="font-bold text-xs uppercase tracking-tighter text-zinc-500">
+                            Project Team
+                        </Label>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full justify-between rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-medium h-10"
+                                >
+                                    <span className="flex items-center gap-2 truncate">
+                                        <Users className="h-4 w-4 text-zinc-500" />
+                                        {selectedTeamIds.length > 0 ? `${selectedTeamIds.length} team member(s) selected` : "Select team members"}
+                                    </span>
+                                    <ChevronDown className="h-4 w-4 text-zinc-400" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-80 sm:w-[420px] max-h-72 overflow-y-auto rounded-xl border-zinc-100 dark:border-zinc-800">
+                                <DropdownMenuLabel className="text-xs uppercase tracking-widest text-zinc-500">Team Members</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {employees.length === 0 && (
+                                    <div className="px-2 py-3 text-sm text-zinc-500">No active employees available</div>
+                                )}
+                                {employees.map((employee) => (
+                                    <DropdownMenuCheckboxItem
+                                        key={employee.id}
+                                        checked={selectedTeamIds.includes(employee.id)}
+                                        onCheckedChange={() => toggleTeamMember(employee.id)}
+                                        onSelect={(event) => event.preventDefault()}
+                                        className="rounded-lg"
+                                    >
+                                        {employee.full_name || employee.email}
+                                    </DropdownMenuCheckboxItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        {selectedTeamIds.length > 0 && (
+                            <p className="text-[11px] font-medium text-zinc-500 flex items-center gap-1.5">
+                                <Check className="h-3.5 w-3.5 text-green-600" />
+                                Team members will be attached during project creation.
+                            </p>
+                        )}
                     </div>
 
                     <DialogFooter className="pt-4">

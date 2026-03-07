@@ -36,6 +36,19 @@ type FinancialsResult = { projectBreakdown: ProjectBreakdown[] };
 type LedgerItem = { id: string; title: string; type: "revenue" | "expense"; date: string; amount: number | string; category: string };
 type ExpenseForm = { amount: string; description: string; category: string; payment_method: string };
 
+function toProjectItems(value: unknown): ProjectItem[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const row = item as { id?: unknown; name?: unknown };
+      if (typeof row.id !== "string" || typeof row.name !== "string") return null;
+      return { id: row.id, name: row.name };
+    })
+    .filter((project): project is ProjectItem => Boolean(project));
+}
+
 const inr = (value: number) =>
   `INR ${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(Number(value) || 0)}`;
 
@@ -66,7 +79,7 @@ export default function AdminProjectsFinancePage() {
   });
 
   const projectRows = useMemo(() => {
-    const projects = (projectsRes ?? []) as ProjectItem[];
+    const projects = toProjectItems(projectsRes);
     const breakdown = ((companyFinancials as FinancialsResult | undefined)?.projectBreakdown ?? []) as ProjectBreakdown[];
     return projects.map((project) => {
       const metrics = breakdown.find((item) => item.id === project.id);
