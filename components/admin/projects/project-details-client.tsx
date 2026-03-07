@@ -21,12 +21,17 @@ import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AdminTaskForm } from "@/components/tasks/admin-task-form";
 import { approveTaskClaimAction, rejectTaskClaimAction, deleteTaskAction } from "@/actions/tasks";
+import { assignProjectManagerAction } from "@/actions/projects";
 import { toast } from "sonner";
 import type { Employee, Task, Project } from "@/types/dashboard";
 
 interface ProjectDetailsClientProps {
     project: Project;
     employees: Employee[];
+    homePath?: string;
+    showFinanceWorkspace?: boolean;
+    canManageTasks?: boolean;
+    canAssignProjectManager?: boolean;
 }
 
 type TaskFilterStatus = "all" | "marketplace" | "todo" | "in_progress" | "done";
@@ -41,13 +46,24 @@ const getTaskSortRank = (task: Task) => {
     return 4;
 };
 
-export function ProjectDetailsClient({ project, employees }: ProjectDetailsClientProps) {
+export function ProjectDetailsClient({
+    project,
+    employees,
+    homePath = "/admin/projects",
+    showFinanceWorkspace = true,
+    canManageTasks = true,
+    canAssignProjectManager = false,
+}: ProjectDetailsClientProps) {
     const router = useRouter();
     const [activeTab, setActiveTab] = useState("tasks");
     const [isActionLoading, setIsActionLoading] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<TaskFilterStatus>("all");
     const [assigneeFilter, setAssigneeFilter] = useState("all");
     const [search, setSearch] = useState("");
+    const [managerSelection, setManagerSelection] = useState(project.project_manager_id || "unassigned");
+    const [isSavingManager, setIsSavingManager] = useState(false);
+
+    const currentProjectManagerName = project.project_manager?.full_name || "Unassigned";
 
     const handleApprove = async (taskId: string) => {
         setIsActionLoading(taskId);
@@ -55,6 +71,23 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
         if (res.ok) { toast.success("Task claim approved!"); router.refresh(); }
         else toast.error(res.message);
         setIsActionLoading(null);
+    };
+
+    const handleProjectManagerSave = async () => {
+        if (!canAssignProjectManager) return;
+
+        setIsSavingManager(true);
+        const selectedManagerId = managerSelection === "unassigned" ? null : managerSelection;
+        const res = await assignProjectManagerAction(project.id, selectedManagerId);
+
+        if (res.ok) {
+            toast.success("Project manager updated");
+            router.refresh();
+        } else {
+            toast.error(res.message || "Failed to update project manager");
+        }
+
+        setIsSavingManager(false);
     };
 
     const handleReject = async (taskId: string) => {
@@ -131,12 +164,14 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
             .map(({ task }) => task);
     }, [assigneeFilter, employeeMap, project.tasks, search, statusFilter]);
 
+    const backLabel = homePath.startsWith("/employee") ? "My Projects" : "Back to Projects";
+
     return (
         <div className="space-y-8">
             {/* Breadcrumbs */}
             <div className="flex items-center gap-4 text-sm font-bold text-zinc-500">
-                <Link href="/admin/projects" className="hover:text-primary transition-colors flex items-center gap-1">
-                    <ArrowLeft className="h-4 w-4" />Back to Projects
+                <Link href={homePath} className="hover:text-primary transition-colors flex items-center gap-1">
+                    <ArrowLeft className="h-4 w-4" />{backLabel}
                 </Link>
                 <ChevronRight className="h-4 w-4" />
                 <span className="text-zinc-900 dark:text-zinc-100">{project.name}</span>
@@ -181,6 +216,35 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
                                     <p className="text-xl font-black text-green-500">{completedTasks}</p>
                                 </div>
                             </div>
+                            <div className="pt-3 border-t border-zinc-200/60 dark:border-zinc-700/60 space-y-2">
+                                <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Project Manager</p>
+                                <p className="text-sm font-black text-zinc-900 dark:text-zinc-100 uppercase truncate">{currentProjectManagerName}</p>
+                            </div>
+                            {canAssignProjectManager && (
+                                <div className="space-y-2">
+                                    <Select value={managerSelection} onValueChange={setManagerSelection}>
+                                        <SelectTrigger className="h-10 rounded-xl border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 font-semibold">
+                                            <SelectValue placeholder="Assign project manager" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="unassigned">Unassigned</SelectItem>
+                                            {employees.map((employee) => (
+                                                <SelectItem key={employee.id} value={employee.id}>
+                                                    {employee.full_name || "Employee"}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Button
+                                        type="button"
+                                        onClick={handleProjectManagerSave}
+                                        disabled={isSavingManager}
+                                        className="w-full h-9 font-bold rounded-xl"
+                                    >
+                                        {isSavingManager ? "Saving..." : "Save Project Manager"}
+                                    </Button>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </div>
@@ -198,12 +262,14 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
                         </TabsTrigger>
                     </TabsList>
                     <div className="flex items-center gap-2">
-                        <Link href={`/admin/projects/${project.id}/finance`}>
-                            <Button variant="outline" className="font-bold">
-                                Finance Workspace
-                            </Button>
-                        </Link>
-                        {activeTab === "tasks" && (
+                        {showFinanceWorkspace && (
+                            <Link href={`/admin/projects/${project.id}/finance`}>
+                                <Button variant="outline" className="font-bold">
+                                    Finance Workspace
+                                </Button>
+                            </Link>
+                        )}
+                        {canManageTasks && activeTab === "tasks" && (
                             <AdminTaskForm
                                 employees={employees}
                                 projectId={project.id}
@@ -323,7 +389,7 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
 
                                     {/* Action Buttons */}
                                     <div className="flex items-center gap-2 shrink-0">
-                                        {task.assignment_status === "pending_approval" && (
+                                        {canManageTasks && task.assignment_status === "pending_approval" && (
                                             <>
                                                 <Button size="sm" variant="outline" className="h-8 rounded-lg border-red-200 text-red-600 hover:bg-red-50 font-bold text-[10px] uppercase px-3" onClick={() => handleReject(task.id)} disabled={isActionLoading === task.id}>
                                                     <XCircle className="h-3.5 w-3.5 mr-1" />Reject
@@ -333,43 +399,48 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
                                                 </Button>
                                             </>
                                         )}
-                                        <AdminTaskForm
-                                            employees={employees}
-                                            projectId={project.id}
-                                            initialData={{
-                                                id: task.id,
-                                                title: task.title,
-                                                description: task.description || "",
-                                                priority: task.priority,
-                                                dueDate: task.due_date ? format(new Date(task.due_date), "yyyy-MM-dd") : "",
-                                                assignment_status: task.assignment_status || "open",
-                                                user_id: task.user_id || "",
-                                                subtasks: task.subtasks || [],
-                                            }}
-                                            onSuccess={() => router.refresh()}
-                                            trigger={
-                                                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-primary transition-all">
-                                                    <Edit3 className="h-4 w-4" />
+                                        {canManageTasks && (
+                                            <>
+                                                <AdminTaskForm
+                                                    employees={employees}
+                                                    projectId={project.id}
+                                                    initialData={{
+                                                        id: task.id,
+                                                        title: task.title,
+                                                        description: task.description || "",
+                                                        priority: task.priority,
+                                                        status: task.status,
+                                                        dueDate: task.due_date ? format(new Date(task.due_date), "yyyy-MM-dd") : "",
+                                                        assignment_status: task.assignment_status || "open",
+                                                        user_id: task.user_id || "",
+                                                        subtasks: task.subtasks || [],
+                                                    }}
+                                                    onSuccess={() => router.refresh()}
+                                                    trigger={
+                                                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-primary transition-all">
+                                                            <Edit3 className="h-4 w-4" />
+                                                        </Button>
+                                                    }
+                                                />
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-9 w-9 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 text-zinc-500 hover:text-red-500 transition-all"
+                                                    disabled={isActionLoading === task.id}
+                                                    onClick={async () => {
+                                                        if (confirm("Delete this task?")) {
+                                                            setIsActionLoading(task.id);
+                                                            const res = await deleteTaskAction(task.id);
+                                                            if (res.ok) { toast.success("Task deleted"); router.refresh(); }
+                                                            else toast.error(res.message);
+                                                            setIsActionLoading(null);
+                                                        }
+                                                    }}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
                                                 </Button>
-                                            }
-                                        />
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-9 w-9 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 text-zinc-500 hover:text-red-500 transition-all"
-                                            disabled={isActionLoading === task.id}
-                                            onClick={async () => {
-                                                if (confirm("Delete this task?")) {
-                                                    setIsActionLoading(task.id);
-                                                    const res = await deleteTaskAction(task.id);
-                                                    if (res.ok) { toast.success("Task deleted"); router.refresh(); }
-                                                    else toast.error(res.message);
-                                                    setIsActionLoading(null);
-                                                }
-                                            }}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -403,7 +474,9 @@ export function ProjectDetailsClient({ project, employees }: ProjectDetailsClien
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-black text-zinc-900 dark:text-zinc-100 uppercase truncate">{emp.full_name}</p>
                                         <div className="flex items-center gap-2 mt-1">
-                                            <Badge variant="secondary" className="text-[8px] h-4 px-1 uppercase font-black bg-zinc-100 dark:bg-zinc-800 text-zinc-500">Employee</Badge>
+                                            <Badge variant="secondary" className="text-[8px] h-4 px-1 uppercase font-black bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
+                                                {project.project_manager_id === emp.id ? "Project Manager" : "Employee"}
+                                            </Badge>
                                             <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1">
                                                 <AlertCircle className="h-3 w-3" />{emp.tasks?.length || 0} Active
                                             </span>

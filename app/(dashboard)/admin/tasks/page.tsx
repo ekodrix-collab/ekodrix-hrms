@@ -191,20 +191,28 @@ export default function AdminTasksPage() {
     setAssigneeSearchQuery("");
   };
 
-  const handleApproveClaim = async (taskId: string) => {
+  const hasClaimRequests = (task: Task) => (task.claimants?.length || 0) > 0 || task.assignment_status === "pending_approval";
+
+  const primaryClaimantId = (task: Task) => task.claimants?.[0]?.id;
+
+  const pendingClaimTasks = useMemo(() => {
+    return (tasks || []).filter((task: Task) => hasClaimRequests(task));
+  }, [tasks]);
+
+  const handleApproveClaim = async (taskId: string, claimantId?: string) => {
     setProcessingId(taskId);
     try {
-      const res = await approveTaskClaimAction(taskId);
+      const res = await approveTaskClaimAction(taskId, claimantId);
       if (res.ok) { toast.success("Task claim approved!"); refetch(); }
       else toast.error(res.message || "Failed to approve claim");
     } catch { toast.error("An unexpected error occurred"); }
     finally { setProcessingId(null); }
   };
 
-  const handleRejectClaim = async (taskId: string) => {
+  const handleRejectClaim = async (taskId: string, claimantId?: string) => {
     setProcessingId(taskId);
     try {
-      const res = await rejectTaskClaimAction(taskId);
+      const res = await rejectTaskClaimAction(taskId, claimantId);
       if (res.ok) { toast.success("Task claim rejected"); refetch(); }
       else toast.error(res.message || "Failed to reject claim");
     } catch { toast.error("An unexpected error occurred"); }
@@ -231,6 +239,52 @@ export default function AdminTasksPage() {
       {/* Stats Bar */}
       {tasks && tasks.length > 0 && (
         <TaskStatsBar tasks={tasks} />
+      )}
+
+      {pendingClaimTasks.length > 0 && (
+        <section className="rounded-2xl border border-amber-200/60 bg-amber-50/60 dark:bg-amber-950/10 dark:border-amber-900/40 p-4 md:p-5">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="text-xs md:text-sm font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">
+              Pending Task Claims ({pendingClaimTasks.length})
+            </h2>
+            <span className="text-[10px] md:text-xs font-bold text-amber-700/80 dark:text-amber-300/80 uppercase tracking-wider">
+              Quick Actions
+            </span>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+            {pendingClaimTasks.slice(0, 6).map((task: Task) => (
+              <div key={task.id} className="rounded-xl border border-amber-200/70 dark:border-amber-900/50 bg-white/80 dark:bg-zinc-900/40 px-3 py-2.5 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100 truncate">{task.title}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                    {(task.claimants?.length || 1)} Claim{(task.claimants?.length || 1) === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Button
+                    size="sm"
+                    className="h-7 rounded-lg text-[10px] font-black uppercase tracking-widest bg-green-600 hover:bg-green-700 px-2.5"
+                    onClick={() => handleApproveClaim(task.id, primaryClaimantId(task))}
+                    disabled={processingId === task.id}
+                  >
+                    <Check className="h-3.5 w-3.5 mr-1" />
+                    Approve
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 rounded-lg text-[10px] font-black uppercase tracking-widest border-red-200 text-red-600 hover:bg-red-50 px-2.5"
+                    onClick={() => handleRejectClaim(task.id, primaryClaimantId(task))}
+                    disabled={processingId === task.id}
+                  >
+                    <X className="h-3.5 w-3.5 mr-1" />
+                    Reject
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Control Bar: Search & Filters */}
@@ -417,12 +471,12 @@ export default function AdminTasksPage() {
                             <span className="text-[11px] font-bold text-zinc-600 dark:text-zinc-400">{task.profiles?.full_name?.split(" ")[0] || "Unassigned"}</span>
                           </div>
                           <TaskPriorityBadge priority={task.priority} />
-                          {task.assignment_status === "pending_approval" && (
+                          {hasClaimRequests(task) && (
                             <div className="flex items-center gap-1">
-                              <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full bg-green-50 text-green-600 border border-green-100" onClick={() => handleApproveClaim(task.id)} disabled={processingId === task.id}>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full bg-green-50 text-green-600 border border-green-100" onClick={() => handleApproveClaim(task.id, primaryClaimantId(task))} disabled={processingId === task.id}>
                                 <Check className="h-4 w-4" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full bg-red-50 text-red-600 border border-red-100" onClick={() => handleRejectClaim(task.id)} disabled={processingId === task.id}>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full bg-red-50 text-red-600 border border-red-100" onClick={() => handleRejectClaim(task.id, primaryClaimantId(task))} disabled={processingId === task.id}>
                                 <X className="h-4 w-4" />
                               </Button>
                             </div>
@@ -488,6 +542,11 @@ export default function AdminTasksPage() {
                                       <Zap className="h-2.5 w-2.5 fill-current" /> MARKETPLACE
                                     </Badge>
                                   )}
+                                  {(task.claimants?.length || 0) > 0 && (
+                                    <Badge variant="secondary" className="text-[9px] font-black">
+                                      {task.claimants?.length} CLAIM{task.claimants?.length === 1 ? "" : "S"}
+                                    </Badge>
+                                  )}
                                 </div>
                               </div>
                             </td>
@@ -539,13 +598,13 @@ export default function AdminTasksPage() {
                             {/* Actions */}
                             <td className="px-6 py-4 text-right">
                               <div className="flex justify-end gap-2">
-                                {task.assignment_status === "pending_approval" ? (
+                                {hasClaimRequests(task) ? (
                                   <>
-                                    <Button size="sm" className="h-8 rounded-xl font-black text-[10px] uppercase tracking-widest bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/20" onClick={() => handleApproveClaim(task.id)} disabled={processingId === task.id}>
+                                    <Button size="sm" className="h-8 rounded-xl font-black text-[10px] uppercase tracking-widest bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/20" onClick={() => handleApproveClaim(task.id, primaryClaimantId(task))} disabled={processingId === task.id}>
                                       {processingId === task.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Check className="h-3 w-3 mr-1" />}
                                       Approve
                                     </Button>
-                                    <Button size="sm" variant="outline" className="h-8 rounded-xl font-black text-[10px] uppercase tracking-widest border-red-200 text-red-600 hover:bg-red-50" onClick={() => handleRejectClaim(task.id)} disabled={processingId === task.id}>
+                                    <Button size="sm" variant="outline" className="h-8 rounded-xl font-black text-[10px] uppercase tracking-widest border-red-200 text-red-600 hover:bg-red-50" onClick={() => handleRejectClaim(task.id, primaryClaimantId(task))} disabled={processingId === task.id}>
                                       <X className="h-3 w-3 mr-1" />Reject
                                     </Button>
                                   </>

@@ -5,6 +5,40 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { TaskStatus } from "@/store/task-store";
 
+type TaskSubtask = {
+  title: string;
+  completed: boolean;
+};
+
+async function isAssignedProjectManager(
+  supabase: ReturnType<typeof createSupabaseServerClient>,
+  userId: string,
+  projectId?: string | null
+) {
+  if (!projectId) return false;
+
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", projectId)
+    .eq("project_manager_id", userId)
+    .maybeSingle();
+
+  if (error) return false;
+  return Boolean(data);
+}
+
+async function canManageTask(
+  supabase: ReturnType<typeof createSupabaseServerClient>,
+  userId: string,
+  role: string | null | undefined,
+  task: { user_id?: string | null; project_id?: string | null }
+) {
+  if (task.user_id === userId) return true;
+  if (role === "admin") return true;
+  return isAssignedProjectManager(supabase, userId, task.project_id);
+}
+
 export async function createTaskAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
@@ -49,12 +83,13 @@ export async function createAdminTaskAction(params: {
   title: string;
   description?: string;
   priority: string;
+  status?: TaskStatus;
   dueDate?: string;
   projectId?: string;
   isOpenAssignment?: boolean;
-  subtasks?: any[];
+  subtasks?: TaskSubtask[];
 }) {
-  const { userId, title, description, priority, dueDate, projectId, isOpenAssignment, subtasks = [] } = params;
+  const { userId, title, description, priority, status, dueDate, projectId, isOpenAssignment, subtasks = [] } = params;
 
   if (!title) return { ok: false, message: "Title is required" };
 
@@ -64,28 +99,50 @@ export async function createAdminTaskAction(params: {
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Not authenticated" };
 
-  // Verify admin role
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, full_name")
+    .select("role, full_name, organization_id")
     .eq("id", user.id)
     .single();
 
-  if (!profile || profile.role !== "admin") {
-    return { ok: false, message: "Unauthorized: Admin access required" };
+  if (!profile) {
+    return { ok: false, message: "Unauthorized" };
+  }
+
+  const isAdmin = profile.role === "admin";
+  const canManageProject = isAdmin || await isAssignedProjectManager(supabase, user.id, projectId || null);
+
+  if (!canManageProject) {
+    return { ok: false, message: "Unauthorized: project manager or admin access required" };
+  }
+
+  if (!isAdmin && !projectId) {
+    return { ok: false, message: "Project managers can only create tasks inside assigned projects" };
   }
 
   let assignedEmployee = null;
   if (!isOpenAssignment && userId) {
     const { data } = await supabase
       .from("profiles")
-      .select("full_name, email")
+      .select("id, full_name, email, role, organization_id, status")
       .eq("id", userId)
       .single();
     assignedEmployee = data;
 
     if (!assignedEmployee) {
       return { ok: false, message: "Employee not found" };
+    }
+
+    if (assignedEmployee.role !== "employee") {
+      return { ok: false, message: "Only employees can be assigned to project tasks" };
+    }
+
+    if (assignedEmployee.status !== "active") {
+      return { ok: false, message: "Employee is not active" };
+    }
+
+    if (profile.organization_id && assignedEmployee.organization_id && profile.organization_id !== assignedEmployee.organization_id) {
+      return { ok: false, message: "Cannot assign employee from another organization" };
     }
   }
 
@@ -98,7 +155,7 @@ export async function createAdminTaskAction(params: {
       created_by: user.id,
       title,
       description,
-      status: "todo",
+      status: status || "todo",
       priority,
       due_date: dueDate || null,
       subtasks: subtasks || [],
@@ -127,7 +184,10 @@ export async function createAdminTaskAction(params: {
   revalidatePath("/admin/tasks");
   revalidatePath("/employee/tasks");
   revalidatePath("/employee/dashboard");
-  if (projectId) revalidatePath(`/admin/projects/${projectId}`);
+  if (projectId) {
+    revalidatePath(`/admin/projects/${projectId}`);
+    revalidatePath(`/employee/projects/${projectId}`);
+  }
   return { ok: true, task };
 }
 
@@ -136,10 +196,22 @@ export async function updateTaskAction(params: {
   title: string;
   description?: string;
   priority: string;
-  subtasks?: any[];
+  subtasks?: TaskSubtask[];
 }) {
   const supabase = createSupabaseServerClient();
   const { id, title, description, priority } = params;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Not authenticated" };
+
+  const [{ data: profile }, { data: task, error: taskError }] = await Promise.all([
+    supabase.from("profiles").select("role").eq("id", user.id).single(),
+    supabase.from("tasks").select("id, user_id, project_id").eq("id", id).maybeSingle()
+  ]);
+
+  if (taskError || !task) return { ok: false, message: taskError?.message || "Task not found" };
+
+  const canManage = await canManageTask(supabase, user.id, profile?.role, task);
+  if (!canManage) return { ok: false, message: "Unauthorized" };
 
   const { error } = await supabase
     .from("tasks")
@@ -156,11 +228,28 @@ export async function updateTaskAction(params: {
 
   revalidatePath("/employee/tasks");
   revalidatePath("/employee/dashboard");
+  if (task.project_id) {
+    revalidatePath(`/admin/projects/${task.project_id}`);
+    revalidatePath(`/employee/projects/${task.project_id}`);
+  }
   return { ok: true };
 }
 
 export async function deleteTaskAction(id: string) {
   const supabase = createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Not authenticated" };
+
+  const [{ data: profile }, { data: task, error: taskError }] = await Promise.all([
+    supabase.from("profiles").select("role").eq("id", user.id).single(),
+    supabase.from("tasks").select("id, user_id, project_id").eq("id", id).maybeSingle()
+  ]);
+
+  if (taskError || !task) return { ok: false, message: taskError?.message || "Task not found" };
+
+  const canManage = await canManageTask(supabase, user.id, profile?.role, task);
+  if (!canManage) return { ok: false, message: "Unauthorized" };
+
   const { error } = await supabase
     .from("tasks")
     .delete()
@@ -172,6 +261,10 @@ export async function deleteTaskAction(id: string) {
   revalidatePath("/admin/projects");
   revalidatePath("/employee/tasks");
   revalidatePath("/employee/dashboard");
+  if (task.project_id) {
+    revalidatePath(`/admin/projects/${task.project_id}`);
+    revalidatePath(`/employee/projects/${task.project_id}`);
+  }
   return { ok: true };
 }
 
@@ -181,28 +274,43 @@ export async function updateAdminTaskAction(params: {
   title: string;
   description?: string;
   priority: string;
+  status?: TaskStatus;
   dueDate?: string;
   isOpenAssignment?: boolean;
-  subtasks?: any[];
+  subtasks?: TaskSubtask[];
 }) {
   const supabase = createSupabaseServerClient();
-  const { id, userId, title, description, priority, dueDate, isOpenAssignment, subtasks } = params;
+  const { id, userId, title, description, priority, status, dueDate, isOpenAssignment, subtasks } = params;
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Not authenticated" };
 
-  // Verify admin role
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  const [{ data: profile }, { data: task, error: taskError }] = await Promise.all([
+    supabase.from("profiles").select("role").eq("id", user.id).single(),
+    supabase.from("tasks").select("id, project_id").eq("id", id).maybeSingle(),
+  ]);
 
-  if (!profile || profile.role !== "admin") {
-    return { ok: false, message: "Unauthorized: Admin access required" };
+  if (taskError || !task) return { ok: false, message: taskError?.message || "Task not found" };
+
+  const isAdmin = profile?.role === "admin";
+  const canManageProject = isAdmin || await isAssignedProjectManager(supabase, user.id, task.project_id);
+
+  if (!canManageProject) {
+    return { ok: false, message: "Unauthorized: project manager or admin access required" };
   }
 
-  const updateData: any = {
+  const updateData: {
+    title: string;
+    description?: string;
+    priority: string;
+    due_date: string | null;
+    subtasks: TaskSubtask[];
+    updated_at: string;
+    status?: TaskStatus;
+    is_open_assignment?: boolean;
+    assignment_status?: "open" | "assigned";
+    user_id?: string | null;
+  } = {
     title,
     description,
     priority,
@@ -210,6 +318,10 @@ export async function updateAdminTaskAction(params: {
     subtasks: subtasks || [],
     updated_at: new Date().toISOString()
   };
+
+  if (status) {
+    updateData.status = status;
+  }
 
   if (isOpenAssignment !== undefined) {
     updateData.is_open_assignment = isOpenAssignment;
@@ -231,6 +343,10 @@ export async function updateAdminTaskAction(params: {
   revalidatePath("/admin/projects");
   revalidatePath("/employee/tasks");
   revalidatePath("/employee/dashboard");
+  if (task.project_id) {
+    revalidatePath(`/admin/projects/${task.project_id}`);
+    revalidatePath(`/employee/projects/${task.project_id}`);
+  }
   return { ok: true };
 }
 
@@ -241,6 +357,18 @@ export async function moveTaskAction(params: {
 }) {
   const supabase = createSupabaseServerClient();
   const { id, status, position } = params;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Not authenticated" };
+
+  const [{ data: profile }, { data: task, error: taskError }] = await Promise.all([
+    supabase.from("profiles").select("role").eq("id", user.id).single(),
+    supabase.from("tasks").select("id, user_id, project_id").eq("id", id).maybeSingle()
+  ]);
+
+  if (taskError || !task) return { ok: false, message: taskError?.message || "Task not found" };
+
+  const canManage = await canManageTask(supabase, user.id, profile?.role, task);
+  if (!canManage) return { ok: false, message: "Unauthorized" };
 
   const updateData: { status: TaskStatus, position: number, updated_at: string } = { status, position, updated_at: new Date().toISOString() };
 
@@ -253,6 +381,10 @@ export async function moveTaskAction(params: {
 
   revalidatePath("/employee/tasks");
   revalidatePath("/employee/dashboard");
+  if (task.project_id) {
+    revalidatePath(`/admin/projects/${task.project_id}`);
+    revalidatePath(`/employee/projects/${task.project_id}`);
+  }
   return { ok: true };
 }
 
@@ -263,17 +395,28 @@ export async function toggleSubtaskAction(params: {
 }) {
   const supabase = createSupabaseServerClient();
   const { taskId, subtaskIndex, completed } = params;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Not authenticated" };
 
   // 1. Get current subtasks
   const { data: task, error: fetchError } = await supabase
     .from("tasks")
-    .select("subtasks")
+    .select("subtasks, user_id, project_id")
     .eq("id", taskId)
     .single();
 
   if (fetchError || !task) return { ok: false, message: fetchError?.message || "Task not found" };
 
-  const subtasks = [...(task.subtasks as any[])];
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  const canManage = await canManageTask(supabase, user.id, profile?.role, task);
+  if (!canManage) return { ok: false, message: "Unauthorized" };
+
+  const subtasks = [...((task.subtasks as TaskSubtask[]) || [])];
   if (subtasks[subtaskIndex]) {
     subtasks[subtaskIndex].completed = completed;
   }
@@ -290,6 +433,10 @@ export async function toggleSubtaskAction(params: {
   if (updateError) return { ok: false, message: updateError.message };
 
   revalidatePath("/employee/tasks");
+  if (task.project_id) {
+    revalidatePath(`/admin/projects/${task.project_id}`);
+    revalidatePath(`/employee/projects/${task.project_id}`);
+  }
   return { ok: true };
 }
 
@@ -516,7 +663,7 @@ export async function getFreeEmployeesAction() {
 
   // Filter to find employees with < 3 active tasks (simplified)
   // In a real prod app, we'd do a better count aggregation in SQL
-  const freeEmployees = data.filter((p: any) => (p.tasks?.length || 0) < 3);
+  const freeEmployees = (data || []).filter((p: { tasks?: Array<{ id: string }> | null }) => (p.tasks?.length || 0) < 3);
 
   return { ok: true, data: freeEmployees };
 }
@@ -540,12 +687,14 @@ export async function getAllEmployeesAction() {
     .select(`
       id,
       full_name,
+      email,
       avatar_url,
       role,
       department,
       tasks:tasks!tasks_user_id_fkey(id)
     `)
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .eq("role", "employee");
 
   if (profile?.organization_id) {
     query.eq("organization_id", profile.organization_id);
@@ -567,15 +716,18 @@ export async function approveTaskClaimAction(taskId: string, claimantId?: string
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Not authenticated" };
 
-  // Check admin
-  const { data: profile } = await supabase.from("profiles").select("role, full_name").eq("id", user.id).single();
-  if (profile?.role !== 'admin') return { ok: false, message: "Admin access required" };
-
   const { data: task } = await supabase
     .from("tasks")
-    .select("title, user_id")
+    .select("title, user_id, project_id")
     .eq("id", taskId)
     .single();
+  if (!task) return { ok: false, message: "Task not found" };
+
+  const { data: profile } = await supabase.from("profiles").select("role, full_name").eq("id", user.id).single();
+  if (!profile) return { ok: false, message: "Unauthorized" };
+
+  const canManageProject = profile.role === "admin" || await isAssignedProjectManager(supabase, user.id, task.project_id);
+  if (!canManageProject) return { ok: false, message: "Unauthorized: project manager or admin access required" };
 
   const { data: pendingClaims } = await adminClient
     .from("admin_inbox")
@@ -652,26 +804,49 @@ export async function approveTaskClaimAction(taskId: string, claimantId?: string
   revalidatePath("/employee/tasks");
   revalidatePath("/employee/projects");
   revalidatePath("/employee/marketplace");
+  if (task.project_id) {
+    revalidatePath(`/admin/projects/${task.project_id}`);
+    revalidatePath(`/employee/projects/${task.project_id}`);
+  }
   return { ok: true };
 }
 
-export async function rejectTaskClaimAction(taskId: string) {
+export async function rejectTaskClaimAction(taskId: string, claimantId?: string) {
   const supabase = createSupabaseServerClient();
+  const adminClient = createSupabaseAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Not authenticated" };
 
-  // Check admin
+  // Get task info and current requester (legacy field) plus active claim requests
+  const { data: task } = await supabase.from("tasks").select("title, user_id, rejected_user_ids, project_id").eq("id", taskId).single();
+  if (!task) return { ok: false, message: "Task not found" };
+
+  const { data: pendingClaims } = await adminClient
+    .from("admin_inbox")
+    .select("id, metadata")
+    .eq("entity_id", taskId)
+    .eq("entity_type", "task_review")
+    .eq("is_handled", false);
+
   const { data: profile } = await supabase.from("profiles").select("role, full_name").eq("id", user.id).single();
-  if (profile?.role !== 'admin') return { ok: false, message: "Admin access required" };
+  if (!profile) return { ok: false, message: "Unauthorized" };
 
-  // Get task info and current requester
-  const { data: task } = await supabase.from("tasks").select("title, user_id, rejected_user_ids").eq("id", taskId).single();
+  const canManageProject = profile.role === "admin" || await isAssignedProjectManager(supabase, user.id, task.project_id);
+  if (!canManageProject) return { ok: false, message: "Unauthorized: project manager or admin access required" };
 
-  if (!task || !task.user_id) return { ok: false, message: "Requester not found" };
-  const requesterId = task.user_id;
+  const claimantIdsFromInbox = new Set<string>();
+  for (const claim of pendingClaims || []) {
+    const metadata = claim.metadata as { claimant_id?: string } | null;
+    if (metadata?.claimant_id) claimantIdsFromInbox.add(metadata.claimant_id);
+  }
 
-  // Revert task to 'open', clear user_id, and add to rejected list
-  const rejectedUserIds = [...(task.rejected_user_ids || []), requesterId];
+  const targetClaimantId = claimantId || task.user_id || Array.from(claimantIdsFromInbox)[0] || null;
+  if (!targetClaimantId) return { ok: false, message: "No claimant available to reject" };
+
+  const claimantsToReject = claimantId ? [targetClaimantId] : Array.from(new Set([targetClaimantId, ...claimantIdsFromInbox]));
+
+  // Revert task to 'open', clear user_id, and keep track of all rejected claimants.
+  const rejectedUserIds = Array.from(new Set([...(task.rejected_user_ids || []), ...claimantsToReject]));
 
   const { error } = await supabase
     .from("tasks")
@@ -684,23 +859,41 @@ export async function rejectTaskClaimAction(taskId: string) {
 
   if (error) return { ok: false, message: error.message };
 
-  // Mark Admin Inbox items as handled
-  await supabase
-    .from("admin_inbox")
-    .update({ is_handled: true, updated_at: new Date().toISOString() })
-    .eq("entity_id", taskId)
-    .eq("entity_type", "task_review");
+  // Mark matching Admin Inbox claim items as handled.
+  if (claimantId) {
+    const matchingClaimIds = (pendingClaims || [])
+      .filter((claim) => {
+        const metadata = claim.metadata as { claimant_id?: string } | null;
+        return metadata?.claimant_id === claimantId;
+      })
+      .map((claim) => claim.id);
 
-  // Create notification for employee
-  await supabase.from("notifications").insert({
-    user_id: requesterId,
-    type: "task_rejected",
-    title: "Task Claim Rejected",
-    message: `${profile?.full_name} rejected your claim for: "${task.title}"`,
-    entity_type: "task",
-    entity_id: taskId,
-    is_read: false
-  });
+    if (matchingClaimIds.length > 0) {
+      await adminClient
+        .from("admin_inbox")
+        .update({ is_handled: true, updated_at: new Date().toISOString() })
+        .in("id", matchingClaimIds);
+    }
+  } else {
+    await adminClient
+      .from("admin_inbox")
+      .update({ is_handled: true, updated_at: new Date().toISOString() })
+      .eq("entity_id", taskId)
+      .eq("entity_type", "task_review");
+  }
+
+  // Notify rejected claimants.
+  for (const rejectedId of claimantsToReject) {
+    await supabase.from("notifications").insert({
+      user_id: rejectedId,
+      type: "task_rejected",
+      title: "Task Claim Rejected",
+      message: `${profile?.full_name} rejected your claim for: "${task.title}"`,
+      entity_type: "task",
+      entity_id: taskId,
+      is_read: false
+    });
+  }
 
   revalidatePath("/admin/inbox");
   revalidatePath("/admin/tasks");
@@ -708,5 +901,9 @@ export async function rejectTaskClaimAction(taskId: string) {
   revalidatePath("/employee/tasks");
   revalidatePath("/employee/projects");
   revalidatePath("/employee/marketplace");
+  if (task.project_id) {
+    revalidatePath(`/admin/projects/${task.project_id}`);
+    revalidatePath(`/employee/projects/${task.project_id}`);
+  }
   return { ok: true };
 }

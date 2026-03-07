@@ -42,6 +42,7 @@ interface AdminTaskFormProps {
         title: string;
         description: string;
         priority: string;
+        status?: string;
         dueDate?: string;
         assignment_status: string;
         user_id?: string;
@@ -75,6 +76,7 @@ export function AdminTaskForm({
     const [title, setTitle] = useState(initialData?.title || "");
     const [description, setDescription] = useState(initialData?.description || "");
     const [priority, setPriority] = useState(initialData?.priority || "medium");
+    const [status, setStatus] = useState(initialData?.status || "todo");
     const [dueDate, setDueDate] = useState(initialData?.dueDate || "");
     const [subtasks, setSubtasks] = useState<Subtask[]>(initialData?.subtasks || []);
     const [subtaskInput, setSubtaskInput] = useState("");
@@ -109,18 +111,13 @@ export function AdminTaskForm({
 
         let result;
         if (initialData) {
-            // Update existing task
-            // We need a dedicated updateAdminTaskAction or enhance updateTaskAction
-            // For now, let's assume we enhance it or use create with logic
-            // Since I don't have updateAdminTaskAction yet, I'll use updateTaskAction
-            // but updateTaskAction doesn't handle assignment or subtasks well in this context
-            // I'll add updateAdminTaskAction to tasks.ts first
             result = await updateAdminTaskAction({
                 id: initialData.id,
                 userId: isMarketplace ? null : selectedEmployee,
                 title: title.trim(),
                 description: description.trim(),
                 priority,
+                status: status as "todo" | "in_progress" | "review" | "done",
                 dueDate: dueDate || undefined,
                 isOpenAssignment: isMarketplace,
                 subtasks: subtasks
@@ -132,6 +129,7 @@ export function AdminTaskForm({
                 title: title.trim(),
                 description: description.trim(),
                 priority,
+                status: status as "todo" | "in_progress" | "review" | "done",
                 dueDate: dueDate || undefined,
                 projectId: projectId,
                 isOpenAssignment: isMarketplace,
@@ -148,6 +146,7 @@ export function AdminTaskForm({
                 setTitle("");
                 setDescription("");
                 setPriority("medium");
+                setStatus("todo");
                 setDueDate("");
                 setSelectedEmployee(isMarketplaceDefault ? "marketplace" : "");
                 setSubtasks([]);
@@ -281,17 +280,34 @@ export function AdminTaskForm({
                                         </Select>
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="dueDate" className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
-                                            Due Date
+                                        <Label htmlFor="status" className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                                            Status
                                         </Label>
-                                        <Input
-                                            id="dueDate"
-                                            type="date"
-                                            value={dueDate}
-                                            onChange={(e) => setDueDate(e.target.value)}
-                                            className="rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-bold"
-                                        />
+                                        <Select value={status} onValueChange={setStatus}>
+                                            <SelectTrigger id="status" className="rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-bold">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="rounded-xl">
+                                                <SelectItem value="todo">To Do</SelectItem>
+                                                <SelectItem value="in_progress">In Progress</SelectItem>
+                                                <SelectItem value="review">Under Review</SelectItem>
+                                                <SelectItem value="done">Completed</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="dueDate" className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                                        Due Date
+                                    </Label>
+                                    <Input
+                                        id="dueDate"
+                                        type="date"
+                                        value={dueDate}
+                                        onChange={(e) => setDueDate(e.target.value)}
+                                        className="rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-bold"
+                                    />
                                 </div>
                             </div>
                         </div>
