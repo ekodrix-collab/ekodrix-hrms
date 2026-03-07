@@ -156,6 +156,7 @@ export interface Project {
     status: string;
     priority: string;
     deadline?: string | null;
+    contract_amount?: number | null;
     project_manager_id?: string | null;
     project_manager?: {
         id: string;

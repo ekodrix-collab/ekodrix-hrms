@@ -135,4 +135,9 @@
   .touch-target {
     min-height: 44px;
   }
+
+  /* Robust Card Spacing: Content following Header should have 0 top padding to prevent double-gap */
+  .card-header + .card-content {
+    @apply pt-0 sm:pt-0;
+  }
 }
