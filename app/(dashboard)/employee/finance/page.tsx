@@ -57,7 +57,7 @@ interface ExpenseClaim extends Expense {
 }
 
 export default function EmployeeFinancePage() {
-    const [selectedCategory, setSelectedCategory] = useState(EXPENSE_CATEGORIES[0]);
+    const [selectedCategory, setSelectedCategory] = useState<string>(EXPENSE_CATEGORIES[0]);
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(PAYMENT_METHODS[0].value);
     const [claimSearch, setClaimSearch] = useState("");
     const [claimStatusFilter, setClaimStatusFilter] = useState("all");

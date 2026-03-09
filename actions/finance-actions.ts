@@ -99,15 +99,30 @@ export async function getPendingClaims() {
 type EmployeeExpenseRow = Expense & {
     rejection_reason?: string | null;
     organization_id?: string | null;
-    profiles: {
-        id: string;
-        full_name: string;
-        avatar_url: string | null;
-        department: string | null;
-        role: string | null;
-        organization_id: string | null;
-    } | null;
+    profiles: EmployeeProfile | null;
 };
+
+type EmployeeProfile = {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+    department: string | null;
+    role: string | null;
+    organization_id: string | null;
+};
+
+type EmployeeExpenseRowRaw = Omit<EmployeeExpenseRow, "profiles"> & {
+    profiles: EmployeeProfile[] | EmployeeProfile | null;
+};
+
+type AnalyticsExpenseRow = Pick<Expense, "amount" | "category" | "status" | "paid_by"> & {
+    profiles: Pick<EmployeeProfile, "full_name" | "avatar_url">[] | Pick<EmployeeProfile, "full_name" | "avatar_url"> | null;
+};
+
+function normalizeJoinedProfile<T>(profile: T[] | T | null | undefined): T | null {
+    if (Array.isArray(profile)) return profile[0] ?? null;
+    return profile ?? null;
+}
 
 export async function getEmployeeExpenseWorkspace() {
     const supabase = createSupabaseServerClient();
@@ -137,9 +152,10 @@ export async function getEmployeeExpenseWorkspace() {
 
     if (error) return { ok: false, message: error.message };
 
-    const normalizedExpenses = ((expenses || []) as EmployeeExpenseRow[]).map((expense) => ({
+    const normalizedExpenses = ((expenses || []) as EmployeeExpenseRowRaw[]).map((expense) => ({
         ...expense,
-        category: normalizeExpenseCategory(expense.category)
+        category: normalizeExpenseCategory(expense.category),
+        profiles: normalizeJoinedProfile(expense.profiles)
     }));
 
     const byEmployee: Record<string, {
@@ -293,9 +309,15 @@ export async function getExpenseAnalytics() {
 
     if (error) return { ok: false, message: error.message };
 
+    const normalizedExpenses = ((expenses || []) as AnalyticsExpenseRow[]).map((expense) => ({
+        ...expense,
+        category: normalizeExpenseCategory(expense.category),
+        profiles: normalizeJoinedProfile(expense.profiles)
+    }));
+
     // 1. Top Spenders
     const spenderMap: Record<string, { name: string, avatar: string, total: number }> = {};
-    (expenses as unknown as (Expense & { profiles: { full_name: string, avatar_url: string } | null })[])?.forEach((exp) => {
+    normalizedExpenses.forEach((exp) => {
         const id = exp.paid_by;
         if (!id) return;
         if (!spenderMap[id]) {
@@ -318,9 +340,8 @@ export async function getExpenseAnalytics() {
 
     // 2. Category Breakdown
     const categoryMap: Record<string, number> = {};
-    (expenses as unknown as Expense[])?.forEach((exp) => {
-        const cat = normalizeExpenseCategory(exp.category);
-        categoryMap[cat] = (categoryMap[cat] || 0) + Number(exp.amount);
+    normalizedExpenses.forEach((exp) => {
+        categoryMap[exp.category] = (categoryMap[exp.category] || 0) + Number(exp.amount);
     });
 
     const breakdown = Object.entries(categoryMap)
