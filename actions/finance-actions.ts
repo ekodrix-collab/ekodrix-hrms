@@ -12,6 +12,7 @@ export async function createExpenseClaim(formData: FormData) {
     const category = normalizeExpenseCategory(rawCategory);
     const description = formData.get("description") as string;
     const date = formData.get("date") as string;
+    const paymentMethod = String(formData.get("payment_method") ?? "cash");
     // For now we will just mock the receipt URL or handle it if upload implementation exists
     // const receiptUrl = formData.get("receipt_url") as string; 
 
@@ -33,13 +34,17 @@ export async function createExpenseClaim(formData: FormData) {
             category,
             description,
             expense_date: date,
+            payment_method: paymentMethod,
             paid_by: user.id,
+            created_by: user.id,
+            organization_id: organizationId,
             status: "pending",
             // receipt_url: receiptUrl 
         });
 
     if (error) return { ok: false, message: `Failed to submit claim: ${error.message}` };
 
+    revalidatePath("/admin/finance");
     revalidatePath("/employee/finance");
     return { ok: true, message: "Claim submitted successfully" };
 }
@@ -75,18 +80,13 @@ export async function getPendingClaims() {
         .from("expenses")
         .select(`
             *,
-            profiles:paid_by(full_name, avatar_url, department)
+            profiles:paid_by!inner(full_name, avatar_url, department, organization_id)
         `)
         .eq("status", "pending")
-        // We might want to filter by org if expenses table has organization_id, 
-        // but currently it seems linked via paid_by -> profile -> org.
-        // For safety, we should verify the user belongs to the org.
+        .eq("profiles.organization_id", organizationId)
         .order("created_at", { ascending: false });
 
     if (error) return { ok: false, message: error.message };
-
-    // Filter by org manually if needed, or rely on RLS + join 
-    // (Assuming RLS policies are set up correctly for admins to see all org expenses)
 
     const normalizedClaims = (claims || []).map((claim: { category: string | null }) => ({
         ...claim,
@@ -96,12 +96,167 @@ export async function getPendingClaims() {
     return { ok: true, data: normalizedClaims };
 }
 
+type EmployeeExpenseRow = Expense & {
+    rejection_reason?: string | null;
+    organization_id?: string | null;
+    profiles: {
+        id: string;
+        full_name: string;
+        avatar_url: string | null;
+        department: string | null;
+        role: string | null;
+        organization_id: string | null;
+    } | null;
+};
+
+export async function getEmployeeExpenseWorkspace() {
+    const supabase = createSupabaseServerClient();
+    const { organizationId } = await getOrgContext();
+    if (!organizationId) return { ok: false, message: "Organization context missing" };
+
+    const { data: expenses, error } = await supabase
+        .from("expenses")
+        .select(`
+            id,
+            amount,
+            description,
+            category,
+            payment_method,
+            status,
+            paid_by,
+            created_by,
+            expense_date,
+            created_at,
+            rejection_reason,
+            organization_id,
+            profiles:paid_by!inner(id, full_name, avatar_url, department, role, organization_id)
+        `)
+        .eq("profiles.organization_id", organizationId)
+        .eq("profiles.role", "employee")
+        .order("created_at", { ascending: false });
+
+    if (error) return { ok: false, message: error.message };
+
+    const normalizedExpenses = ((expenses || []) as EmployeeExpenseRow[]).map((expense) => ({
+        ...expense,
+        category: normalizeExpenseCategory(expense.category)
+    }));
+
+    const byEmployee: Record<string, {
+        employeeId: string;
+        name: string;
+        avatar: string | null;
+        department: string | null;
+        submittedAmount: number;
+        approvedAmount: number;
+        pendingAmount: number;
+        rejectedAmount: number;
+        claimsCount: number;
+        pendingCount: number;
+        latestExpenseDate: string;
+    }> = {};
+
+    const byCategory: Record<string, number> = {};
+    const byStatus = {
+        pending: 0,
+        approved: 0,
+        rejected: 0
+    };
+
+    normalizedExpenses.forEach((expense) => {
+        const employeeId = expense.paid_by || expense.profiles?.id || expense.id;
+        const amount = Number(expense.amount) || 0;
+        const status = expense.status;
+
+        if (!byEmployee[employeeId]) {
+            byEmployee[employeeId] = {
+                employeeId,
+                name: expense.profiles?.full_name || "Unknown employee",
+                avatar: expense.profiles?.avatar_url || null,
+                department: expense.profiles?.department || "Unassigned",
+                submittedAmount: 0,
+                approvedAmount: 0,
+                pendingAmount: 0,
+                rejectedAmount: 0,
+                claimsCount: 0,
+                pendingCount: 0,
+                latestExpenseDate: expense.expense_date
+            };
+        }
+
+        const employee = byEmployee[employeeId];
+        employee.submittedAmount += amount;
+        employee.claimsCount += 1;
+
+        if (new Date(expense.expense_date).getTime() > new Date(employee.latestExpenseDate).getTime()) {
+            employee.latestExpenseDate = expense.expense_date;
+        }
+
+        if (status === "approved") employee.approvedAmount += amount;
+        if (status === "pending") {
+            employee.pendingAmount += amount;
+            employee.pendingCount += 1;
+        }
+        if (status === "rejected") employee.rejectedAmount += amount;
+
+        if (status === "pending" || status === "approved" || status === "rejected") {
+            byStatus[status] += 1;
+        }
+
+        byCategory[expense.category] = (byCategory[expense.category] || 0) + amount;
+    });
+
+    const contributors = Object.values(byEmployee).sort((a, b) => {
+        if (b.approvedAmount !== a.approvedAmount) return b.approvedAmount - a.approvedAmount;
+        return b.submittedAmount - a.submittedAmount;
+    });
+
+    const categoryBreakdown = Object.entries(byCategory)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+
+    const summary = {
+        contributionsCount: normalizedExpenses.length,
+        contributorCount: contributors.length,
+        totalSubmittedAmount: normalizedExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0),
+        totalApprovedAmount: normalizedExpenses
+            .filter((expense) => expense.status === "approved")
+            .reduce((sum, expense) => sum + Number(expense.amount || 0), 0),
+        totalPendingAmount: normalizedExpenses
+            .filter((expense) => expense.status === "pending")
+            .reduce((sum, expense) => sum + Number(expense.amount || 0), 0),
+        totalRejectedAmount: normalizedExpenses
+            .filter((expense) => expense.status === "rejected")
+            .reduce((sum, expense) => sum + Number(expense.amount || 0), 0),
+        pendingClaims: byStatus.pending,
+        approvedClaims: byStatus.approved,
+        rejectedClaims: byStatus.rejected
+    };
+
+    return {
+        ok: true,
+        data: {
+            expenses: normalizedExpenses,
+            contributors,
+            categoryBreakdown,
+            summary
+        }
+    };
+}
+
 export async function updateClaimStatus(claimId: string, status: "approved" | "rejected", reason?: string) {
     const supabase = createSupabaseServerClient();
     const { organizationId } = await getOrgContext();
     if (!organizationId) return { ok: false, message: "Organization context missing" };
 
-    // meaningful verification of admin status should be done here or via RLS
+    const { data: claim, error: claimError } = await supabase
+        .from("expenses")
+        .select("id, profiles:paid_by!inner(organization_id)")
+        .eq("id", claimId)
+        .eq("profiles.organization_id", organizationId)
+        .single();
+
+    if (claimError || !claim) return { ok: false, message: "Claim not found for your organization" };
 
     const { error } = await supabase
         .from("expenses")
@@ -131,8 +286,9 @@ export async function getExpenseAnalytics() {
             category,
             status,
             paid_by,
-            profiles:paid_by(full_name, avatar_url)
+            profiles:paid_by!inner(full_name, avatar_url, organization_id)
         `)
+        .eq("profiles.organization_id", organizationId)
         .eq("status", "approved"); // Only count approved expenses for analytics
 
     if (error) return { ok: false, message: error.message };

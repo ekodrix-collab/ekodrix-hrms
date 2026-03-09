@@ -3,9 +3,15 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { UnpaidAccrual } from "@/types/dashboard";
+import { getOrgContext } from "@/lib/auth-utils";
 
 export async function getUnpaidAccruals(): Promise<{ ok: boolean; data?: UnpaidAccrual[]; message?: string }> {
     const supabase = createSupabaseServerClient();
+    const { organizationId } = await getOrgContext();
+
+    if (!organizationId) {
+        return { ok: false, message: "Organization context missing" };
+    }
 
     const { data: accruals, error } = await supabase
         .from("salary_accruals")
@@ -16,8 +22,9 @@ export async function getUnpaidAccruals(): Promise<{ ok: boolean; data?: UnpaidA
             remaining_amount,
             month_year,
             status,
-            profiles!inner(id, full_name, avatar_url, role, department)
+            profiles!inner(id, full_name, avatar_url, role, department, organization_id)
         `)
+        .eq("profiles.organization_id", organizationId)
         .neq("status", "paid")
         .order("month_year", { ascending: true });
 
@@ -26,7 +33,7 @@ export async function getUnpaidAccruals(): Promise<{ ok: boolean; data?: UnpaidA
         return { ok: false, message: "Failed to fetch payroll data" };
     }
 
-    return { ok: true, data: (accruals as any) as UnpaidAccrual[] };
+    return { ok: true, data: accruals as unknown as UnpaidAccrual[] };
 }
 
 export async function processSalaryPayment(payload: {
@@ -35,15 +42,16 @@ export async function processSalaryPayment(payload: {
     paymentMethod: string;
 }) {
     const supabase = createSupabaseServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { user, organizationId } = await getOrgContext();
 
-    if (!user) return { ok: false, message: "Unauthorized" };
+    if (!user || !organizationId) return { ok: false, message: "Unauthorized" };
 
     // 1. Fetch Accrual to verify
     const { data: accrual, error: fetchError } = await supabase
         .from("salary_accruals")
-        .select("*")
+        .select("*, profiles!user_id!inner(organization_id)")
         .eq("id", payload.accrualId)
+        .eq("profiles.organization_id", organizationId)
         .single();
 
     if (fetchError || !accrual) return { ok: false, message: "Accrual not found" };
@@ -58,10 +66,11 @@ export async function processSalaryPayment(payload: {
         .from("expenses")
         .insert({
             amount: payload.amount,
-            category: "Salary",
+            category: "Salary Payments",
             description: `Salary Payment - ${format(new Date(accrual.month_year), 'MMMM yyyy')}`,
             payment_method: payload.paymentMethod,
             paid_by: user.id,
+            organization_id: organizationId,
             expense_date: new Date().toISOString().split('T')[0],
             status: "approved",
             created_by: user.id

@@ -3,6 +3,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { normalizeExpenseCategory } from "@/lib/finance-categories";
+import { getOrgContext } from "@/lib/auth-utils";
 
 type ProjectRelation = { name: string } | { name: string }[] | null;
 type ProjectBreakdownItem = { id: string; name: string; revenue: number; expenses: number; net: number };
@@ -16,11 +17,17 @@ function getProjectName(projects: ProjectRelation, fallback = "Unknown") {
 
 export async function generateMonthlyAccruals(date: Date) {
     const supabase = createSupabaseServerClient();
+    const { organizationId, role } = await getOrgContext();
+
+    if (!organizationId || role !== "admin") {
+        return { error: "Admin organization context missing" };
+    }
 
     // Get all active employees with a salary > 0
     const { data: employees, error: fetchError } = await supabase
         .from("profiles")
         .select("id, monthly_salary")
+        .eq("organization_id", organizationId)
         .eq("is_active", true)
         .gt("monthly_salary", 0);
 
@@ -47,7 +54,11 @@ export async function generateMonthlyAccruals(date: Date) {
 
 export async function postRevenue(amount: number, source: string, description?: string, projectId?: string) {
     const supabase = createSupabaseServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { user, organizationId, role } = await getOrgContext();
+
+    if (!user || !organizationId || role !== "admin") {
+        return { error: "Admin organization context missing" };
+    }
 
     const { data, error } = await supabase
         .from("revenue_logs")
@@ -128,13 +139,18 @@ export async function postBusinessExpense(data: {
     project_id?: string;
 }) {
     const supabase = createSupabaseServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { user, organizationId, role } = await getOrgContext();
+
+    if (!user || !organizationId || role !== "admin") {
+        return { error: "Admin organization context missing" };
+    }
 
     const { error } = await supabase
         .from("expenses")
         .insert({
             ...data,
             category: normalizeExpenseCategory(data.category),
+            organization_id: organizationId,
             paid_by: user?.id,
             created_by: user?.id,
             status: 'approved' // Admin expenses are auto-approved
@@ -153,18 +169,34 @@ export async function postBusinessExpense(data: {
 
 export async function getCompanyFinancials(projectId?: string) {
     const supabase = createSupabaseServerClient();
+    const { organizationId } = await getOrgContext();
+
+    if (!organizationId) {
+        return {
+            totalLiability: 0,
+            totalPaid: 0,
+            totalSalaryPaid: 0,
+            totalBusinessExpenses: 0,
+            totalRevenue: 0,
+            netBalance: 0,
+            projectBreakdown: []
+        };
+    }
 
     const accrualQuery = supabase
         .from("salary_accruals")
-        .select("amount, paid_amount, remaining_amount");
+        .select("amount, paid_amount, remaining_amount, profiles!user_id!inner(organization_id)")
+        .eq("profiles.organization_id", organizationId);
 
     let revenueQuery = supabase
         .from("revenue_logs")
-        .select("amount");
+        .select("amount, creator:profiles!created_by!inner(organization_id)")
+        .eq("creator.organization_id", organizationId);
 
     let expenseQuery = supabase
         .from("expenses")
-        .select("amount")
+        .select("amount, profiles:paid_by!inner(organization_id)")
+        .eq("profiles.organization_id", organizationId)
         .eq("status", "approved");
 
     if (projectId) {
@@ -187,8 +219,15 @@ export async function getCompanyFinancials(projectId?: string) {
     let projectBreakdown: ProjectBreakdownItem[] = [];
     if (!projectId) {
         const [{ data: projRevenue }, { data: projExpenses }] = await Promise.all([
-            supabase.from("revenue_logs").select("project_id, amount, projects(name)"),
-            supabase.from("expenses").select("project_id, amount, projects(name)").eq("status", "approved")
+            supabase
+                .from("revenue_logs")
+                .select("project_id, amount, projects(name), creator:profiles!created_by!inner(organization_id)")
+                .eq("creator.organization_id", organizationId),
+            supabase
+                .from("expenses")
+                .select("project_id, amount, projects(name), profiles:paid_by!inner(organization_id)")
+                .eq("profiles.organization_id", organizationId)
+                .eq("status", "approved")
         ]);
 
         const breakdownMap: Record<string, { id: string; name: string; revenue: number; expenses: number; net: number }> = {};
@@ -240,15 +279,20 @@ export async function getUserAccruals(userId: string) {
 
 export async function getFinancialHistory(projectId?: string) {
     const supabase = createSupabaseServerClient();
+    const { organizationId } = await getOrgContext();
+
+    if (!organizationId) return [];
 
     let revenueQuery = supabase
         .from("revenue_logs")
-        .select("id, amount, source, description, received_date, created_at, project_id, projects(name)")
+        .select("id, amount, source, description, received_date, created_at, project_id, projects(name), creator:profiles!created_by!inner(organization_id)")
+        .eq("creator.organization_id", organizationId)
         .order("received_date", { ascending: false });
 
     let expenseQuery = supabase
         .from("expenses")
-        .select("id, amount, category, description, expense_date, payment_method, created_at, project_id, projects(name)")
+        .select("id, amount, category, description, expense_date, payment_method, created_at, project_id, projects(name), profiles:paid_by!inner(organization_id)")
+        .eq("profiles.organization_id", organizationId)
         .eq("status", "approved")
         .order("expense_date", { ascending: false });
 

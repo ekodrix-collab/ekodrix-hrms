@@ -1,14 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { motion } from "framer-motion";
 import {
+    CheckCircle2,
+    Clock3,
     TrendingUp,
     FileText,
     History,
     Wallet,
     Download,
     Receipt,
+    Search,
+    XCircle,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,22 +39,35 @@ import { UnpaidAccrual } from "@/types/dashboard";
 import { Expense } from "@/types/common";
 import { EXPENSE_CATEGORIES } from "@/lib/finance-categories";
 
+const PAYMENT_METHODS = [
+    { value: "cash", label: "Cash" },
+    { value: "upi", label: "UPI" },
+    { value: "card", label: "Card" },
+    { value: "bank_transfer", label: "Bank Transfer" },
+];
+
 interface ExpenseClaim extends Expense {
     id: string;
     description: string;
     expense_date: string;
     category: string;
     amount: number;
+    rejection_reason?: string | null;
     status: "pending" | "approved" | "rejected";
 }
 
-
 export default function EmployeeFinancePage() {
+    const [selectedCategory, setSelectedCategory] = useState(EXPENSE_CATEGORIES[0]);
+    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(PAYMENT_METHODS[0].value);
+    const [claimSearch, setClaimSearch] = useState("");
+    const [claimStatusFilter, setClaimStatusFilter] = useState("all");
+    const [claimSort, setClaimSort] = useState("latest");
+    const deferredClaimSearch = useDeferredValue(claimSearch);
     const { data, isLoading: isFinanceLoading } = useQuery({
         queryKey: ["employee-finance-data"],
         queryFn: async () => {
             const res = await getEmployeeFinanceData();
-            return res.ok && 'data' in res ? res.data : null;
+            return res.ok && "data" in res ? res.data : null;
         }
     });
 
@@ -65,22 +82,20 @@ export default function EmployeeFinancePage() {
     const [isClaimOpen, setIsClaimOpen] = useState(false);
     const claims = (claimsData || []) as ExpenseClaim[];
 
-
     async function handleClaimSubmit(formData: FormData) {
         const res = await createExpenseClaim(formData);
         if (res.ok) {
             toast.success("Claim submitted successfully");
             setIsClaimOpen(false);
-            // Refresh claims
+            setSelectedCategory(EXPENSE_CATEGORIES[0]);
+            setSelectedPaymentMethod(PAYMENT_METHODS[0].value);
             refetchClaims();
         } else {
             toast.error(res.message);
         }
     }
 
-
     const isLoading = isFinanceLoading || isClaimsLoading;
-
 
     if (isLoading && !data) {
         return (
@@ -95,14 +110,33 @@ export default function EmployeeFinancePage() {
 
     const totalPaid = accruals.reduce((acc: number, curr: UnpaidAccrual) => acc + Number(curr.paid_amount || 0), 0);
     const pendingAmount = accruals.reduce((acc: number, curr: UnpaidAccrual) => acc + Number(curr.remaining_amount || 0), 0);
+    const totalClaimedAmount = claims.reduce((acc, claim) => acc + Number(claim.amount || 0), 0);
+    const pendingClaimsAmount = claims
+        .filter((claim) => claim.status === "pending")
+        .reduce((acc, claim) => acc + Number(claim.amount || 0), 0);
+    const approvedClaimsAmount = claims
+        .filter((claim) => claim.status === "approved")
+        .reduce((acc, claim) => acc + Number(claim.amount || 0), 0);
+    const rejectedClaimsCount = claims.filter((claim) => claim.status === "rejected").length;
+    const filteredClaims = claims
+        .filter((claim) => {
+            const search = deferredClaimSearch.trim().toLowerCase();
+            const matchesSearch = !search ||
+                claim.description.toLowerCase().includes(search) ||
+                claim.category.toLowerCase().includes(search);
+            const matchesStatus = claimStatusFilter === "all" || claim.status === claimStatusFilter;
+            return matchesSearch && matchesStatus;
+        })
+        .sort((left, right) => {
+            if (claimSort === "highest") return Number(right.amount) - Number(left.amount);
+            if (claimSort === "oldest") return new Date(left.expense_date).getTime() - new Date(right.expense_date).getTime();
+            return new Date(right.expense_date).getTime() - new Date(left.expense_date).getTime();
+        });
 
-    // Date Logic
     const today = new Date();
-    // Check if current month is already accrued
-    const currentMonthStr = format(today, 'yyyy-MM-01');
-    const isCurrentMonthAccrued = accruals.some((a: UnpaidAccrual) => a.month_year === currentMonthStr);
+    const currentMonthStr = format(today, "yyyy-MM-01");
+    const isCurrentMonthAccrued = accruals.some((accrual: UnpaidAccrual) => accrual.month_year === currentMonthStr);
 
-    // Next Payout Date Logic (5th of next month, or 5th of this month if today < 5th)
     let nextPayoutMonth = today.getMonth();
     let nextPayoutYear = today.getFullYear();
 
@@ -115,12 +149,12 @@ export default function EmployeeFinancePage() {
     }
     const nextPayoutDate = new Date(nextPayoutYear, nextPayoutMonth, 5);
 
-    const formatCurrency = (amt: number) => {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat("en-IN", {
+            style: "currency",
+            currency: "INR",
             maximumFractionDigits: 0
-        }).format(amt);
+        }).format(amount);
     };
 
     return (
@@ -143,9 +177,9 @@ export default function EmployeeFinancePage() {
                             </div>
                             <span className="text-xs font-black uppercase tracking-[0.2em] text-primary">Financial Insights</span>
                         </div>
-                        <h1 className="text-4xl font-black text-zinc-900 dark:text-zinc-100">Finance</h1>
+                        <h1 className="text-4xl font-black text-zinc-900 dark:text-zinc-100">My Earnings & Expenses</h1>
                         <p className="text-zinc-500 dark:text-zinc-400 font-medium max-w-xl">
-                            Overview of your salary, payouts, and financial records.
+                            Track salary, reimbursement claims, and every company expense you have covered.
                         </p>
                     </motion.div>
                 </header>
@@ -170,8 +204,8 @@ export default function EmployeeFinancePage() {
                             <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1">
                                 <TrendingUp className="h-3 w-3" />
                                 {data?.lastPayoutDate
-                                    ? `Last paid on ${format(new Date(data.lastPayoutDate), 'MMM do')}`
-                                    : 'No payouts yet'
+                                    ? `Last paid on ${format(new Date(data.lastPayoutDate), "MMM do")}`
+                                    : "No payouts yet"
                                 }
                             </p>
                         </CardContent>
@@ -193,7 +227,7 @@ export default function EmployeeFinancePage() {
                             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
                                 {isCurrentMonthAccrued
                                     ? "Net unpaid accruals"
-                                    : `Includes ₹${salary.toLocaleString()} for ${format(new Date(), 'MMMM')}`
+                                    : `Includes INR ${salary.toLocaleString()} for ${format(new Date(), "MMMM")}`
                                 }
                             </p>
                         </CardContent>
@@ -205,10 +239,10 @@ export default function EmployeeFinancePage() {
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-black text-primary">
-                                {format(nextPayoutDate, 'MMM do')}
+                                {format(nextPayoutDate, "MMM do")}
                             </div>
                             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                                Expected date ({format(nextPayoutDate, 'EEEE')})
+                                Expected date ({format(nextPayoutDate, "EEEE")})
                             </p>
                         </CardContent>
                     </Card>
@@ -247,15 +281,15 @@ export default function EmployeeFinancePage() {
                                     {accruals.length === 0 ? (
                                         <div className="text-center py-8 text-zinc-500 font-medium">No payment records found</div>
                                     ) : (
-                                        accruals.map((item: UnpaidAccrual, i: number) => (
-                                            <div key={i} className="flex items-center justify-between p-4 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:shadow-md transition-all">
+                                        accruals.map((item: UnpaidAccrual, index: number) => (
+                                            <div key={index} className="flex items-center justify-between p-4 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:shadow-md transition-all">
                                                 <div className="flex items-center gap-4">
-                                                    <div className={`p-2 rounded-lg ${item.status === 'paid' ? 'bg-green-50 dark:bg-green-900/30 text-green-600' : 'bg-orange-50 dark:bg-orange-900/30 text-orange-600'}`}>
+                                                    <div className={`p-2 rounded-lg ${item.status === "paid" ? "bg-green-50 dark:bg-green-900/30 text-green-600" : "bg-orange-50 dark:bg-orange-900/30 text-orange-600"}`}>
                                                         <FileText className="h-5 w-5" />
                                                     </div>
                                                     <div>
                                                         <p className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
-                                                            {format(new Date(item.month_year), 'MMMM yyyy')}
+                                                            {format(new Date(item.month_year), "MMMM yyyy")}
                                                         </p>
                                                         <p className="text-xs text-zinc-500 dark:text-zinc-400">Total: {formatCurrency(item.amount)}</p>
                                                     </div>
@@ -283,7 +317,7 @@ export default function EmployeeFinancePage() {
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <CardTitle className="text-lg font-bold">Expense Claims</CardTitle>
-                                        <CardDescription>Submit and track your reimbursement requests</CardDescription>
+                                        <CardDescription>Submit company-paid expenses and track your reimbursement lifecycle</CardDescription>
                                     </div>
                                     <Dialog open={isClaimOpen} onOpenChange={setIsClaimOpen}>
                                         <DialogTrigger asChild>
@@ -296,10 +330,12 @@ export default function EmployeeFinancePage() {
                                             <DialogHeader>
                                                 <DialogTitle>Submit Expense Claim</DialogTitle>
                                                 <DialogDescription>
-                                                    Add details about your expense. Please attach receipts if required.
+                                                    Add the expense you paid on behalf of the company so finance can review and reimburse it.
                                                 </DialogDescription>
                                             </DialogHeader>
                                             <form action={handleClaimSubmit} className="space-y-4 py-4">
+                                                <input type="hidden" name="category" value={selectedCategory} />
+                                                <input type="hidden" name="payment_method" value={selectedPaymentMethod} />
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div className="space-y-2">
                                                         <Label htmlFor="amount">Amount</Label>
@@ -307,12 +343,12 @@ export default function EmployeeFinancePage() {
                                                     </div>
                                                     <div className="space-y-2">
                                                         <Label htmlFor="date">Date</Label>
-                                                        <Input id="date" name="date" type="date" required defaultValue={new Date().toISOString().split('T')[0]} />
+                                                        <Input id="date" name="date" type="date" required defaultValue={new Date().toISOString().split("T")[0]} />
                                                     </div>
                                                 </div>
                                                 <div className="space-y-2">
                                                     <Label htmlFor="category">Category</Label>
-                                                    <Select name="category" required>
+                                                    <Select value={selectedCategory} onValueChange={setSelectedCategory} required>
                                                         <SelectTrigger>
                                                             <SelectValue placeholder="Select category" />
                                                         </SelectTrigger>
@@ -320,6 +356,21 @@ export default function EmployeeFinancePage() {
                                                             {EXPENSE_CATEGORIES.map((category) => (
                                                                 <SelectItem key={category} value={category}>
                                                                     {category}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="payment_method">Payment Method</Label>
+                                                    <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Select payment method" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {PAYMENT_METHODS.map((method) => (
+                                                                <SelectItem key={method.value} value={method.value}>
+                                                                    {method.label}
                                                                 </SelectItem>
                                                             ))}
                                                         </SelectContent>
@@ -335,10 +386,61 @@ export default function EmployeeFinancePage() {
                                             </form>
                                         </DialogContent>
                                     </Dialog>
-
                                 </div>
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="space-y-4">
+                                <div className="grid gap-3 sm:grid-cols-3">
+                                    <div className="rounded-2xl border border-zinc-100 bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+                                        <div className="flex items-center gap-2 text-amber-600">
+                                            <Clock3 className="h-4 w-4" />
+                                            <p className="text-[11px] font-black uppercase tracking-[0.08em]">Pending Review</p>
+                                        </div>
+                                        <p className="mt-2 text-lg font-black text-zinc-900 dark:text-zinc-100">{formatCurrency(pendingClaimsAmount)}</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-zinc-100 bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+                                        <div className="flex items-center gap-2 text-emerald-600">
+                                            <CheckCircle2 className="h-4 w-4" />
+                                            <p className="text-[11px] font-black uppercase tracking-[0.08em]">Approved</p>
+                                        </div>
+                                        <p className="mt-2 text-lg font-black text-zinc-900 dark:text-zinc-100">{formatCurrency(approvedClaimsAmount)}</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-zinc-100 bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+                                        <div className="flex items-center gap-2 text-rose-600">
+                                            <XCircle className="h-4 w-4" />
+                                            <p className="text-[11px] font-black uppercase tracking-[0.08em]">Rejected</p>
+                                        </div>
+                                        <p className="mt-2 text-lg font-black text-zinc-900 dark:text-zinc-100">{rejectedClaimsCount}</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-3 md:grid-cols-[1.4fr,0.8fr,0.8fr]">
+                                    <div className="relative">
+                                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                                        <Input value={claimSearch} onChange={(event) => setClaimSearch(event.target.value)} placeholder="Search category or note" className="pl-9" />
+                                    </div>
+                                    <Select value={claimStatusFilter} onValueChange={setClaimStatusFilter}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Filter status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All statuses</SelectItem>
+                                            <SelectItem value="pending">Pending</SelectItem>
+                                            <SelectItem value="approved">Approved</SelectItem>
+                                            <SelectItem value="rejected">Rejected</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <Select value={claimSort} onValueChange={setClaimSort}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Sort claims" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="latest">Latest first</SelectItem>
+                                            <SelectItem value="oldest">Oldest first</SelectItem>
+                                            <SelectItem value="highest">Highest amount</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
                                 {claims.length === 0 ? (
                                     <div className="rounded-xl border-2 border-dashed border-zinc-200 dark:border-zinc-800 p-8 text-center space-y-3">
                                         <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-full w-fit mx-auto">
@@ -351,31 +453,45 @@ export default function EmployeeFinancePage() {
                                     </div>
                                 ) : (
                                     <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                                        {claims.map((claim: ExpenseClaim) => (
-                                            <div key={claim.id} className="flex items-center justify-between p-3 rounded-lg border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="p-2 bg-primary/10 dark:bg-primary/20 text-primary rounded-md">
-                                                        <Receipt className="h-4 w-4" />
+                                        {filteredClaims.map((claim: ExpenseClaim) => (
+                                            <div key={claim.id} className="space-y-2">
+                                                <div className="flex items-center justify-between p-3 rounded-lg border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-2 bg-primary/10 dark:bg-primary/20 text-primary rounded-md">
+                                                            <Receipt className="h-4 w-4" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-medium text-sm text-zinc-900 dark:text-zinc-100">{claim.description || claim.category}</p>
+                                                            <p className="text-xs text-zinc-500">{format(new Date(claim.expense_date), "MMM dd, yyyy")} | {claim.category}</p>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <p className="font-medium text-sm text-zinc-900 dark:text-zinc-100">{claim.description || claim.category}</p>
-                                                        <p className="text-xs text-zinc-500">{format(new Date(claim.expense_date), 'MMM dd, yyyy')} • {claim.category}</p>
+                                                    <div className="text-right">
+                                                        <p className="font-bold text-sm">{formatCurrency(claim.amount)}</p>
+                                                        <Badge
+                                                            variant={
+                                                                claim.status === "approved" ? "default" :
+                                                                    claim.status === "rejected" ? "destructive" : "secondary"
+                                                            }
+                                                            className="text-[10px] h-5 capitalize"
+                                                        >
+                                                            {claim.status}
+                                                        </Badge>
                                                     </div>
                                                 </div>
-                                                <div className="text-right">
-                                                    <p className="font-bold text-sm">{formatCurrency(claim.amount)}</p>
-                                                    <Badge variant={
-                                                        claim.status === 'approved' ? 'default' :
-                                                            claim.status === 'rejected' ? 'destructive' : 'secondary'
-                                                    } className="text-[10px] h-5 capitalize">
-                                                        {claim.status}
-                                                    </Badge>
-                                                </div>
+                                                {claim.rejection_reason && (
+                                                    <div className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-950/30 dark:text-rose-200">
+                                                        {claim.rejection_reason}
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
+                                        {filteredClaims.length === 0 && (
+                                            <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 p-6 text-center text-sm text-zinc-500">
+                                                No claims match the selected filters.
+                                            </div>
+                                        )}
                                     </div>
                                 )}
-
                             </CardContent>
                         </Card>
                     </div>
@@ -419,6 +535,15 @@ export default function EmployeeFinancePage() {
                                         <div>
                                             <p className="text-xs font-bold text-zinc-500">ACTIVE ACCRUALS</p>
                                             <p className="text-sm font-black text-zinc-900 dark:text-zinc-100">{accruals.length}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 rounded-lg bg-primary/10 dark:bg-primary/20">
+                                            <Receipt className="h-4 w-4 text-primary" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-zinc-500">TOTAL SUBMITTED</p>
+                                            <p className="text-sm font-black text-zinc-900 dark:text-zinc-100">{formatCurrency(totalClaimedAmount)}</p>
                                         </div>
                                     </div>
                                 </div>
