@@ -130,6 +130,8 @@ type EmployeeProfile = {
     organization_id: string | null;
 };
 
+type ClaimPaymentProfile = Pick<EmployeeProfile, "id" | "full_name" | "role" | "organization_id">;
+
 type EmployeeExpenseRowRaw = Omit<EmployeeExpenseRow, "profiles"> & {
     profiles: EmployeeProfile[] | EmployeeProfile | null;
 };
@@ -362,7 +364,7 @@ export async function markClaimAsPaid(claimId: string, reimbursementMethod: stri
 
     if (claimError || !claim) return { ok: false, message: "Claim not found for your organization" };
 
-    const profile = normalizeJoinedProfile((claim as { profiles: EmployeeProfile[] | EmployeeProfile | null }).profiles);
+    const profile = normalizeJoinedProfile((claim as unknown as { profiles: ClaimPaymentProfile[] | ClaimPaymentProfile | null }).profiles);
     if (!profile || profile.role !== "employee") {
         return { ok: false, message: "Only employee claims can be marked as reimbursed." };
     }
