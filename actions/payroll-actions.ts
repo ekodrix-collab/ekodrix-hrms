@@ -62,6 +62,7 @@ export async function processSalaryPayment(payload: {
 
     // 2. Perform Updates
     // A. Insert into Expenses (Auto-Ledgering)
+    const timestamp = new Date().toISOString();
     const { error: expenseError } = await supabase
         .from("expenses")
         .insert({
@@ -73,7 +74,12 @@ export async function processSalaryPayment(payload: {
             organization_id: organizationId,
             expense_date: new Date().toISOString().split('T')[0],
             status: "approved",
-            created_by: user.id
+            created_by: user.id,
+            approved_at: timestamp,
+            approved_by: user.id,
+            reimbursed_at: null,
+            reimbursed_by: null,
+            reimbursement_method: null
         });
 
     if (expenseError) return { ok: false, message: "Failed to log expense" };
