@@ -240,14 +240,21 @@ export async function getEmployeeFinanceData() {
         console.error("Accruals error:", accrualsError);
     }
 
-    // Calculate total reimbursed (approved expenses)
     const { data: expenses } = await supabase
         .from("expenses")
-        .select("amount")
+        .select("id")
         .eq("paid_by", user.id)
-        .eq("status", "approved");
+        .in("status", ["partially_paid", "paid"]);
 
-    const totalReimbursed = expenses?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
+    const expenseIds = expenses?.map((expense) => expense.id) || [];
+    const { data: reimbursements } = expenseIds.length
+        ? await supabase
+            .from("expense_reimbursements")
+            .select("amount")
+            .in("expense_id", expenseIds)
+        : { data: [] as { amount: number | string }[] };
+
+    const totalReimbursed = (reimbursements || []).reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
 
     // Get last payout date
     const accrualIds = accruals?.map((accrual) => accrual.id) || [];

@@ -16,11 +16,16 @@ export interface Expense {
     description: string;
     category: string;
     payment_method: string;
-    status: 'pending' | 'approved' | 'rejected';
+    status: 'pending' | 'approved' | 'partially_paid' | 'rejected' | 'paid';
     paid_by: string | null;
     created_by: string | null;
     expense_date: string;
     created_at: string;
+    approved_at?: string | null;
+    reimbursed_at?: string | null;
+    reimbursement_method?: string | null;
+    reimbursed_amount?: number;
+    outstanding_amount?: number;
 }
 
 export interface Revenue {

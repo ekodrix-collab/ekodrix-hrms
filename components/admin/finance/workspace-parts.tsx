@@ -15,10 +15,15 @@ export type EmployeeExpense = {
   description: string;
   category: string;
   payment_method: string;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "partially_paid" | "rejected" | "paid";
+  reimbursed_amount?: number;
+  outstanding_amount?: number;
   expense_date: string;
   created_at: string;
   rejection_reason?: string | null;
+  approved_at?: string | null;
+  reimbursed_at?: string | null;
+  reimbursement_method?: string | null;
   profiles: {
     id: string;
     full_name: string;
@@ -72,6 +77,8 @@ export function FilterCard({
 }
 
 export function StatusBadge({ status }: { status: EmployeeExpense["status"] }) {
+  if (status === "partially_paid") return <Badge className="bg-sky-500 hover:bg-sky-500">Partial</Badge>;
+  if (status === "paid") return <Badge className="bg-sky-600 hover:bg-sky-600">Paid</Badge>;
   if (status === "approved") return <Badge className="bg-emerald-600 hover:bg-emerald-600">Approved</Badge>;
   if (status === "rejected") return <Badge variant="destructive">Rejected</Badge>;
   return <Badge variant="secondary">Pending</Badge>;
