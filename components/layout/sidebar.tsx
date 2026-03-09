@@ -93,8 +93,13 @@ export const employeeNav: NavGroup[] = [
       { href: "/employee/attendance", label: "Clock In/Out", icon: CalendarDays },
       { href: "/employee/leaves", label: "My Leaves", icon: CalendarCheck },
       { href: "/employee/tasks", label: "My Tasks", icon: KanbanSquare },
-      { href: "/employee/finance", label: "My Earnings", icon: CreditCard },
       { href: "/employee/vaults", label: "Vaults", icon: KeyRound },
+    ]
+  },
+  {
+    group: "Finance",
+    items: [
+      { href: "/employee/finance", label: "My Earnings & Expenses", icon: CreditCard },
     ]
   },
   {
@@ -128,7 +133,17 @@ export function getNavLabel(pathname: string, navGroups: NavGroup[]): string | n
 }
 
 export function getPrimaryMobileNav(navGroups: NavGroup[]): NavItem[] {
-  return flattenNavItems(navGroups).slice(0, 4);
+  const navItems = flattenNavItems(navGroups);
+  const hasEmployeeFinance = navItems.some((item) => item.href === "/employee/finance");
+
+  if (hasEmployeeFinance) {
+    const priority = ["/employee/dashboard", "/employee/tasks", "/employee/finance", "/employee/attendance"];
+    return priority
+      .map((href) => navItems.find((item) => item.href === href))
+      .filter((item): item is NavItem => Boolean(item));
+  }
+
+  return navItems.slice(0, 4);
 }
 
 export function Sidebar() {

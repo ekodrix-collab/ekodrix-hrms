@@ -250,13 +250,16 @@ export async function getEmployeeFinanceData() {
     const totalReimbursed = expenses?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
 
     // Get last payout date
-    const { data: lastPayout } = await supabase
-        .from("payouts")
-        .select("created_at")
-        .in("accrual_id", accruals?.map(a => a.id) || [])
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    const accrualIds = accruals?.map((accrual) => accrual.id) || [];
+    const { data: lastPayout } = accrualIds.length
+        ? await supabase
+            .from("payouts")
+            .select("created_at")
+            .in("accrual_id", accrualIds)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : { data: null };
 
     return {
         ok: true,
