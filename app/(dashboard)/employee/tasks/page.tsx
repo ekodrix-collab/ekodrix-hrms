@@ -362,7 +362,12 @@ export default function EmployeeTasksPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [newSubtasks, setNewSubtasks] = useState<Subtask[]>([]);
   const [editingSubtasks, setEditingSubtasks] = useState<Subtask[]>([]);
-  const [subtaskInput, setSubtaskInput] = useState("");
+  const [newSubtaskInput, setNewSubtaskInput] = useState("");
+  const [editSubtaskInput, setEditSubtaskInput] = useState("");
+  const [newSubtaskEditIndex, setNewSubtaskEditIndex] = useState<number | null>(null);
+  const [newSubtaskEditValue, setNewSubtaskEditValue] = useState("");
+  const [editingSubtaskIndex, setEditingSubtaskIndex] = useState<number | null>(null);
+  const [editingSubtaskValue, setEditingSubtaskValue] = useState("");
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -380,6 +385,98 @@ export default function EmployeeTasksPage() {
       setTasks(tasksData);
     }
   }, [tasksData]);
+
+  const resetNewSubtaskEditor = () => {
+    setNewSubtaskEditIndex(null);
+    setNewSubtaskEditValue("");
+  };
+
+  const resetEditingSubtaskEditor = () => {
+    setEditingSubtaskIndex(null);
+    setEditingSubtaskValue("");
+  };
+
+  const handleAddNewSubtask = () => {
+    const title = newSubtaskInput.trim();
+    if (!title) return;
+
+    setNewSubtasks((prev) => [...prev, { title, completed: false }]);
+    setNewSubtaskInput("");
+  };
+
+  const handleAddEditingSubtask = () => {
+    const title = editSubtaskInput.trim();
+    if (!title) return;
+
+    setEditingSubtasks((prev) => [...prev, { title, completed: false }]);
+    setEditSubtaskInput("");
+  };
+
+  const handleRemoveNewSubtask = (index: number) => {
+    setNewSubtasks((prev) => prev.filter((_, idx) => idx !== index));
+    if (newSubtaskEditIndex === index) {
+      resetNewSubtaskEditor();
+      return;
+    }
+    if (newSubtaskEditIndex !== null && newSubtaskEditIndex > index) {
+      setNewSubtaskEditIndex((prev) => (prev === null ? null : prev - 1));
+    }
+  };
+
+  const handleRemoveEditingSubtask = (index: number) => {
+    setEditingSubtasks((prev) => prev.filter((_, idx) => idx !== index));
+    if (editingSubtaskIndex === index) {
+      resetEditingSubtaskEditor();
+      return;
+    }
+    if (editingSubtaskIndex !== null && editingSubtaskIndex > index) {
+      setEditingSubtaskIndex((prev) => (prev === null ? null : prev - 1));
+    }
+  };
+
+  const handleStartNewSubtaskEdit = (index: number) => {
+    setNewSubtaskEditIndex(index);
+    setNewSubtaskEditValue(newSubtasks[index]?.title || "");
+  };
+
+  const handleStartEditingSubtaskEdit = (index: number) => {
+    setEditingSubtaskIndex(index);
+    setEditingSubtaskValue(editingSubtasks[index]?.title || "");
+  };
+
+  const handleSaveNewSubtaskEdit = () => {
+    if (newSubtaskEditIndex === null) return;
+
+    const title = newSubtaskEditValue.trim();
+    if (!title) {
+      toast.error("Subtask title cannot be empty");
+      return;
+    }
+
+    setNewSubtasks((prev) =>
+      prev.map((subtask, index) =>
+        index === newSubtaskEditIndex ? { ...subtask, title } : subtask
+      )
+    );
+    resetNewSubtaskEditor();
+  };
+
+  const handleSaveEditingSubtaskEdit = () => {
+    if (editingSubtaskIndex === null) return;
+
+    const title = editingSubtaskValue.trim();
+    if (!title) {
+      toast.error("Subtask title cannot be empty");
+      return;
+    }
+
+    setEditingSubtasks((prev) =>
+      prev.map((subtask, index) =>
+        index === editingSubtaskIndex ? { ...subtask, title } : subtask
+      )
+    );
+    resetEditingSubtaskEditor();
+  };
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -453,6 +550,8 @@ export default function EmployeeTasksPage() {
       toast.success("Task created successfully");
       setIsDialogOpen(false);
       setNewSubtasks([]);
+      setNewSubtaskInput("");
+      resetNewSubtaskEditor();
       queryClient.invalidateQueries({ queryKey: ["employee-tasks"] });
     } else {
       toast.error(res.message || "Failed to create task");
@@ -481,6 +580,8 @@ export default function EmployeeTasksPage() {
   const handleEditTask = (task: TaskItem) => {
     setEditingTask(task);
     setEditingSubtasks(task.subtasks || []);
+    setEditSubtaskInput("");
+    resetEditingSubtaskEditor();
     setIsEditDialogOpen(true);
   };
 
@@ -504,6 +605,8 @@ export default function EmployeeTasksPage() {
     if (res.ok) {
       toast.success("Task updated successfully");
       setIsEditDialogOpen(false);
+      setEditSubtaskInput("");
+      resetEditingSubtaskEditor();
       queryClient.invalidateQueries({ queryKey: ["employee-tasks"] });
     } else {
       toast.error(res.message || "Failed to update task");
@@ -584,7 +687,16 @@ export default function EmployeeTasksPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <Dialog
+              open={isDialogOpen}
+              onOpenChange={(open) => {
+                setIsDialogOpen(open);
+                if (!open) {
+                  setNewSubtaskInput("");
+                  resetNewSubtaskEditor();
+                }
+              }}
+            >
               <DialogTrigger asChild>
                 <Button className="h-10 gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 font-bold">
                   <Plus className="h-4 w-4" />
@@ -644,13 +756,64 @@ export default function EmployeeTasksPage() {
                       <div className="space-y-2 max-h-[150px] overflow-y-auto px-1">
                         {newSubtasks.map((st, i) => (
                           <div key={i} className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-900 px-2 py-1.5 rounded-md border border-zinc-100 dark:border-zinc-800 group">
-                            <span className="flex-1 text-sm text-zinc-700 dark:text-zinc-300">{st.title}</span>
+                            {newSubtaskEditIndex === i ? (
+                              <Input
+                                value={newSubtaskEditValue}
+                                onChange={(e) => setNewSubtaskEditValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleSaveNewSubtaskEdit();
+                                  }
+                                  if (e.key === "Escape") {
+                                    e.preventDefault();
+                                    resetNewSubtaskEditor();
+                                  }
+                                }}
+                                className="h-8 flex-1 text-sm"
+                                autoFocus
+                              />
+                            ) : (
+                              <span className="flex-1 text-sm text-zinc-700 dark:text-zinc-300">{st.title}</span>
+                            )}
+                            {newSubtaskEditIndex === i ? (
+                              <>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-[11px] font-semibold text-primary hover:text-primary"
+                                  onClick={handleSaveNewSubtaskEdit}
+                                >
+                                  Save
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-[11px] font-semibold text-zinc-500"
+                                  onClick={resetNewSubtaskEditor}
+                                >
+                                  Cancel
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-primary"
+                                onClick={() => handleStartNewSubtaskEdit(i)}
+                              >
+                                Edit
+                              </Button>
+                            )}
                             <Button
                               type="button"
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-red-500"
-                              onClick={() => setNewSubtasks(prev => prev.filter((_, idx) => idx !== i))}
+                              onClick={() => handleRemoveNewSubtask(i)}
                             >
                               <X className="h-3 w-3" />
                             </Button>
@@ -660,27 +823,19 @@ export default function EmployeeTasksPage() {
                       <div className="flex gap-2 mt-1">
                         <Input
                           placeholder="Add a subtask..."
-                          value={subtaskInput}
-                          onChange={(e) => setSubtaskInput(e.target.value)}
+                          value={newSubtaskInput}
+                          onChange={(e) => setNewSubtaskInput(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               e.preventDefault();
-                              if (subtaskInput.trim()) {
-                                setNewSubtasks(prev => [...prev, { title: subtaskInput.trim(), completed: false }]);
-                                setSubtaskInput("");
-                              }
+                              handleAddNewSubtask();
                             }
                           }}
                         />
                         <Button
                           type="button"
                           variant="outline"
-                          onClick={() => {
-                            if (subtaskInput.trim()) {
-                              setNewSubtasks(prev => [...prev, { title: subtaskInput.trim(), completed: false }]);
-                              setSubtaskInput("");
-                            }
-                          }}
+                          onClick={handleAddNewSubtask}
                         >
                           Add
                         </Button>
@@ -830,7 +985,16 @@ export default function EmployeeTasksPage() {
               ) : null}
             </DragOverlay>
 
-            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <Dialog
+              open={isEditDialogOpen}
+              onOpenChange={(open) => {
+                setIsEditDialogOpen(open);
+                if (!open) {
+                  setEditSubtaskInput("");
+                  resetEditingSubtaskEditor();
+                }
+              }}
+            >
               <DialogContent className="sm:max-w-[425px]">
                 <form onSubmit={handleUpdateTask}>
                   <DialogHeader>
@@ -886,15 +1050,66 @@ export default function EmployeeTasksPage() {
                       <div className="space-y-2 max-h-[150px] overflow-y-auto px-1">
                         {editingSubtasks.map((st, i) => (
                           <div key={i} className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-900 px-2 py-1.5 rounded-md border border-zinc-100 dark:border-zinc-800 group">
-                            <span className={`flex-1 text-sm ${st.completed ? 'text-zinc-400 line-through' : 'text-zinc-700 dark:text-zinc-300'}`}>
-                              {st.title}
-                            </span>
+                            {editingSubtaskIndex === i ? (
+                              <Input
+                                value={editingSubtaskValue}
+                                onChange={(e) => setEditingSubtaskValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleSaveEditingSubtaskEdit();
+                                  }
+                                  if (e.key === "Escape") {
+                                    e.preventDefault();
+                                    resetEditingSubtaskEditor();
+                                  }
+                                }}
+                                className="h-8 flex-1 text-sm"
+                                autoFocus
+                              />
+                            ) : (
+                              <span className={`flex-1 text-sm ${st.completed ? 'text-zinc-400 line-through' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                                {st.title}
+                              </span>
+                            )}
+                            {editingSubtaskIndex === i ? (
+                              <>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-[11px] font-semibold text-primary hover:text-primary"
+                                  onClick={handleSaveEditingSubtaskEdit}
+                                >
+                                  Save
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-[11px] font-semibold text-zinc-500"
+                                  onClick={resetEditingSubtaskEditor}
+                                >
+                                  Cancel
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-primary"
+                                onClick={() => handleStartEditingSubtaskEdit(i)}
+                              >
+                                Edit
+                              </Button>
+                            )}
                             <Button
                               type="button"
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-red-500"
-                              onClick={() => setEditingSubtasks(prev => prev.filter((_, idx) => idx !== i))}
+                              onClick={() => handleRemoveEditingSubtask(i)}
                             >
                               <X className="h-3 w-3" />
                             </Button>
@@ -904,27 +1119,19 @@ export default function EmployeeTasksPage() {
                       <div className="flex gap-2 mt-1">
                         <Input
                           placeholder="Add a subtask..."
-                          value={subtaskInput}
-                          onChange={(e) => setSubtaskInput(e.target.value)}
+                          value={editSubtaskInput}
+                          onChange={(e) => setEditSubtaskInput(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               e.preventDefault();
-                              if (subtaskInput.trim()) {
-                                setEditingSubtasks(prev => [...prev, { title: subtaskInput.trim(), completed: false }]);
-                                setSubtaskInput("");
-                              }
+                              handleAddEditingSubtask();
                             }
                           }}
                         />
                         <Button
                           type="button"
                           variant="outline"
-                          onClick={() => {
-                            if (subtaskInput.trim()) {
-                              setEditingSubtasks(prev => [...prev, { title: subtaskInput.trim(), completed: false }]);
-                              setSubtaskInput("");
-                            }
-                          }}
+                          onClick={handleAddEditingSubtask}
                         >
                           Add
                         </Button>
