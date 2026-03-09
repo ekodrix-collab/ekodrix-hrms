@@ -53,7 +53,7 @@ interface ExpenseClaim extends Expense {
     category: string;
     amount: number;
     rejection_reason?: string | null;
-    status: "pending" | "approved" | "rejected";
+    status: "pending" | "approved" | "partially_paid" | "rejected" | "paid";
 }
 
 export default function EmployeeFinancePage() {
@@ -115,8 +115,10 @@ export default function EmployeeFinancePage() {
         .filter((claim) => claim.status === "pending")
         .reduce((acc, claim) => acc + Number(claim.amount || 0), 0);
     const approvedClaimsAmount = claims
-        .filter((claim) => claim.status === "approved")
+        .filter((claim) => claim.status === "approved" || claim.status === "partially_paid")
         .reduce((acc, claim) => acc + Number(claim.amount || 0), 0);
+    const reimbursedClaimsAmount = claims
+        .reduce((acc, claim) => acc + Number(claim.reimbursed_amount || (claim.status === "paid" ? claim.amount : 0) || 0), 0);
     const rejectedClaimsCount = claims.filter((claim) => claim.status === "rejected").length;
     const filteredClaims = claims
         .filter((claim) => {
@@ -389,7 +391,7 @@ export default function EmployeeFinancePage() {
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <div className="grid gap-3 sm:grid-cols-3">
+                                <div className="grid gap-3 sm:grid-cols-4">
                                     <div className="rounded-2xl border border-zinc-100 bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
                                         <div className="flex items-center gap-2 text-amber-600">
                                             <Clock3 className="h-4 w-4" />
@@ -403,6 +405,13 @@ export default function EmployeeFinancePage() {
                                             <p className="text-[11px] font-black uppercase tracking-[0.08em]">Approved</p>
                                         </div>
                                         <p className="mt-2 text-lg font-black text-zinc-900 dark:text-zinc-100">{formatCurrency(approvedClaimsAmount)}</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-zinc-100 bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+                                        <div className="flex items-center gap-2 text-sky-600">
+                                            <Wallet className="h-4 w-4" />
+                                            <p className="text-[11px] font-black uppercase tracking-[0.08em]">Reimbursed</p>
+                                        </div>
+                                        <p className="mt-2 text-lg font-black text-zinc-900 dark:text-zinc-100">{formatCurrency(reimbursedClaimsAmount)}</p>
                                     </div>
                                     <div className="rounded-2xl border border-zinc-100 bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
                                         <div className="flex items-center gap-2 text-rose-600">
@@ -426,6 +435,8 @@ export default function EmployeeFinancePage() {
                                             <SelectItem value="all">All statuses</SelectItem>
                                             <SelectItem value="pending">Pending</SelectItem>
                                             <SelectItem value="approved">Approved</SelectItem>
+                                            <SelectItem value="partially_paid">Partial</SelectItem>
+                                            <SelectItem value="paid">Paid</SelectItem>
                                             <SelectItem value="rejected">Rejected</SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -470,6 +481,8 @@ export default function EmployeeFinancePage() {
                                                         <Badge
                                                             variant={
                                                                 claim.status === "approved" ? "default" :
+                                                                    claim.status === "partially_paid" ? "default" :
+                                                                    claim.status === "paid" ? "default" :
                                                                     claim.status === "rejected" ? "destructive" : "secondary"
                                                             }
                                                             className="text-[10px] h-5 capitalize"
