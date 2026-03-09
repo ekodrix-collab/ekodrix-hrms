@@ -80,8 +80,15 @@ export function AdminTaskForm({
     const [dueDate, setDueDate] = useState(initialData?.dueDate || "");
     const [subtasks, setSubtasks] = useState<Subtask[]>(initialData?.subtasks || []);
     const [subtaskInput, setSubtaskInput] = useState("");
+    const [editingSubtaskIndex, setEditingSubtaskIndex] = useState<number | null>(null);
+    const [editingSubtaskValue, setEditingSubtaskValue] = useState("");
 
     const isMarketplace = selectedEmployee === "marketplace";
+
+    const resetEditingSubtask = () => {
+        setEditingSubtaskIndex(null);
+        setEditingSubtaskValue("");
+    };
 
     const addSubtask = () => {
         if (subtaskInput.trim()) {
@@ -92,6 +99,35 @@ export function AdminTaskForm({
 
     const removeSubtask = (index: number) => {
         setSubtasks(subtasks.filter((_, i) => i !== index));
+        if (editingSubtaskIndex === index) {
+            resetEditingSubtask();
+            return;
+        }
+        if (editingSubtaskIndex !== null && editingSubtaskIndex > index) {
+            setEditingSubtaskIndex((prev) => (prev === null ? null : prev - 1));
+        }
+    };
+
+    const startEditingSubtask = (index: number) => {
+        setEditingSubtaskIndex(index);
+        setEditingSubtaskValue(subtasks[index]?.title || "");
+    };
+
+    const saveEditingSubtask = () => {
+        if (editingSubtaskIndex === null) return;
+
+        const title = editingSubtaskValue.trim();
+        if (!title) {
+            toast.error("Subtask title cannot be empty");
+            return;
+        }
+
+        setSubtasks(
+            subtasks.map((subtask, index) =>
+                index === editingSubtaskIndex ? { ...subtask, title } : subtask
+            )
+        );
+        resetEditingSubtask();
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -151,6 +187,8 @@ export function AdminTaskForm({
                 setSelectedEmployee(isMarketplaceDefault ? "marketplace" : "");
                 setSubtasks([]);
             }
+            setSubtaskInput("");
+            resetEditingSubtask();
             setIsOpen(false);
             onSuccess?.();
         } else {
@@ -159,7 +197,16 @@ export function AdminTaskForm({
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <Dialog
+            open={isOpen}
+            onOpenChange={(open) => {
+                setIsOpen(open);
+                if (!open) {
+                    setSubtaskInput("");
+                    resetEditingSubtask();
+                }
+            }}
+        >
             {trigger ? (
                 <div onClick={() => setIsOpen(true)} className="cursor-pointer">
                     {trigger}
@@ -351,7 +398,58 @@ export function AdminTaskForm({
                                 {subtasks.map((st, i) => (
                                     <div key={i} className="flex items-center gap-3 bg-zinc-50/80 dark:bg-zinc-900/80 p-3 rounded-xl border border-zinc-100 dark:border-zinc-800 group animate-in slide-in-from-left-2 duration-300">
                                         <div className="h-5 w-5 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex-shrink-0" />
-                                        <span className="flex-1 text-sm font-bold text-zinc-700 dark:text-zinc-300">{st.title}</span>
+                                        {editingSubtaskIndex === i ? (
+                                            <Input
+                                                value={editingSubtaskValue}
+                                                onChange={(e) => setEditingSubtaskValue(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter") {
+                                                        e.preventDefault();
+                                                        saveEditingSubtask();
+                                                    }
+                                                    if (e.key === "Escape") {
+                                                        e.preventDefault();
+                                                        resetEditingSubtask();
+                                                    }
+                                                }}
+                                                className="h-9 flex-1 rounded-lg border-zinc-200 bg-white text-sm font-medium"
+                                                autoFocus
+                                            />
+                                        ) : (
+                                            <span className="flex-1 text-sm font-bold text-zinc-700 dark:text-zinc-300">{st.title}</span>
+                                        )}
+                                        {editingSubtaskIndex === i ? (
+                                            <>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-8 px-2 text-[11px] font-bold text-primary hover:text-primary"
+                                                    onClick={saveEditingSubtask}
+                                                >
+                                                    Save
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-8 px-2 text-[11px] font-bold text-zinc-500"
+                                                    onClick={resetEditingSubtask}
+                                                >
+                                                    Cancel
+                                                </Button>
+                                            </>
+                                        ) : (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 px-2 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-primary hover:bg-primary/5"
+                                                onClick={() => startEditingSubtask(i)}
+                                            >
+                                                Edit
+                                            </Button>
+                                        )}
                                         <Button
                                             type="button"
                                             variant="ghost"
