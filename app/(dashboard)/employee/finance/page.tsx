@@ -57,6 +57,14 @@ interface ExpenseClaim extends Expense {
     status: "pending" | "approved" | "partially_paid" | "rejected" | "paid";
 }
 
+interface ProjectEarning {
+    amount: number;
+    description: string;
+    date: string;
+    project_name: string;
+    payment_type: string;
+}
+
 export default function EmployeeFinancePage() {
     const [selectedCategory, setSelectedCategory] = useState<string>(EXPENSE_CATEGORIES[0]);
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(PAYMENT_METHODS[0].value);
@@ -144,19 +152,6 @@ export default function EmployeeFinancePage() {
             return new Date(right.expense_date).getTime() - new Date(left.expense_date).getTime();
         });
 
-    const today = new Date();
-    const currentMonthStr = format(today, "yyyy-MM-01");
-
-    let nextPayoutMonth = today.getMonth();
-    let nextPayoutYear = today.getFullYear();
-
-    if (today.getDate() > 5) {
-        nextPayoutMonth++;
-        if (nextPayoutMonth > 11) {
-            nextPayoutMonth = 0;
-            nextPayoutYear++;
-        }
-    }
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat("en-IN", {
@@ -327,7 +322,7 @@ export default function EmployeeFinancePage() {
                                     {!data?.projectSalaries || data.projectSalaries.length === 0 ? (
                                         <div className="text-center py-8 text-zinc-500 font-medium">No project-specific earnings found</div>
                                     ) : (
-                                        data.projectSalaries.map((item: { project_name: string; payment_type: string; description: string; date: string }, index: number) => (
+                                        data.projectSalaries.map((item: ProjectEarning, index: number) => (
                                             <div key={index} className="flex items-center justify-between p-4 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:shadow-md transition-all">
                                                 <div className="flex items-center gap-4">
                                                     <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-900/30 text-rose-600">

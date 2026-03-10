@@ -119,7 +119,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
     const [expenseForm, setExpenseForm] = useState({
         amount: "",
         description: "",
-        category: PROJECT_EXPENSE_CATEGORIES[0],
+        category: PROJECT_EXPENSE_CATEGORIES[0] as typeof PROJECT_EXPENSE_CATEGORIES[number],
         payment_method: "upi",
         employee_id: ""
     });
@@ -211,7 +211,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                 setExpenseForm({
                     amount: "",
                     description: "",
-                    category: PROJECT_EXPENSE_CATEGORIES[0],
+                    category: PROJECT_EXPENSE_CATEGORIES[0] as typeof PROJECT_EXPENSE_CATEGORIES[number],
                     payment_method: "upi",
                     employee_id: ""
                 });
