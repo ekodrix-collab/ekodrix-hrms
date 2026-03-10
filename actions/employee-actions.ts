@@ -268,13 +268,29 @@ export async function getEmployeeFinanceData() {
             .maybeSingle()
         : { data: null };
 
+    // Get project-based salary payments
+    const { data: projectSalaries } = await supabase
+        .from("expenses")
+        .select("amount, description, expense_date, projects(name)")
+        .eq("employee_id", user.id)
+        .eq("category", "Salary Payments")
+        .eq("status", "paid");
+
+    const formattedProjectSalaries = projectSalaries?.map((ps: any) => ({
+        amount: ps.amount,
+        description: ps.description,
+        date: ps.expense_date,
+        project_name: ps.projects?.name || "N/A"
+    })) || [];
+
     return {
         ok: true,
         data: {
             salary: profile?.monthly_salary || 0,
             accruals: accruals || [],
             totalReimbursed,
-            lastPayoutDate: lastPayout?.created_at || null
+            lastPayoutDate: lastPayout?.created_at || null,
+            projectSalaries: formattedProjectSalaries
         }
     };
 }

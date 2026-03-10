@@ -286,16 +286,17 @@ export async function getProjectDetailsAction(id: string) {
         }
     }
 
-    const { data, error } = await supabase
+    const { data: projectRow, error: projectError } = await supabase
         .from("projects")
         .select(`
-      *,
-      tasks:tasks(*, assignee:profiles!tasks_user_id_fkey(id, full_name, avatar_url))
-    `)
+            *,
+            tasks:tasks(*, assignee:profiles!tasks_user_id_fkey(id, full_name, avatar_url)),
+            project_team_members(user_id, profiles:user_id(id, full_name, email, avatar_url, role))
+        `)
         .eq("id", id)
         .single();
 
-    if (error) return { ok: false, message: error.message };
+    if (projectError) return { ok: false, message: projectError.message };
 
     let projectManager: {
         id: string;
@@ -304,11 +305,11 @@ export async function getProjectDetailsAction(id: string) {
         avatar_url: string | null;
     } | null = null;
 
-    if (data.project_manager_id) {
+    if (projectRow.project_manager_id) {
         const { data: managerRow } = await supabase
             .from("profiles")
             .select("id, full_name, email, avatar_url")
-            .eq("id", data.project_manager_id)
+            .eq("id", projectRow.project_manager_id)
             .maybeSingle();
 
         if (managerRow) {
@@ -316,11 +317,14 @@ export async function getProjectDetailsAction(id: string) {
         }
     }
 
+    const members = (projectRow.project_team_members || []).map((m: any) => m.profiles).filter(Boolean);
+
     const enriched = {
-        ...data,
+        ...projectRow,
         project_manager: projectManager,
-        is_project_manager: data.project_manager_id === user.id,
-        can_manage_project: isAdmin || data.project_manager_id === user.id,
+        members,
+        is_project_manager: projectRow.project_manager_id === user.id,
+        can_manage_project: isAdmin || projectRow.project_manager_id === user.id,
     };
 
     return { ok: true, data: enriched };
@@ -425,4 +429,75 @@ async function attachProjectManagerProfiles(
         ...project,
         project_manager: project.project_manager_id ? managerMap.get(project.project_manager_id) ?? null : null,
     }));
+}
+export async function getProjectMembersAction(projectId: string) {
+    if (!projectId) return { ok: false, message: "Project ID is required" };
+    const supabase = createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, message: "Not authenticated" };
+
+    const { data: members, error } = await supabase
+        .from("project_team_members")
+        .select(`
+            user_id,
+            profiles:user_id (id, full_name, avatar_url, role, email)
+        `)
+        .eq("project_id", projectId);
+
+    if (error) return { ok: false, message: error.message };
+
+    const formattedMembers = members.map(m => m.profiles).filter(Boolean);
+    return { ok: true, data: formattedMembers };
+}
+
+export async function updateProjectMembersAction(projectId: string, memberIds: string[]) {
+    if (!projectId) return { ok: false, message: "Project ID is required" };
+
+    const supabase = createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, message: "Not authenticated" };
+
+    // Check admin or manager access
+    const { data: project } = await supabase
+        .from("projects")
+        .select("id, project_manager_id")
+        .eq("id", projectId)
+        .single();
+
+    if (!project) return { ok: false, message: "Project not found" };
+
+    const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+    const canManageMembers = profile?.role === 'admin' || project.project_manager_id === user.id;
+    if (!canManageMembers) return { ok: false, message: "Unauthorized to manage project members" };
+
+    // Start a simple transaction-like flow (delete existing, insert new)
+    // Note: This is an HRMS internal tool, so this pattern is acceptable here.
+    const { error: deleteError } = await supabase
+        .from("project_team_members")
+        .delete()
+        .eq("project_id", projectId);
+
+    if (deleteError) return { ok: false, message: `Failed to clear existing members: ${deleteError.message}` };
+
+    if (memberIds.length > 0) {
+        const { error: insertError } = await supabase
+            .from("project_team_members")
+            .insert(
+                memberIds.map(id => ({
+                    project_id: projectId,
+                    user_id: id,
+                    added_by: user.id
+                }))
+            );
+
+        if (insertError) return { ok: false, message: `Failed to insert new members: ${insertError.message}` };
+    }
+
+    revalidatePath(`/admin/projects/${projectId}`);
+    return { ok: true };
 }

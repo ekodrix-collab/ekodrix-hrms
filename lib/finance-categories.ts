@@ -3,8 +3,19 @@ export const EXPENSE_CATEGORIES = [
   "Office Rent",
   "Electricity",
   "WiFi & Internet",
+  "Domain & Hosting",
+  "Tea & Snacks",
   "Marketing & Ads",
-  "Miscellaneous"
+  "Miscellaneous",
+  "Commision / Broker",
+] as const;
+
+export const PROJECT_EXPENSE_CATEGORIES = [
+  "Salary Payments",
+  "Commision / Broker",
+  "Domain & Hosting",
+  "Marketing & Ads",
+  "Miscellaneous",
 ] as const;
 
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];

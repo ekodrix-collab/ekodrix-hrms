@@ -244,8 +244,9 @@ export async function postBusinessExpense(data: {
     amount: number;
     description: string;
     category: string;
-    payment_method: string;
+    payment_method?: string;
     project_id?: string;
+    employee_id?: string;
 }) {
     const supabase = createSupabaseServerClient();
     const { user, organizationId, role } = await getOrgContext();
@@ -254,22 +255,21 @@ export async function postBusinessExpense(data: {
         return { error: "Admin organization context missing" };
     }
 
-    const timestamp = new Date().toISOString();
-
     const { error } = await supabase
         .from("expenses")
         .insert({
-            ...data,
+            amount: data.amount,
+            description: data.description,
             category: normalizeExpenseCategory(data.category),
+            payment_method: data.payment_method || "cash",
+            project_id: data.project_id || null,
+            employee_id: data.employee_id || null,
+            paid_by: user.id,
             organization_id: organizationId,
-            paid_by: user?.id,
-            created_by: user?.id,
-            status: 'approved', // Admin expenses are auto-approved
-            approved_at: timestamp,
-            approved_by: user.id,
-            reimbursed_at: null,
-            reimbursed_by: null,
-            reimbursement_method: null
+            status: 'paid',
+            expense_date: new Date().toISOString(),
+            approved_at: new Date().toISOString(),
+            approved_by: user.id
         });
 
     if (error) return { error: error.message };
@@ -313,7 +313,7 @@ export async function getCompanyFinancials(projectId?: string) {
         .from("expenses")
         .select("amount, profiles:paid_by!inner(organization_id)")
         .eq("profiles.organization_id", organizationId)
-        .eq("status", "approved");
+        .in("status", ["approved", "paid"]);
 
     if (projectId) {
         revenueQuery = revenueQuery.eq("project_id", projectId);
@@ -343,7 +343,7 @@ export async function getCompanyFinancials(projectId?: string) {
                 .from("expenses")
                 .select("project_id, amount, projects(name), profiles:paid_by!inner(organization_id)")
                 .eq("profiles.organization_id", organizationId)
-                .eq("status", "approved")
+                .in("status", ["approved", "paid"])
         ]);
 
         const breakdownMap: Record<string, { id: string; name: string; revenue: number; expenses: number; net: number }> = {};
@@ -840,7 +840,7 @@ export async function getFinancialHistory(projectId?: string) {
         .from("expenses")
         .select("id, amount, category, description, expense_date, payment_method, created_at, project_id, projects(name), profiles:paid_by!inner(organization_id)")
         .eq("profiles.organization_id", organizationId)
-        .eq("status", "approved")
+        .in("status", ["approved", "paid"])
         .order("expense_date", { ascending: false });
 
     if (projectId) {

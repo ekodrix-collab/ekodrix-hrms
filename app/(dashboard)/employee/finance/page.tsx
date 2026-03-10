@@ -13,6 +13,7 @@ import {
     Receipt,
     Search,
     XCircle,
+    IndianRupee,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -318,6 +319,51 @@ export default function EmployeeFinancePage() {
                             <CardHeader>
                                 <div className="flex items-center justify-between">
                                     <div>
+                                        <CardTitle className="text-lg font-bold">Project Earnings</CardTitle>
+                                        <CardDescription>Salary payments received for specific projects</CardDescription>
+                                    </div>
+                                    <div className="p-2 bg-rose-50 dark:bg-rose-900/30 text-rose-600 rounded-lg">
+                                        <TrendingUp className="h-5 w-5" />
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-4">
+                                    {!data?.projectSalaries || data.projectSalaries.length === 0 ? (
+                                        <div className="text-center py-8 text-zinc-500 font-medium">No project-specific earnings found</div>
+                                    ) : (
+                                        data.projectSalaries.map((item: any, index: number) => (
+                                            <div key={index} className="flex items-center justify-between p-4 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:shadow-md transition-all">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-900/30 text-rose-600">
+                                                        <IndianRupee className="h-5 w-5" />
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
+                                                                {item.project_name}
+                                                            </p>
+                                                            <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 border-none text-[10px] font-black uppercase">Salary</Badge>
+                                                        </div>
+                                                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                                            {item.description || "Project Salary Payment"} • {format(new Date(item.date), "MMM dd, yyyy")}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="font-black text-sm text-zinc-900 dark:text-zinc-100">{formatCurrency(item.amount)}</p>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
+                            <CardHeader>
+                                <div className="flex items-center justify-between">
+                                    <div>
                                         <CardTitle className="text-lg font-bold">Expense Claims</CardTitle>
                                         <CardDescription>Submit company-paid expenses and track your reimbursement lifecycle</CardDescription>
                                     </div>
@@ -482,8 +528,8 @@ export default function EmployeeFinancePage() {
                                                             variant={
                                                                 claim.status === "approved" ? "default" :
                                                                     claim.status === "partially_paid" ? "default" :
-                                                                    claim.status === "paid" ? "default" :
-                                                                    claim.status === "rejected" ? "destructive" : "secondary"
+                                                                        claim.status === "paid" ? "default" :
+                                                                            claim.status === "rejected" ? "destructive" : "secondary"
                                                             }
                                                             className="text-[10px] h-5 capitalize"
                                                         >
