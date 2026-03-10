@@ -415,10 +415,10 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         };
     }
 
-    const [revenueResult, expenseResult, reimbursementResult, accrualResult] = await Promise.all([
+    const [revenueResult, expenseResult, reimbursementResult, accrualResult, projectFinancialsResult] = await Promise.all([
         supabase
             .from("revenue_logs")
-            .select("id, amount, source, description, received_date, created_at, creator:profiles!created_by!inner(organization_id)")
+            .select("id, amount, source, description, received_date, created_at, project_id, creator:profiles!created_by!inner(organization_id)")
             .eq("creator.organization_id", organizationId)
             .lte("received_date", toKey)
             .order("received_date", { ascending: true }),
@@ -437,6 +437,7 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
                 approved_at,
                 reimbursed_at,
                 status,
+                project_id,
                 profiles:paid_by!inner(id, full_name, avatar_url, role, department, organization_id)
             `)
             .eq("profiles.organization_id", organizationId)
@@ -450,7 +451,8 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         supabase
             .from("salary_accruals")
             .select("remaining_amount, profiles!user_id!inner(organization_id)")
-            .eq("profiles.organization_id", organizationId)
+            .eq("profiles.organization_id", organizationId),
+        getCompanyFinancials() // This is safe as it returns aggregated data
     ]);
 
     const revenueRows = (revenueResult.data ?? []) as FinanceRevenueRow[];
@@ -471,19 +473,54 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         return accumulator;
     }, {});
 
-    const allEvents: FinanceLedgerEvent[] = revenueRows.map((row) => ({
-        id: `revenue-${row.id}`,
-        date: row.received_date,
-        createdAt: row.created_at,
-        amount: Number(row.amount) || 0,
-        type: "revenue",
-        sourceType: "cash_revenue",
-        title: row.source,
-        description: row.description || "Revenue recorded",
-        category: "Cash Revenue",
-        method: "-",
-        person: null
-    }));
+    const allEvents: FinanceLedgerEvent[] = revenueRows
+        .filter(row => !(row as any).project_id) // Exclude project specific revenue from main treasury ledger
+        .map((row) => ({
+            id: `revenue-${row.id}`,
+            date: row.received_date,
+            createdAt: row.created_at,
+            amount: Number(row.amount) || 0,
+            type: "revenue",
+            sourceType: "cash_revenue",
+            title: row.source,
+            description: row.description || "Revenue recorded",
+            category: "Cash Revenue",
+            method: "-",
+            person: null
+        }));
+
+    // Add aggregated project net profits as virtual revenue events
+    projectFinancialsResult.projectBreakdown?.forEach((project) => {
+        if (project.net > 0) {
+            allEvents.push({
+                id: `project-profit-${project.id}`,
+                date: toKey, // Use end of period for simplicity or latest transaction date
+                createdAt: new Date().toISOString(),
+                amount: project.net,
+                type: "revenue",
+                sourceType: "cash_revenue",
+                title: `Project Net Profit: ${project.name}`,
+                description: `Aggregated net profit from project ${project.name}`,
+                category: "Project Profit",
+                method: "-",
+                person: null
+            });
+        } else if (project.net < 0) {
+            allEvents.push({
+                id: `project-loss-${project.id}`,
+                date: toKey,
+                createdAt: new Date().toISOString(),
+                amount: Math.abs(project.net),
+                type: "expense",
+                sourceType: "business_expense",
+                title: `Project Net Loss: ${project.name}`,
+                description: `Aggregated net loss from project ${project.name}`,
+                category: "Project Loss",
+                method: "-",
+                person: null
+            });
+        }
+    });
 
     const claims = expenses.filter((expense) => expense.profiles?.role === "employee");
 
@@ -557,6 +594,8 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         if (expense.status !== "approved" && expense.status !== "paid") {
             return;
         }
+
+        if ((expense as any).project_id) return; // Exclude project specific expenses from main treasury ledger
 
         const isSalaryExpense = category === "Salary Payments";
         allEvents.push({
@@ -634,8 +673,8 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         return bucket;
     });
 
-    const periodRevenue = monthly.reduce((sum, row) => sum + row.revenue, 0);
-    const periodExpenses = monthly.reduce((sum, row) => sum + row.expense, 0);
+    const periodRevenue = allEvents.filter(e => e.type === "revenue").reduce((sum, row) => sum + row.amount, 0);
+    const periodExpenses = allEvents.filter(e => e.type === "expense").reduce((sum, row) => sum + row.amount, 0);
     const periodLedger = allEvents
         .filter((event) => inRange(event.date))
         .sort((left, right) =>
@@ -807,6 +846,9 @@ export async function getFinancialHistory(projectId?: string) {
     if (projectId) {
         revenueQuery = revenueQuery.eq("project_id", projectId);
         expenseQuery = expenseQuery.eq("project_id", projectId);
+    } else {
+        revenueQuery = revenueQuery.is("project_id", null);
+        expenseQuery = expenseQuery.is("project_id", null);
     }
 
     const [{ data: revenue }, { data: expenses }] = await Promise.all([revenueQuery, expenseQuery]);
@@ -839,6 +881,27 @@ export async function getFinancialHistory(projectId?: string) {
         project_id: e.project_id,
         project_name: getProjectName(e.projects)
     })) || [];
+
+    if (!projectId) {
+        const financials = await getCompanyFinancials();
+        financials.projectBreakdown?.forEach(project => {
+            if (project.net !== 0) {
+                history.push({
+                    id: `project-net-${project.id}`,
+                    type: project.net > 0 ? 'revenue' : 'expense',
+                    amount: Math.abs(project.net),
+                    title: `Project Net ${project.net > 0 ? 'Profit' : 'Loss'}: ${project.name}`,
+                    subtitle: `Aggregated project result`,
+                    date: new Date().toISOString().split('T')[0],
+                    created_at: new Date().toISOString(),
+                    category: project.net > 0 ? "Project Profit" : "Project Loss",
+                    method: "-",
+                    project_id: project.id,
+                    project_name: project.name
+                } as any);
+            }
+        });
+    }
 
     const history = [...normalizedRevenue, ...normalizedExpenses].sort((a, b) =>
         new Date(b.date).getTime() - new Date(a.date).getTime() ||
