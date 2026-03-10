@@ -401,6 +401,18 @@ export async function markClaimAsPaid(claimId: string, reimbursementMethod: stri
 
     if (insertError) return { ok: false, message: insertError.message };
 
+    // Record in employee_payments for the employee view
+    await supabase
+        .from("employee_payments")
+        .insert({
+            employee_id: profile.id,
+            payment_type: "reimbursement",
+            amount: amount,
+            date: new Date().toISOString().split('T')[0],
+            status: "completed",
+            notes: note || `Reimbursement for claim ${claimId}`
+        });
+
     const refreshResult = await refreshClaimReimbursementState(supabase, claimId, user.id, (claim as { approved_at?: string | null }).approved_at ?? timestamp);
     if (!refreshResult.ok) return refreshResult;
 

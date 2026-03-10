@@ -1,5 +1,6 @@
 export const EXPENSE_CATEGORIES = [
   "Salary Payments",
+  "Project Share",
   "Office Rent",
   "Electricity",
   "WiFi & Internet",
@@ -11,7 +12,7 @@ export const EXPENSE_CATEGORIES = [
 ] as const;
 
 export const PROJECT_EXPENSE_CATEGORIES = [
-  "Salary Payments",
+  "Project Share",
   "Commision / Broker",
   "Domain & Hosting",
   "Marketing & Ads",

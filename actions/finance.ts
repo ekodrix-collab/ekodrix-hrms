@@ -203,7 +203,7 @@ export async function distributeRevenue(revenueId: string, distribution: { [user
         // Find oldest unpaid accrual for this user
         const { data: accrual } = await supabase
             .from("salary_accruals")
-            .select("id, amount, paid_amount, remaining_amount")
+            .select("id, amount, paid_amount, remaining_amount, month_year")
             .eq("user_id", userId)
             .neq("status", "paid")
             .order("month_year", { ascending: true })
@@ -231,6 +231,18 @@ export async function distributeRevenue(revenueId: string, distribution: { [user
                     revenue_id: revenueId,
                     amount_paid: amount,
                     created_by: user?.id
+                });
+
+            // 3. Record in employee_payments for the employee view
+            await supabase
+                .from("employee_payments")
+                .insert({
+                    employee_id: userId,
+                    payment_type: "salary",
+                    amount: amount,
+                    date: new Date().toISOString().split('T')[0],
+                    status: "completed",
+                    notes: `Salary payout for ${accrual.month_year}`
                 });
         }
     }
@@ -273,6 +285,30 @@ export async function postBusinessExpense(data: {
         });
 
     if (error) return { error: error.message };
+
+    // If it's a salary payment or project share to an employee, record it in employee_payments
+    if (data.employee_id) {
+        let type: "salary" | "project_share" | "commission" | "bonus" | "reimbursement" = "project_share";
+
+        if (data.category === "Salary Payments") {
+            type = "salary";
+        } else if (data.category === "Project Share") {
+            type = "project_share";
+        } else if (data.category === "Commision / Broker") {
+            type = "commission";
+        }
+        await supabase
+            .from("employee_payments")
+            .insert({
+                employee_id: data.employee_id,
+                project_id: data.project_id || null,
+                payment_type: type,
+                amount: data.amount,
+                date: new Date().toISOString().split('T')[0],
+                status: "completed",
+                notes: data.description
+            });
+    }
 
     revalidatePath("/admin/finance");
     if (data.project_id) {
@@ -838,8 +874,8 @@ export async function getFinancialHistory(projectId?: string) {
 
     let expenseQuery = supabase
         .from("expenses")
-        .select("id, amount, category, description, expense_date, payment_method, created_at, project_id, projects(name), profiles:paid_by!inner(organization_id)")
-        .eq("profiles.organization_id", organizationId)
+        .select("id, amount, category, description, expense_date, payment_method, created_at, project_id, projects(name), paid_by_profile:profiles!paid_by!inner(organization_id), employee_profile:profiles!employee_id(full_name)")
+        .eq("paid_by_profile.organization_id", organizationId)
         .in("status", ["approved", "paid"])
         .order("expense_date", { ascending: false });
 
@@ -868,7 +904,7 @@ export async function getFinancialHistory(projectId?: string) {
         project_name: getProjectName(r.projects)
     })) || [];
 
-    const normalizedExpenses = expenses?.map(e => ({
+    const normalizedExpenses = (expenses as any[])?.map(e => ({
         id: e.id,
         type: 'expense',
         amount: e.amount,
@@ -879,7 +915,8 @@ export async function getFinancialHistory(projectId?: string) {
         category: normalizeExpenseCategory(e.category),
         method: e.payment_method,
         project_id: e.project_id,
-        project_name: getProjectName(e.projects)
+        project_name: getProjectName(e.projects),
+        person: e.employee_profile?.full_name || null
     })) || [];
 
     if (!projectId) {

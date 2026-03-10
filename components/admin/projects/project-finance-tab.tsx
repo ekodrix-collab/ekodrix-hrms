@@ -77,6 +77,7 @@ interface ProjectLedgerItem {
     title: string;
     category: string;
     date: string;
+    person?: string | null;
 }
 
 interface VerdictItem {
@@ -475,8 +476,12 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                                         {item.type === 'revenue' ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                                                     </div>
                                                     <div>
-                                                        <p className="text-sm font-black text-zinc-900 dark:text-zinc-100">{item.title}</p>
-                                                        <p className="text-[10px] uppercase tracking-[0.15em] font-bold text-muted-foreground/50">{item.category}</p>
+                                                        <p className="text-sm font-black text-zinc-900 dark:text-zinc-100">
+                                                            {item.person && !item.title ? item.person : (item.title || item.category)}
+                                                        </p>
+                                                        <p className="text-[10px] uppercase tracking-[0.15em] font-bold text-muted-foreground/50">
+                                                            {item.category}{item.person && item.title ? ` — ${item.person}` : ''}
+                                                        </p>
                                                     </div>
                                                 </div>
                                             </td>
@@ -741,7 +746,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                             </div>
                             <div className="space-y-2">
                                 <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Category</Label>
-                                <Select value={expenseForm.category} onValueChange={(val) => setExpenseForm({ ...expenseForm, category: val as any, employee_id: val === "Salary Payments" ? expenseForm.employee_id : "" })}>
+                                <Select value={expenseForm.category} onValueChange={(val) => setExpenseForm({ ...expenseForm, category: val as any, employee_id: ["Project Share", "Commision / Broker"].includes(val) ? expenseForm.employee_id : "" })}>
                                     <SelectTrigger className="h-12 border-2 rounded-xl border-zinc-200 dark:border-zinc-700">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -756,7 +761,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                             </div>
                         </div>
 
-                        {expenseForm.category === "Salary Payments" && (
+                        {["Project Share", "Commision / Broker"].includes(expenseForm.category) && (
                             <motion.div
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -784,7 +789,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                             </motion.div>
                         )}
                         <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Description</Label>
+                            <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Description (Optional)</Label>
                             <Input
                                 placeholder="e.g. Server hosting for March..."
                                 className="h-12 border-2 rounded-xl border-zinc-200 dark:border-zinc-700"
@@ -798,7 +803,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                         <Button
                             className="bg-rose-600 hover:bg-rose-700 text-white font-black px-6 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95"
                             onClick={() => expenseMutation.mutate(expenseForm)}
-                            disabled={!expenseForm.amount || !expenseForm.description || expenseMutation.isPending}
+                            disabled={!expenseForm.amount || expenseMutation.isPending}
                         >
                             {expenseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Log Cost"}
                         </Button>

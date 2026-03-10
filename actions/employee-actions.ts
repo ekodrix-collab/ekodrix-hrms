@@ -268,20 +268,48 @@ export async function getEmployeeFinanceData() {
             .maybeSingle()
         : { data: null };
 
-    // Get project-based salary payments
-    const { data: projectSalaries } = await supabase
-        .from("expenses")
-        .select("amount, description, expense_date, projects(name)")
+    // Get consolidated employee payments
+    const { data: payments } = await supabase
+        .from("employee_payments")
+        .select("amount, payment_type, date, projects(name), notes")
         .eq("employee_id", user.id)
-        .eq("category", "Salary Payments")
-        .eq("status", "paid");
+        .eq("status", "completed")
+        .order("date", { ascending: false });
 
-    const formattedProjectSalaries = projectSalaries?.map((ps: any) => ({
-        amount: ps.amount,
-        description: ps.description,
-        date: ps.expense_date,
-        project_name: ps.projects?.name || "N/A"
-    })) || [];
+    // Calculate breakdown
+    const breakdown = {
+        salary: 0,
+        project_share: 0,
+        commission: 0,
+        bonus: 0,
+        reimbursement: 0
+    };
+
+    const projectSharePayments: any[] = [];
+    let totalEarnedYTD = 0;
+    const currentYear = new Date().getFullYear();
+
+    payments?.forEach((p: any) => {
+        const type = p.payment_type as keyof typeof breakdown;
+        const amount = Number(p.amount || 0);
+        if (breakdown[type] !== undefined) {
+            breakdown[type] += amount;
+        }
+
+        if (new Date(p.date).getFullYear() === currentYear) {
+            totalEarnedYTD += amount;
+        }
+
+        if (type === "project_share" || type === "commission") {
+            projectSharePayments.push({
+                amount,
+                description: p.notes || (type === "project_share" ? "Project Share" : "Commission"),
+                date: p.date,
+                project_name: p.projects?.name || "N/A",
+                payment_type: type
+            });
+        }
+    });
 
     return {
         ok: true,
@@ -290,7 +318,9 @@ export async function getEmployeeFinanceData() {
             accruals: accruals || [],
             totalReimbursed,
             lastPayoutDate: lastPayout?.created_at || null,
-            projectSalaries: formattedProjectSalaries
+            projectSalaries: projectSharePayments, // Keeping naming for BC but content is updated
+            incomeBreakdown: breakdown,
+            totalEarnedYTD
         }
     };
 }
