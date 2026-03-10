@@ -46,10 +46,19 @@ export async function middleware(request: NextRequest) {
     }
   );
 
+  // Detect background requests (Server Actions, Prefetches, AJAX)
+  const isServerAction = request.headers.has("next-action");
+  const isPrefetch =
+    request.headers.get("purpose") === "prefetch" ||
+    request.headers.get("x-middleware-prefetch") === "1" ||
+    request.headers.has("next-router-prefetch");
+  const isJsonRequest = request.headers.get("accept")?.includes("application/json");
+  const isBackgroundRequest = isServerAction || isPrefetch || isJsonRequest;
+
   // Use getUser() instead of getSession() for security
   const {
     data: { user },
-    error,
+    error: authError,
   } = await supabase.auth.getUser();
 
   // Define route types
@@ -66,55 +75,60 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // Root path handling
+  // Fetch profile once if user exists to optimize
+  let profile = null;
+  if (user) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("role, status, organization_id")
+      .eq("id", user.id)
+      .single();
+    profile = data;
+  }
+
+  // Handle Root path redirection
   if (pathname === "/") {
     if (!user) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
-
-    // Get user role from profile
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
     const role = profile?.role ?? "employee";
     const redirectTo = role === "admin" ? "/admin/dashboard" : "/employee/dashboard";
     return NextResponse.redirect(new URL(redirectTo, request.url));
   }
 
-  // No user and trying to access protected route
+  // Protected route access without user
   if (!user && !isPublicRoute) {
+    // If it's a background request, return 401 instead of redirecting
+    // This prevents the whole page from redirecting during a race condition in background polls
+    if (isBackgroundRequest) {
+      return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Has user but trying to access public auth routes
+  // User is logged in but trying to access public auth routes
   if (user && isPublicRoute) {
-    // Get user role and redirect to appropriate dashboard
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
     const role = profile?.role ?? "employee";
     const redirectTo = role === "admin" ? "/admin/dashboard" : "/employee/dashboard";
     return NextResponse.redirect(new URL(redirectTo, request.url));
   }
 
-  // Role-based access control
+  // Role-based access control and account status check
   if (user && (isAdminRoute || isEmployeeRoute)) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role, status")
-      .eq("id", user.id)
-      .single();
-
     // Check if user account is active
     if (profile?.status === "inactive") {
+      if (isBackgroundRequest) {
+        return new NextResponse(JSON.stringify({ error: "Account inactive" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
       await supabase.auth.signOut();
       return NextResponse.redirect(new URL("/login?error=account_inactive", request.url));
     }
@@ -123,11 +137,14 @@ export async function middleware(request: NextRequest) {
 
     // Employee trying to access admin routes
     if (isAdminRoute && role !== "admin") {
+      if (isBackgroundRequest) {
+        return new NextResponse(JSON.stringify({ error: "Forbidden" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
       return NextResponse.redirect(new URL("/employee/dashboard", request.url));
     }
-
-    // Admin can access both admin and employee routes
-    // No need to redirect admins from employee routes
   }
 
   return response;

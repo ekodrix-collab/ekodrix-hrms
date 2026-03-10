@@ -63,7 +63,8 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import type { Project } from "@/types/dashboard";
-import { EXPENSE_CATEGORIES } from "@/lib/finance-categories";
+import { PROJECT_EXPENSE_CATEGORIES } from "@/lib/finance-categories";
+import { getProjectMembersAction } from "@/actions/projects";
 
 interface ProjectFinanceTabProps {
     project: Project;
@@ -76,6 +77,7 @@ interface ProjectLedgerItem {
     title: string;
     category: string;
     date: string;
+    person?: string | null;
 }
 
 interface VerdictItem {
@@ -88,7 +90,7 @@ interface VerdictItem {
     } | null;
 }
 
-const DEFAULT_EXPENSE_CATEGORY = "Miscellaneous";
+
 
 const fadeUp = {
     initial: { opacity: 0, y: 20 },
@@ -117,8 +119,14 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
     const [expenseForm, setExpenseForm] = useState({
         amount: "",
         description: "",
-        category: DEFAULT_EXPENSE_CATEGORY,
-        payment_method: "upi"
+        category: PROJECT_EXPENSE_CATEGORIES[0] as typeof PROJECT_EXPENSE_CATEGORIES[number],
+        payment_method: "upi",
+        employee_id: ""
+    });
+
+    const { data: projectMembers } = useQuery({
+        queryKey: ["project-members", project.id],
+        queryFn: () => getProjectMembersAction(project.id),
     });
 
     // ── Queries ──
@@ -193,13 +201,20 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
             description: data.description,
             category: data.category,
             payment_method: data.payment_method,
-            project_id: project.id
+            project_id: project.id,
+            employee_id: data.employee_id || undefined
         }) as Promise<{ success: boolean; error?: string }>,
         onSuccess: (res) => {
             if (res.success) {
                 toast.success("Expense logged successfully");
                 setIsExpenseOpen(false);
-                setExpenseForm({ amount: "", description: "", category: DEFAULT_EXPENSE_CATEGORY, payment_method: "upi" });
+                setExpenseForm({
+                    amount: "",
+                    description: "",
+                    category: PROJECT_EXPENSE_CATEGORIES[0] as typeof PROJECT_EXPENSE_CATEGORIES[number],
+                    payment_method: "upi",
+                    employee_id: ""
+                });
                 queryClient.invalidateQueries({ queryKey: ["project-financials", project.id] });
                 queryClient.invalidateQueries({ queryKey: ["project-history", project.id] });
             } else {
@@ -461,8 +476,12 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                                         {item.type === 'revenue' ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                                                     </div>
                                                     <div>
-                                                        <p className="text-sm font-black text-zinc-900 dark:text-zinc-100">{item.title}</p>
-                                                        <p className="text-[10px] uppercase tracking-[0.15em] font-bold text-muted-foreground/50">{item.category}</p>
+                                                        <p className="text-sm font-black text-zinc-900 dark:text-zinc-100">
+                                                            {item.person && !item.title ? item.person : (item.title || item.category)}
+                                                        </p>
+                                                        <p className="text-[10px] uppercase tracking-[0.15em] font-bold text-muted-foreground/50">
+                                                            {item.category}{item.person && item.title ? ` — ${item.person}` : ''}
+                                                        </p>
                                                     </div>
                                                 </div>
                                             </td>
@@ -727,12 +746,12 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                             </div>
                             <div className="space-y-2">
                                 <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Category</Label>
-                                <Select value={expenseForm.category} onValueChange={(val) => setExpenseForm({ ...expenseForm, category: val })}>
+                                <Select value={expenseForm.category} onValueChange={(val) => setExpenseForm({ ...expenseForm, category: val as typeof PROJECT_EXPENSE_CATEGORIES[number], employee_id: ["Project Share", "Commision / Broker"].includes(val) ? expenseForm.employee_id : "" })}>
                                     <SelectTrigger className="h-12 border-2 rounded-xl border-zinc-200 dark:border-zinc-700">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent className="rounded-xl">
-                                        {EXPENSE_CATEGORIES.map((category) => (
+                                        {PROJECT_EXPENSE_CATEGORIES.map((category) => (
                                             <SelectItem key={category} value={category}>
                                                 {category}
                                             </SelectItem>
@@ -741,10 +760,38 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                 </Select>
                             </div>
                         </div>
+
+                        {["Project Share", "Commision / Broker"].includes(expenseForm.category) && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="space-y-2"
+                            >
+                                <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Select Employee</Label>
+                                <Select value={expenseForm.employee_id} onValueChange={(val) => setExpenseForm({ ...expenseForm, employee_id: val })}>
+                                    <SelectTrigger className="h-12 border-2 rounded-xl border-zinc-200 dark:border-zinc-700">
+                                        <SelectValue placeholder="Select team member" />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-xl">
+                                        {projectMembers?.data?.map((member: { id: string; avatar_url: string; full_name: string }) => (
+                                            <SelectItem key={member.id} value={member.id}>
+                                                <div className="flex items-center gap-2">
+                                                    <Avatar className="h-6 w-6">
+                                                        <AvatarImage src={member.avatar_url} />
+                                                        <AvatarFallback>{member.full_name?.charAt(0)}</AvatarFallback>
+                                                    </Avatar>
+                                                    <span>{member.full_name}</span>
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </motion.div>
+                        )}
                         <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Description</Label>
+                            <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Description (Optional)</Label>
                             <Input
-                                placeholder="What was this spent on?"
+                                placeholder="e.g. Server hosting for March..."
                                 className="h-12 border-2 rounded-xl border-zinc-200 dark:border-zinc-700"
                                 value={expenseForm.description}
                                 onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
@@ -756,7 +803,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                         <Button
                             className="bg-rose-600 hover:bg-rose-700 text-white font-black px-6 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95"
                             onClick={() => expenseMutation.mutate(expenseForm)}
-                            disabled={!expenseForm.amount || !expenseForm.description || expenseMutation.isPending}
+                            disabled={!expenseForm.amount || expenseMutation.isPending}
                         >
                             {expenseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Log Cost"}
                         </Button>

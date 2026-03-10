@@ -9,19 +9,36 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { TaskStatsBar } from "@/components/tasks/task-stats-bar";
 import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import {
     Calendar, CheckCircle2, Clock, UsersIcon as Users,
-    KanbanSquare, ArrowLeft, ChevronRight, AlertCircle, Edit3, Trash2, Search, XCircle, CheckCircle
+    KanbanSquare, ArrowLeft, ChevronRight, Edit3, Trash2, Search, XCircle, CheckCircle, ChevronDown
 } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AdminTaskForm } from "@/components/tasks/admin-task-form";
 import { approveTaskClaimAction, rejectTaskClaimAction, deleteTaskAction } from "@/actions/tasks";
-import { assignProjectManagerAction } from "@/actions/projects";
+import { assignProjectManagerAction, updateProjectMembersAction } from "@/actions/projects";
 import { toast } from "sonner";
 import type { Employee, Task, Project } from "@/types/dashboard";
 
@@ -194,7 +211,7 @@ export function ProjectDetailsClient({
                             </div>
                             <div className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-widest">
                                 <Users className="h-4 w-4 text-primary" />
-                                {employees.length} Members
+                                {project.members?.length || 0} Members
                             </div>
                         </div>
                     </div>
@@ -262,6 +279,13 @@ export function ProjectDetailsClient({
                         </TabsTrigger>
                     </TabsList>
                     <div className="flex items-center gap-2">
+                        {activeTab === "team" && (project.can_manage_project || canAssignProjectManager) && (
+                            <ManageTeamDialog
+                                project={project}
+                                allEmployees={employees}
+                                onSuccess={() => router.refresh()}
+                            />
+                        )}
                         {showFinanceWorkspace && (
                             <Link href={`/admin/projects/${project.id}/finance`}>
                                 <Button variant="outline" className="font-bold">
@@ -329,122 +353,122 @@ export function ProjectDetailsClient({
                             </div>
 
                             {filteredTasks.length > 0 ? (
-                        <div className="grid grid-cols-1 gap-4">
-                                {filteredTasks.map((task: Task) => (
-                                <div key={task.id} className="group bg-white/40 dark:bg-zinc-900/40 p-5 rounded-[1.5rem] border border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-4 hover:bg-white dark:hover:bg-zinc-900 transition-all flex-wrap md:flex-nowrap">
-                                    {/* Status icon */}
-                                    <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${task.status === "done" ? "bg-green-500/10 text-green-500" : "bg-primary/10 text-primary"}`}>
-                                        {task.status === "done" ? <CheckCircle2 className="h-5 w-5" /> : <Clock className="h-5 w-5" />}
-                                    </div>
-
-                                    {/* Task Info */}
-                                    <div className="space-y-1.5 min-w-0 flex-1">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="font-bold text-zinc-900 dark:text-zinc-100 truncate">{task.title}</span>
-                                            <TaskPriorityBadge priority={task.priority} className="text-[8px] h-4 px-1 tracking-tighter" />
-                                            <TaskStatusBadge status={task.status} />
-                                            {task.is_open_assignment && (
-                                                <Badge className="text-[8px] h-4 px-1 uppercase font-black bg-blue-500 text-white border-none">Marketplace</Badge>
-                                            )}
-                                        </div>
-                                        <p className="text-xs text-zinc-500 font-medium truncate">{task.description || "No description provided."}</p>
-                                        {/* Subtasks Progress */}
-                                        {task.subtasks && task.subtasks.length > 0 && (
-                                            <div className="pt-1 space-y-1 max-w-[200px]">
-                                                <div className="flex items-center justify-between text-[8px] uppercase font-black text-zinc-400">
-                                                    <span>{Math.round((task.subtasks.filter((s: { title: string; completed: boolean }) => s.completed).length / task.subtasks.length) * 100)}% subtasks</span>
-                                                    <span>{task.subtasks.filter((s: { title: string; completed: boolean }) => s.completed).length}/{task.subtasks.length}</span>
-                                                </div>
-                                                <div className="h-1 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-primary transition-all duration-500" style={{ width: `${(task.subtasks.filter((s: { title: string; completed: boolean }) => s.completed).length / task.subtasks.length) * 100}%` }} />
-                                                </div>
+                                <div className="grid grid-cols-1 gap-4">
+                                    {filteredTasks.map((task: Task) => (
+                                        <div key={task.id} className="group bg-white/40 dark:bg-zinc-900/40 p-5 rounded-[1.5rem] border border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-4 hover:bg-white dark:hover:bg-zinc-900 transition-all flex-wrap md:flex-nowrap">
+                                            {/* Status icon */}
+                                            <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${task.status === "done" ? "bg-green-500/10 text-green-500" : "bg-primary/10 text-primary"}`}>
+                                                {task.status === "done" ? <CheckCircle2 className="h-5 w-5" /> : <Clock className="h-5 w-5" />}
                                             </div>
-                                        )}
-                                    </div>
 
-                                    {/* Assignee + Date */}
-                                    <div className="flex items-center gap-6 px-4 border-x border-zinc-100 dark:border-zinc-800/50 shrink-0">
-                                        <div className="flex items-center gap-2">
-                                            <Avatar className="h-7 w-7 border-2 border-white dark:border-zinc-800 ring-1 ring-zinc-100 dark:ring-zinc-800">
-                                                <AvatarImage src={task.assignee?.avatar_url || undefined} />
-                                                <AvatarFallback className="text-[8px] font-bold uppercase">{task.assignee?.full_name?.charAt(0) || "U"}</AvatarFallback>
-                                            </Avatar>
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-widest whitespace-nowrap">
-                                                    {task.assignee?.full_name || (task.is_open_assignment ? "Unassigned" : "Unknown")}
-                                                </span>
-                                                {task.assignment_status === "pending_approval" && (
-                                                    <span className="text-[8px] font-black text-amber-500 uppercase">Pending Approval</span>
-                                                )}
-                                                {task.assignment_status === "open" && (
-                                                    <span className="text-[8px] font-black text-blue-500 uppercase">Marketplace</span>
+                                            {/* Task Info */}
+                                            <div className="space-y-1.5 min-w-0 flex-1">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="font-bold text-zinc-900 dark:text-zinc-100 truncate">{task.title}</span>
+                                                    <TaskPriorityBadge priority={task.priority} className="text-[8px] h-4 px-1 tracking-tighter" />
+                                                    <TaskStatusBadge status={task.status} />
+                                                    {task.is_open_assignment && (
+                                                        <Badge className="text-[8px] h-4 px-1 uppercase font-black bg-blue-500 text-white border-none">Marketplace</Badge>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-zinc-500 font-medium truncate">{task.description || "No description provided."}</p>
+                                                {/* Subtasks Progress */}
+                                                {task.subtasks && task.subtasks.length > 0 && (
+                                                    <div className="pt-1 space-y-1 max-w-[200px]">
+                                                        <div className="flex items-center justify-between text-[8px] uppercase font-black text-zinc-400">
+                                                            <span>{Math.round((task.subtasks.filter((s: { title: string; completed: boolean }) => s.completed).length / task.subtasks.length) * 100)}% subtasks</span>
+                                                            <span>{task.subtasks.filter((s: { title: string; completed: boolean }) => s.completed).length}/{task.subtasks.length}</span>
+                                                        </div>
+                                                        <div className="h-1 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                                            <div className="h-full bg-primary transition-all duration-500" style={{ width: `${(task.subtasks.filter((s: { title: string; completed: boolean }) => s.completed).length / task.subtasks.length) * 100}%` }} />
+                                                        </div>
+                                                    </div>
                                                 )}
                                             </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-widest whitespace-nowrap">
-                                            <Calendar className="h-3.5 w-3.5" />
-                                            {task.due_date ? format(new Date(task.due_date), "MMM d") : "No Due Date"}
-                                        </div>
-                                    </div>
 
-                                    {/* Action Buttons */}
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        {canManageTasks && task.assignment_status === "pending_approval" && (
-                                            <>
-                                                <Button size="sm" variant="outline" className="h-8 rounded-lg border-red-200 text-red-600 hover:bg-red-50 font-bold text-[10px] uppercase px-3" onClick={() => handleReject(task.id)} disabled={isActionLoading === task.id}>
-                                                    <XCircle className="h-3.5 w-3.5 mr-1" />Reject
-                                                </Button>
-                                                <Button size="sm" className="h-8 rounded-lg bg-green-600 hover:bg-green-700 text-white font-bold text-[10px] uppercase px-3" onClick={() => handleApprove(task.id)} disabled={isActionLoading === task.id}>
-                                                    <CheckCircle className="h-3.5 w-3.5 mr-1" />Approve
-                                                </Button>
-                                            </>
-                                        )}
-                                        {canManageTasks && (
-                                            <>
-                                                <AdminTaskForm
-                                                    employees={employees}
-                                                    projectId={project.id}
-                                                    initialData={{
-                                                        id: task.id,
-                                                        title: task.title,
-                                                        description: task.description || "",
-                                                        priority: task.priority,
-                                                        status: task.status,
-                                                        dueDate: task.due_date ? format(new Date(task.due_date), "yyyy-MM-dd") : "",
-                                                        assignment_status: task.assignment_status || "open",
-                                                        user_id: task.user_id || "",
-                                                        subtasks: task.subtasks || [],
-                                                    }}
-                                                    onSuccess={() => router.refresh()}
-                                                    trigger={
-                                                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-primary transition-all">
-                                                            <Edit3 className="h-4 w-4" />
+                                            {/* Assignee + Date */}
+                                            <div className="flex items-center gap-6 px-4 border-x border-zinc-100 dark:border-zinc-800/50 shrink-0">
+                                                <div className="flex items-center gap-2">
+                                                    <Avatar className="h-7 w-7 border-2 border-white dark:border-zinc-800 ring-1 ring-zinc-100 dark:ring-zinc-800">
+                                                        <AvatarImage src={task.assignee?.avatar_url || undefined} />
+                                                        <AvatarFallback className="text-[8px] font-bold uppercase">{task.assignee?.full_name?.charAt(0) || "U"}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-widest whitespace-nowrap">
+                                                            {task.assignee?.full_name || (task.is_open_assignment ? "Unassigned" : "Unknown")}
+                                                        </span>
+                                                        {task.assignment_status === "pending_approval" && (
+                                                            <span className="text-[8px] font-black text-amber-500 uppercase">Pending Approval</span>
+                                                        )}
+                                                        {task.assignment_status === "open" && (
+                                                            <span className="text-[8px] font-black text-blue-500 uppercase">Marketplace</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-widest whitespace-nowrap">
+                                                    <Calendar className="h-3.5 w-3.5" />
+                                                    {task.due_date ? format(new Date(task.due_date), "MMM d") : "No Due Date"}
+                                                </div>
+                                            </div>
+
+                                            {/* Action Buttons */}
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                {canManageTasks && task.assignment_status === "pending_approval" && (
+                                                    <>
+                                                        <Button size="sm" variant="outline" className="h-8 rounded-lg border-red-200 text-red-600 hover:bg-red-50 font-bold text-[10px] uppercase px-3" onClick={() => handleReject(task.id)} disabled={isActionLoading === task.id}>
+                                                            <XCircle className="h-3.5 w-3.5 mr-1" />Reject
                                                         </Button>
-                                                    }
-                                                />
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-9 w-9 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 text-zinc-500 hover:text-red-500 transition-all"
-                                                    disabled={isActionLoading === task.id}
-                                                    onClick={async () => {
-                                                        if (confirm("Delete this task?")) {
-                                                            setIsActionLoading(task.id);
-                                                            const res = await deleteTaskAction(task.id);
-                                                            if (res.ok) { toast.success("Task deleted"); router.refresh(); }
-                                                            else toast.error(res.message);
-                                                            setIsActionLoading(null);
-                                                        }
-                                                    }}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </>
-                                        )}
-                                    </div>
+                                                        <Button size="sm" className="h-8 rounded-lg bg-green-600 hover:bg-green-700 text-white font-bold text-[10px] uppercase px-3" onClick={() => handleApprove(task.id)} disabled={isActionLoading === task.id}>
+                                                            <CheckCircle className="h-3.5 w-3.5 mr-1" />Approve
+                                                        </Button>
+                                                    </>
+                                                )}
+                                                {canManageTasks && (
+                                                    <>
+                                                        <AdminTaskForm
+                                                            employees={employees}
+                                                            projectId={project.id}
+                                                            initialData={{
+                                                                id: task.id,
+                                                                title: task.title,
+                                                                description: task.description || "",
+                                                                priority: task.priority,
+                                                                status: task.status,
+                                                                dueDate: task.due_date ? format(new Date(task.due_date), "yyyy-MM-dd") : "",
+                                                                assignment_status: task.assignment_status || "open",
+                                                                user_id: task.user_id || "",
+                                                                subtasks: task.subtasks || [],
+                                                            }}
+                                                            onSuccess={() => router.refresh()}
+                                                            trigger={
+                                                                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-primary transition-all">
+                                                                    <Edit3 className="h-4 w-4" />
+                                                                </Button>
+                                                            }
+                                                        />
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-9 w-9 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 text-zinc-500 hover:text-red-500 transition-all"
+                                                            disabled={isActionLoading === task.id}
+                                                            onClick={async () => {
+                                                                if (confirm("Delete this task?")) {
+                                                                    setIsActionLoading(task.id);
+                                                                    const res = await deleteTaskAction(task.id);
+                                                                    if (res.ok) { toast.success("Task deleted"); router.refresh(); }
+                                                                    else toast.error(res.message);
+                                                                    setIsActionLoading(null);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
                             ) : (
                                 <div className="py-20 text-center border-2 border-dashed border-zinc-100 dark:border-zinc-800 rounded-[3rem] bg-zinc-50/10">
                                     <KanbanSquare className="h-12 w-12 text-zinc-200 mx-auto mb-4" />
@@ -464,31 +488,174 @@ export function ProjectDetailsClient({
 
                 <TabsContent value="team" className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {employees.map((emp: Employee) => (
-                            <Card key={emp.id} className="border-zinc-100 dark:border-zinc-800 rounded-[2rem] bg-white/50 dark:bg-zinc-900/50">
-                                <CardContent className="p-6 flex items-center gap-4">
-                                    <Avatar className="h-12 w-12 border-2 border-white dark:border-zinc-800 shadow-sm ring-1 ring-zinc-100 dark:ring-zinc-800">
-                                        <AvatarImage src={emp.avatar_url || undefined} />
-                                        <AvatarFallback className="text-sm font-black uppercase">{emp.full_name?.charAt(0)}</AvatarFallback>
-                                    </Avatar>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-black text-zinc-900 dark:text-zinc-100 uppercase truncate">{emp.full_name}</p>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <Badge variant="secondary" className="text-[8px] h-4 px-1 uppercase font-black bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
-                                                {project.project_manager_id === emp.id ? "Project Manager" : "Employee"}
-                                            </Badge>
-                                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1">
-                                                <AlertCircle className="h-3 w-3" />{emp.tasks?.length || 0} Active
-                                            </span>
+                        {(project.members || []).length > 0 ? (
+                            (project.members || []).map((emp) => (
+                                <Card key={emp.id} className="border-zinc-100 dark:border-zinc-800 rounded-[2rem] bg-white/50 dark:bg-zinc-900/50">
+                                    <CardContent className="p-6 flex items-center gap-4">
+                                        <Avatar className="h-12 w-12 border-2 border-white dark:border-zinc-800 shadow-sm ring-1 ring-zinc-100 dark:ring-zinc-800">
+                                            <AvatarImage src={emp.avatar_url || undefined} />
+                                            <AvatarFallback className="text-sm font-black uppercase">{emp.full_name?.charAt(0)}</AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-black text-zinc-900 dark:text-zinc-100 uppercase truncate">{emp.full_name}</p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <Badge variant="secondary" className="text-[8px] h-4 px-1 uppercase font-black bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
+                                                    {project.project_manager_id === emp.id ? "Project Manager" : "Employee"}
+                                                </Badge>
+                                            </div>
                                         </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
+                                    </CardContent>
+                                </Card>
+                            ))
+                        ) : (
+                            <div className="col-span-full py-20 text-center border-2 border-dashed border-zinc-100 dark:border-zinc-800 rounded-[3rem] bg-zinc-50/10">
+                                <Users className="h-12 w-12 text-zinc-200 mx-auto mb-4" />
+                                <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">No Members Assigned</h3>
+                                <p className="text-zinc-500 font-medium mt-1">Add members to this project to track their contributions.</p>
+                            </div>
+                        )}
                     </div>
                 </TabsContent>
 
             </Tabs>
         </div>
+    );
+}
+
+function ManageTeamDialog({
+    project,
+    allEmployees,
+    onSuccess
+}: {
+    project: Project;
+    allEmployees: Employee[];
+    onSuccess: () => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<string[]>(
+        (project.members || []).map(m => m.id)
+    );
+
+    const toggleMember = (id: string) => {
+        setSelectedIds(prev =>
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
+    const handleSave = async () => {
+        setLoading(true);
+        const res = await updateProjectMembersAction(project.id, selectedIds);
+        if (res.ok) {
+            toast.success("Project team updated");
+            setOpen(false);
+            onSuccess();
+        } else {
+            toast.error(res.message || "Failed to update team");
+        }
+        setLoading(false);
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" className="font-bold rounded-xl flex items-center gap-2">
+                    <Users className="h-4 w-4" /> Manage Team
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[450px] rounded-[2rem] border-zinc-100 dark:border-zinc-800 p-8">
+                <DialogHeader>
+                    <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+                        <Users className="h-6 w-6 text-primary" />
+                    </div>
+                    <DialogTitle className="text-2xl font-black uppercase tracking-tight">Manage Project Team</DialogTitle>
+                    <DialogDescription className="font-medium text-zinc-500">
+                        Add or remove members for <span className="text-zinc-900 dark:text-zinc-100 font-bold">{project.name}</span>.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 py-4">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full justify-between rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-medium h-12"
+                            >
+                                <span className="flex items-center gap-2 truncate">
+                                    <Users className="h-4 w-4 text-zinc-500" />
+                                    {selectedIds.length} member(s) selected
+                                </span>
+                                <ChevronDown className="h-4 w-4 text-zinc-400" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-[380px] max-h-72 overflow-y-auto rounded-xl border-zinc-100 dark:border-zinc-800">
+                            <DropdownMenuLabel className="text-xs uppercase tracking-widest text-zinc-500 py-2 flex items-center justify-between">
+                                All Employees
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 text-[10px] font-black uppercase tracking-tighter text-primary hover:text-primary/80 px-2"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setSelectedIds(selectedIds.length === allEmployees.length ? [] : allEmployees.map(e => e.id));
+                                    }}
+                                >
+                                    {selectedIds.length === allEmployees.length ? "Deselect All" : "Select All"}
+                                </Button>
+                            </DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {allEmployees.map((emp) => (
+                                <DropdownMenuCheckboxItem
+                                    key={emp.id}
+                                    checked={selectedIds.includes(emp.id)}
+                                    onCheckedChange={() => toggleMember(emp.id)}
+                                    onSelect={(e) => e.preventDefault()}
+                                    className="rounded-lg"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <Avatar className="h-5 w-5 font-bold">
+                                            <AvatarImage src={emp.avatar_url || undefined} />
+                                            <AvatarFallback className="text-[10px]">{emp.full_name?.charAt(0)}</AvatarFallback>
+                                        </Avatar>
+                                        <span className="font-medium">{emp.full_name}</span>
+                                    </div>
+                                </DropdownMenuCheckboxItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <div className="flex flex-wrap gap-2 pt-2">
+                        {selectedIds.length > 0 ? (
+                            allEmployees.filter(e => selectedIds.includes(e.id)).slice(0, 5).map(emp => (
+                                <Avatar key={emp.id} className="h-8 w-8 border-2 border-white dark:border-zinc-800 ring-1 ring-zinc-100 dark:ring-zinc-800 shadow-sm">
+                                    <AvatarImage src={emp.avatar_url || undefined} title={emp.full_name} />
+                                    <AvatarFallback className="text-[10px] font-black">{emp.full_name?.charAt(0)}</AvatarFallback>
+                                </Avatar>
+                            ))
+                        ) : (
+                            <p className="text-xs font-medium text-zinc-400">No members selected yet.</p>
+                        )}
+                        {selectedIds.length > 5 && (
+                            <div className="h-8 w-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[10px] font-black text-zinc-500 border-2 border-white dark:border-zinc-800 shadow-sm">
+                                +{selectedIds.length - 5}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <DialogFooter className="pt-4">
+                    <Button
+                        type="button"
+                        onClick={handleSave}
+                        disabled={loading}
+                        className="w-full bg-primary hover:bg-primary/90 text-white font-black rounded-xl h-12 shadow-lg shadow-primary/20 transition-all active:scale-95"
+                    >
+                        {loading ? "Updating..." : "Update Project Team"}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }
