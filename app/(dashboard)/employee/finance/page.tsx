@@ -146,7 +146,6 @@ export default function EmployeeFinancePage() {
 
     const today = new Date();
     const currentMonthStr = format(today, "yyyy-MM-01");
-    const isCurrentMonthAccrued = accruals.some((accrual: UnpaidAccrual) => accrual.month_year === currentMonthStr);
 
     let nextPayoutMonth = today.getMonth();
     let nextPayoutYear = today.getFullYear();
@@ -158,7 +157,6 @@ export default function EmployeeFinancePage() {
             nextPayoutYear++;
         }
     }
-    const nextPayoutDate = new Date(nextPayoutYear, nextPayoutMonth, 5);
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat("en-IN", {
@@ -329,7 +327,7 @@ export default function EmployeeFinancePage() {
                                     {!data?.projectSalaries || data.projectSalaries.length === 0 ? (
                                         <div className="text-center py-8 text-zinc-500 font-medium">No project-specific earnings found</div>
                                     ) : (
-                                        data.projectSalaries.map((item: any, index: number) => (
+                                        data.projectSalaries.map((item: { project_name: string; payment_type: string; description: string; date: string }, index: number) => (
                                             <div key={index} className="flex items-center justify-between p-4 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:shadow-md transition-all">
                                                 <div className="flex items-center gap-4">
                                                     <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-900/30 text-rose-600">

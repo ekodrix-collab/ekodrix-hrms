@@ -90,7 +90,7 @@ interface VerdictItem {
     } | null;
 }
 
-const DEFAULT_EXPENSE_CATEGORY = "Miscellaneous";
+
 
 const fadeUp = {
     initial: { opacity: 0, y: 20 },
@@ -746,7 +746,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                             </div>
                             <div className="space-y-2">
                                 <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Category</Label>
-                                <Select value={expenseForm.category} onValueChange={(val) => setExpenseForm({ ...expenseForm, category: val as any, employee_id: ["Project Share", "Commision / Broker"].includes(val) ? expenseForm.employee_id : "" })}>
+                                <Select value={expenseForm.category} onValueChange={(val) => setExpenseForm({ ...expenseForm, category: val as typeof PROJECT_EXPENSE_CATEGORIES[number], employee_id: ["Project Share", "Commision / Broker"].includes(val) ? expenseForm.employee_id : "" })}>
                                     <SelectTrigger className="h-12 border-2 rounded-xl border-zinc-200 dark:border-zinc-700">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -773,7 +773,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                         <SelectValue placeholder="Select team member" />
                                     </SelectTrigger>
                                     <SelectContent className="rounded-xl">
-                                        {projectMembers?.data?.map((member: any) => (
+                                        {projectMembers?.data?.map((member: { id: string; avatar_url: string; full_name: string }) => (
                                             <SelectItem key={member.id} value={member.id}>
                                                 <div className="flex items-center gap-2">
                                                     <Avatar className="h-6 w-6">
