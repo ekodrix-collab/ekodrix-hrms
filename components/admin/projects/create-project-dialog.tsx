@@ -31,6 +31,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Check, ChevronDown, Plus, Rocket, Users } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { createProjectAction } from "@/actions/projects";
 import { getAllEmployeesAction } from "@/actions/tasks";
 import { toast } from "sonner";
@@ -40,6 +41,7 @@ interface EmployeeOption {
     full_name: string | null;
     email: string;
     department?: string | null;
+    avatar_url?: string | null;
 }
 
 export function CreateProjectDialog({ onSuccess }: { onSuccess?: () => void }) {
@@ -199,7 +201,24 @@ export function CreateProjectDialog({ onSuccess }: { onSuccess?: () => void }) {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start" className="w-80 sm:w-[420px] max-h-72 overflow-y-auto rounded-xl border-zinc-100 dark:border-zinc-800">
-                                <DropdownMenuLabel className="text-xs uppercase tracking-widest text-zinc-500">Team Members</DropdownMenuLabel>
+                                <DropdownMenuLabel className="text-xs uppercase tracking-widest text-zinc-500 py-2 flex items-center justify-between">
+                                    Team Members
+                                    {employees.length > 0 && (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 text-[10px] font-black uppercase tracking-tighter text-primary hover:text-primary/80 px-2"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                const allIds = employees.map(emp => emp.id);
+                                                setSelectedTeamIds(selectedTeamIds.length === employees.length ? [] : allIds);
+                                            }}
+                                        >
+                                            {selectedTeamIds.length === employees.length ? "Deselect All" : "Select All"}
+                                        </Button>
+                                    )}
+                                </DropdownMenuLabel>
                                 <DropdownMenuSeparator />
                                 {employees.length === 0 && (
                                     <div className="px-2 py-3 text-sm text-zinc-500">No active employees available</div>
@@ -212,7 +231,13 @@ export function CreateProjectDialog({ onSuccess }: { onSuccess?: () => void }) {
                                         onSelect={(event) => event.preventDefault()}
                                         className="rounded-lg"
                                     >
-                                        {employee.full_name || employee.email}
+                                        <div className="flex items-center gap-2">
+                                            <Avatar className="h-5 w-5">
+                                                <AvatarImage src={employee.avatar_url || undefined} />
+                                                <AvatarFallback className="text-[10px]">{employee.full_name?.charAt(0) || "U"}</AvatarFallback>
+                                            </Avatar>
+                                            <span>{employee.full_name || employee.email}</span>
+                                        </div>
                                     </DropdownMenuCheckboxItem>
                                 ))}
                             </DropdownMenuContent>

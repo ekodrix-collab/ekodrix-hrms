@@ -164,6 +164,13 @@ export interface Project {
         email?: string | null;
         avatar_url?: string | null;
     } | null;
+    members?: {
+        id: string;
+        full_name: string;
+        email: string;
+        avatar_url: string | null;
+        role: string;
+    }[];
     can_manage_project?: boolean;
     is_project_manager?: boolean;
     tasks?: Task[];

@@ -33,7 +33,7 @@ const METHODS = [
 type ProjectItem = { id: string; name: string };
 type ProjectBreakdown = { id: string; name: string; revenue: number; expenses: number; net: number };
 type FinancialsResult = { projectBreakdown: ProjectBreakdown[] };
-type LedgerItem = { id: string; title: string; type: "revenue" | "expense"; date: string; amount: number | string; category: string };
+type LedgerItem = { id: string; title: string; type: "revenue" | "expense"; date: string; amount: number | string; category: string; person?: string | null };
 type ExpenseForm = { amount: string; description: string; category: string; payment_method: string };
 
 function toProjectItems(value: unknown): ProjectItem[] {
@@ -209,9 +209,8 @@ export default function AdminProjectsFinancePage() {
             {projectRows.map((project) => (
               <div
                 key={project.id}
-                className={`w-full rounded-xl border p-3 text-left transition-colors ${
-                  activeProjectId === project.id ? "border-primary/30 bg-primary/5" : "hover:bg-muted/20"
-                }`}
+                className={`w-full rounded-xl border p-3 text-left transition-colors ${activeProjectId === project.id ? "border-primary/30 bg-primary/5" : "hover:bg-muted/20"
+                  }`}
               >
                 <p className="text-sm font-semibold">{project.name}</p>
                 <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
@@ -299,8 +298,12 @@ export default function AdminProjectsFinancePage() {
                   {ledger.slice(0, 8).map((item) => (
                     <div key={item.id} className="flex flex-col gap-1 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{item.title}</p>
-                        <p className="text-xs text-muted-foreground">{format(new Date(item.date), "MMM dd, yyyy")} - {item.category}</p>
+                        <p className="truncate text-sm font-medium">
+                          {item.person && !item.title ? item.person : (item.title || item.category)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(item.date), "MMM dd, yyyy")} - {item.category}{item.person && item.title ? ` — ${item.person}` : ''}
+                        </p>
                       </div>
                       <p className={`text-sm font-bold ${item.type === "revenue" ? "text-emerald-600" : "text-rose-600"}`}>
                         {item.type === "revenue" ? "+" : "-"} {inr(Number(item.amount))}
@@ -430,7 +433,7 @@ function ProjectExpenseDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={() => mutation.mutate()} disabled={!form.amount || !form.description || mutation.isPending}>
+          <Button onClick={() => mutation.mutate()} disabled={!form.amount || mutation.isPending}>
             {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}Save Expense
           </Button>
         </DialogFooter>

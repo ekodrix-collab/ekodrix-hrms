@@ -13,6 +13,7 @@ import {
     Receipt,
     Search,
     XCircle,
+    IndianRupee,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -107,6 +108,14 @@ export default function EmployeeFinancePage() {
 
     const salary = data?.salary || 0;
     const accruals = (data?.accruals || []) as UnpaidAccrual[];
+    const incomeBreakdown = data?.incomeBreakdown || {
+        salary: 0,
+        project_share: 0,
+        commission: 0,
+        bonus: 0,
+        reimbursement: 0
+    };
+    const totalEarnedYTD = data?.totalEarnedYTD || 0;
 
     const totalPaid = accruals.reduce((acc: number, curr: UnpaidAccrual) => acc + Number(curr.paid_amount || 0), 0);
     const pendingAmount = accruals.reduce((acc: number, curr: UnpaidAccrual) => acc + Number(curr.remaining_amount || 0), 0);
@@ -187,77 +196,66 @@ export default function EmployeeFinancePage() {
                 </header>
 
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-                    <Card className="border-2 border-primary/20 dark:border-primary/30 bg-white dark:bg-zinc-900/80 backdrop-blur-md">
+                    <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Monthly Gross</CardTitle>
+                            <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Total Earned (YTD)</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-black text-zinc-900 dark:text-zinc-100">{formatCurrency(salary)}</div>
-                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Base monthly salary</p>
+                            <div className="text-2xl font-black text-zinc-900 dark:text-zinc-100">{formatCurrency(totalEarnedYTD)}</div>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Total earnings this year</p>
                         </CardContent>
                     </Card>
 
                     <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Total Paid (YTD)</CardTitle>
+                            <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Monthly Salary</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-black text-green-600">{formatCurrency(totalPaid)}</div>
+                            <div className="text-2xl font-black text-green-600">{formatCurrency(salary)}</div>
                             <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1">
                                 <TrendingUp className="h-3 w-3" />
-                                {data?.lastPayoutDate
-                                    ? `Last paid on ${format(new Date(data.lastPayoutDate), "MMM do")}`
-                                    : "No payouts yet"
-                                }
+                                Base gross amount
                             </p>
                         </CardContent>
                     </Card>
 
                     <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Pending Amount</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-black text-orange-600 flex items-baseline gap-2">
-                                {formatCurrency(pendingAmount + (isCurrentMonthAccrued ? 0 : salary))}
-                                {!isCurrentMonthAccrued && (
-                                    <span className="text-[10px] font-bold text-orange-400 bg-orange-50 dark:bg-orange-950/30 px-1.5 py-0.5 rounded uppercase tracking-wide">
-                                        + Current
-                                    </span>
-                                )}
-                            </div>
-                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                                {isCurrentMonthAccrued
-                                    ? "Net unpaid accruals"
-                                    : `Includes INR ${salary.toLocaleString()} for ${format(new Date(), "MMMM")}`
-                                }
-                            </p>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Next Payout</CardTitle>
+                            <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Project Earnings</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-black text-primary">
-                                {format(nextPayoutDate, "MMM do")}
+                                {formatCurrency(incomeBreakdown.project_share)}
                             </div>
                             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                                Expected date ({format(nextPayoutDate, "EEEE")})
+                                Share from contribution
                             </p>
                         </CardContent>
                     </Card>
 
                     <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Total Reimbursed</CardTitle>
+                            <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Commission</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-black text-emerald-600">{formatCurrency(data?.totalReimbursed || 0)}</div>
-                            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
-                                <TrendingUp className="h-3 w-3" />
-                                All time approved
+                            <div className="text-2xl font-black text-emerald-600">
+                                {formatCurrency(incomeBreakdown.commission)}
+                            </div>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                                Sales & referrals
+                            </p>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Reimbursements</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-black text-sky-600">{formatCurrency(incomeBreakdown.reimbursement)}</div>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 flex items-center gap-1">
+                                <CheckCircle2 className="h-3 w-3" />
+                                Paid expenses
                             </p>
                         </CardContent>
                     </Card>
@@ -306,6 +304,53 @@ export default function EmployeeFinancePage() {
                                                     <Button variant="ghost" size="icon" className="h-8 w-8">
                                                         <Download className="h-4 w-4" />
                                                     </Button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
+                            <CardHeader>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <CardTitle className="text-lg font-bold">Project Earnings</CardTitle>
+                                        <CardDescription>Income received from project contributions and commissions</CardDescription>
+                                    </div>
+                                    <div className="p-2 bg-rose-50 dark:bg-rose-900/30 text-rose-600 rounded-lg">
+                                        <TrendingUp className="h-5 w-5" />
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-4">
+                                    {!data?.projectSalaries || data.projectSalaries.length === 0 ? (
+                                        <div className="text-center py-8 text-zinc-500 font-medium">No project-specific earnings found</div>
+                                    ) : (
+                                        data.projectSalaries.map((item: any, index: number) => (
+                                            <div key={index} className="flex items-center justify-between p-4 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:shadow-md transition-all">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-900/30 text-rose-600">
+                                                        <IndianRupee className="h-5 w-5" />
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
+                                                                {item.project_name}
+                                                            </p>
+                                                            <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-none text-[10px] font-black uppercase">
+                                                                {item.payment_type === "commission" ? "Commission" : "Project Share"}
+                                                            </Badge>
+                                                        </div>
+                                                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                                            {item.description} • {format(new Date(item.date), "MMM dd, yyyy")}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="font-black text-sm text-zinc-900 dark:text-zinc-100">{formatCurrency(item.amount)}</p>
                                                 </div>
                                             </div>
                                         ))
@@ -480,14 +525,17 @@ export default function EmployeeFinancePage() {
                                                         <p className="font-bold text-sm">{formatCurrency(claim.amount)}</p>
                                                         <Badge
                                                             variant={
-                                                                claim.status === "approved" ? "default" :
-                                                                    claim.status === "partially_paid" ? "default" :
-                                                                    claim.status === "paid" ? "default" :
-                                                                    claim.status === "rejected" ? "destructive" : "secondary"
+                                                                claim.status === "paid" ? "default" :
+                                                                    claim.status === "approved" ? "default" :
+                                                                        claim.status === "partially_paid" ? "secondary" :
+                                                                            claim.status === "rejected" ? "destructive" : "outline"
                                                             }
-                                                            className="text-[10px] h-5 capitalize"
+                                                            className={`text-[10px] h-5 capitalize ${claim.status === "paid" ? "bg-emerald-500 hover:bg-emerald-600" :
+                                                                claim.status === "approved" ? "bg-blue-500 hover:bg-blue-600" :
+                                                                    claim.status === "pending" ? "text-amber-600 border-amber-200" : ""
+                                                                }`}
                                                         >
-                                                            {claim.status}
+                                                            {claim.status === "paid" ? "Reimbursed" : claim.status}
                                                         </Badge>
                                                     </div>
                                                 </div>
@@ -563,16 +611,48 @@ export default function EmployeeFinancePage() {
                             </CardContent>
                         </Card>
 
-                        <Card className="border border-zinc-100 dark:border-zinc-800 bg-gradient-to-br from-primary to-emerald-700 text-white shadow-xl shadow-primary/20">
-                            <CardContent className="p-6 text-center space-y-4">
-                                <div className="p-3 bg-white/20 rounded-full w-fit mx-auto backdrop-blur-md">
-                                    <TrendingUp className="h-6 w-6 text-white" />
+                        <Card className="border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl border-t-4 border-t-primary">
+                            <CardContent className="p-6 space-y-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-primary/10 rounded-lg">
+                                        <TrendingUp className="h-5 w-5 text-primary" />
+                                    </div>
+                                    <h3 className="font-black text-lg text-zinc-900 dark:text-zinc-100">Income Breakdown</h3>
                                 </div>
-                                <div className="space-y-1">
-                                    <h3 className="font-black text-lg">Financial Planning</h3>
-                                    <p className="text-xs text-emerald-50">Need help with investments or tax planning? Our HR team is here to help.</p>
+
+                                <div className="space-y-4 pt-2">
+                                    {[
+                                        { label: "Salary", value: incomeBreakdown.salary, color: "bg-green-500" },
+                                        { label: "Project Share", value: incomeBreakdown.project_share, color: "bg-primary" },
+                                        { label: "Commission", value: incomeBreakdown.commission, color: "bg-emerald-500" },
+                                        { label: "Bonus", value: incomeBreakdown.bonus, color: "bg-amber-500" },
+                                        { label: "Reimbursements", value: incomeBreakdown.reimbursement, color: "bg-sky-500" },
+                                    ].map((income) => {
+                                        const total = Object.values(incomeBreakdown).reduce((a, b) => Number(a) + Number(b), 0) || 1;
+                                        const percentage = Math.round((Number(income.value) / total) * 100);
+
+                                        return (
+                                            <div key={income.label} className="space-y-1.5">
+                                                <div className="flex justify-between text-xs font-bold">
+                                                    <span className="text-zinc-500 uppercase tracking-wider">{income.label}</span>
+                                                    <span className="text-zinc-900 dark:text-zinc-100">{formatCurrency(Number(income.value))} ({percentage}%)</span>
+                                                </div>
+                                                <div className="h-1.5 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                                    <motion.div
+                                                        initial={{ width: 0 }}
+                                                        animate={{ width: `${percentage}%` }}
+                                                        transition={{ duration: 1, ease: "easeOut" }}
+                                                        className={`h-full ${income.color} rounded-full`}
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                                <Button variant="secondary" className="w-full font-bold">Contact Support</Button>
+
+                                <div className="pt-4 mt-4 border-t border-zinc-100 dark:border-zinc-800 text-center">
+                                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Growth Focused Analytics</p>
+                                </div>
                             </CardContent>
                         </Card>
                     </div>

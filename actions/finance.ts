@@ -203,7 +203,7 @@ export async function distributeRevenue(revenueId: string, distribution: { [user
         // Find oldest unpaid accrual for this user
         const { data: accrual } = await supabase
             .from("salary_accruals")
-            .select("id, amount, paid_amount, remaining_amount")
+            .select("id, amount, paid_amount, remaining_amount, month_year")
             .eq("user_id", userId)
             .neq("status", "paid")
             .order("month_year", { ascending: true })
@@ -232,6 +232,18 @@ export async function distributeRevenue(revenueId: string, distribution: { [user
                     amount_paid: amount,
                     created_by: user?.id
                 });
+
+            // 3. Record in employee_payments for the employee view
+            await supabase
+                .from("employee_payments")
+                .insert({
+                    employee_id: userId,
+                    payment_type: "salary",
+                    amount: amount,
+                    date: new Date().toISOString().split('T')[0],
+                    status: "completed",
+                    notes: `Salary payout for ${accrual.month_year}`
+                });
         }
     }
 
@@ -244,8 +256,9 @@ export async function postBusinessExpense(data: {
     amount: number;
     description: string;
     category: string;
-    payment_method: string;
+    payment_method?: string;
     project_id?: string;
+    employee_id?: string;
 }) {
     const supabase = createSupabaseServerClient();
     const { user, organizationId, role } = await getOrgContext();
@@ -254,25 +267,48 @@ export async function postBusinessExpense(data: {
         return { error: "Admin organization context missing" };
     }
 
-    const timestamp = new Date().toISOString();
-
     const { error } = await supabase
         .from("expenses")
         .insert({
-            ...data,
+            amount: data.amount,
+            description: data.description,
             category: normalizeExpenseCategory(data.category),
+            payment_method: data.payment_method || "cash",
+            project_id: data.project_id || null,
+            employee_id: data.employee_id || null,
+            paid_by: user.id,
             organization_id: organizationId,
-            paid_by: user?.id,
-            created_by: user?.id,
-            status: 'approved', // Admin expenses are auto-approved
-            approved_at: timestamp,
-            approved_by: user.id,
-            reimbursed_at: null,
-            reimbursed_by: null,
-            reimbursement_method: null
+            status: 'paid',
+            expense_date: new Date().toISOString(),
+            approved_at: new Date().toISOString(),
+            approved_by: user.id
         });
 
     if (error) return { error: error.message };
+
+    // If it's a salary payment or project share to an employee, record it in employee_payments
+    if (data.employee_id) {
+        let type: "salary" | "project_share" | "commission" | "bonus" | "reimbursement" = "project_share";
+
+        if (data.category === "Salary Payments") {
+            type = "salary";
+        } else if (data.category === "Project Share") {
+            type = "project_share";
+        } else if (data.category === "Commision / Broker") {
+            type = "commission";
+        }
+        await supabase
+            .from("employee_payments")
+            .insert({
+                employee_id: data.employee_id,
+                project_id: data.project_id || null,
+                payment_type: type,
+                amount: data.amount,
+                date: new Date().toISOString().split('T')[0],
+                status: "completed",
+                notes: data.description
+            });
+    }
 
     revalidatePath("/admin/finance");
     if (data.project_id) {
@@ -313,7 +349,7 @@ export async function getCompanyFinancials(projectId?: string) {
         .from("expenses")
         .select("amount, profiles:paid_by!inner(organization_id)")
         .eq("profiles.organization_id", organizationId)
-        .eq("status", "approved");
+        .in("status", ["approved", "paid"]);
 
     if (projectId) {
         revenueQuery = revenueQuery.eq("project_id", projectId);
@@ -343,7 +379,7 @@ export async function getCompanyFinancials(projectId?: string) {
                 .from("expenses")
                 .select("project_id, amount, projects(name), profiles:paid_by!inner(organization_id)")
                 .eq("profiles.organization_id", organizationId)
-                .eq("status", "approved")
+                .in("status", ["approved", "paid"])
         ]);
 
         const breakdownMap: Record<string, { id: string; name: string; revenue: number; expenses: number; net: number }> = {};
@@ -415,10 +451,10 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         };
     }
 
-    const [revenueResult, expenseResult, reimbursementResult, accrualResult] = await Promise.all([
+    const [revenueResult, expenseResult, reimbursementResult, accrualResult, projectFinancialsResult] = await Promise.all([
         supabase
             .from("revenue_logs")
-            .select("id, amount, source, description, received_date, created_at, creator:profiles!created_by!inner(organization_id)")
+            .select("id, amount, source, description, received_date, created_at, project_id, creator:profiles!created_by!inner(organization_id)")
             .eq("creator.organization_id", organizationId)
             .lte("received_date", toKey)
             .order("received_date", { ascending: true }),
@@ -437,6 +473,7 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
                 approved_at,
                 reimbursed_at,
                 status,
+                project_id,
                 profiles:paid_by!inner(id, full_name, avatar_url, role, department, organization_id)
             `)
             .eq("profiles.organization_id", organizationId)
@@ -450,7 +487,8 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         supabase
             .from("salary_accruals")
             .select("remaining_amount, profiles!user_id!inner(organization_id)")
-            .eq("profiles.organization_id", organizationId)
+            .eq("profiles.organization_id", organizationId),
+        getCompanyFinancials() // This is safe as it returns aggregated data
     ]);
 
     const revenueRows = (revenueResult.data ?? []) as FinanceRevenueRow[];
@@ -471,19 +509,54 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         return accumulator;
     }, {});
 
-    const allEvents: FinanceLedgerEvent[] = revenueRows.map((row) => ({
-        id: `revenue-${row.id}`,
-        date: row.received_date,
-        createdAt: row.created_at,
-        amount: Number(row.amount) || 0,
-        type: "revenue",
-        sourceType: "cash_revenue",
-        title: row.source,
-        description: row.description || "Revenue recorded",
-        category: "Cash Revenue",
-        method: "-",
-        person: null
-    }));
+    const allEvents: FinanceLedgerEvent[] = revenueRows
+        .filter(row => !(row as any).project_id) // Exclude project specific revenue from main treasury ledger
+        .map((row) => ({
+            id: `revenue-${row.id}`,
+            date: row.received_date,
+            createdAt: row.created_at,
+            amount: Number(row.amount) || 0,
+            type: "revenue",
+            sourceType: "cash_revenue",
+            title: row.source,
+            description: row.description || "Revenue recorded",
+            category: "Cash Revenue",
+            method: "-",
+            person: null
+        }));
+
+    // Add aggregated project net profits as virtual revenue events
+    projectFinancialsResult.projectBreakdown?.forEach((project) => {
+        if (project.net > 0) {
+            allEvents.push({
+                id: `project-profit-${project.id}`,
+                date: toKey, // Use end of period for simplicity or latest transaction date
+                createdAt: new Date().toISOString(),
+                amount: project.net,
+                type: "revenue",
+                sourceType: "cash_revenue",
+                title: `Project Net Profit: ${project.name}`,
+                description: `Aggregated net profit from project ${project.name}`,
+                category: "Project Profit",
+                method: "-",
+                person: null
+            });
+        } else if (project.net < 0) {
+            allEvents.push({
+                id: `project-loss-${project.id}`,
+                date: toKey,
+                createdAt: new Date().toISOString(),
+                amount: Math.abs(project.net),
+                type: "expense",
+                sourceType: "business_expense",
+                title: `Project Net Loss: ${project.name}`,
+                description: `Aggregated net loss from project ${project.name}`,
+                category: "Project Loss",
+                method: "-",
+                person: null
+            });
+        }
+    });
 
     const claims = expenses.filter((expense) => expense.profiles?.role === "employee");
 
@@ -557,6 +630,8 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         if (expense.status !== "approved" && expense.status !== "paid") {
             return;
         }
+
+        if ((expense as any).project_id) return; // Exclude project specific expenses from main treasury ledger
 
         const isSalaryExpense = category === "Salary Payments";
         allEvents.push({
@@ -634,8 +709,8 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         return bucket;
     });
 
-    const periodRevenue = monthly.reduce((sum, row) => sum + row.revenue, 0);
-    const periodExpenses = monthly.reduce((sum, row) => sum + row.expense, 0);
+    const periodRevenue = allEvents.filter(e => e.type === "revenue").reduce((sum, row) => sum + row.amount, 0);
+    const periodExpenses = allEvents.filter(e => e.type === "expense").reduce((sum, row) => sum + row.amount, 0);
     const periodLedger = allEvents
         .filter((event) => inRange(event.date))
         .sort((left, right) =>
@@ -799,14 +874,17 @@ export async function getFinancialHistory(projectId?: string) {
 
     let expenseQuery = supabase
         .from("expenses")
-        .select("id, amount, category, description, expense_date, payment_method, created_at, project_id, projects(name), profiles:paid_by!inner(organization_id)")
-        .eq("profiles.organization_id", organizationId)
-        .eq("status", "approved")
+        .select("id, amount, category, description, expense_date, payment_method, created_at, project_id, projects(name), paid_by_profile:profiles!paid_by!inner(organization_id), employee_profile:profiles!employee_id(full_name)")
+        .eq("paid_by_profile.organization_id", organizationId)
+        .in("status", ["approved", "paid"])
         .order("expense_date", { ascending: false });
 
     if (projectId) {
         revenueQuery = revenueQuery.eq("project_id", projectId);
         expenseQuery = expenseQuery.eq("project_id", projectId);
+    } else {
+        revenueQuery = revenueQuery.is("project_id", null);
+        expenseQuery = expenseQuery.is("project_id", null);
     }
 
     const [{ data: revenue }, { data: expenses }] = await Promise.all([revenueQuery, expenseQuery]);
@@ -826,7 +904,7 @@ export async function getFinancialHistory(projectId?: string) {
         project_name: getProjectName(r.projects)
     })) || [];
 
-    const normalizedExpenses = expenses?.map(e => ({
+    const normalizedExpenses = (expenses as any[])?.map(e => ({
         id: e.id,
         type: 'expense',
         amount: e.amount,
@@ -837,8 +915,30 @@ export async function getFinancialHistory(projectId?: string) {
         category: normalizeExpenseCategory(e.category),
         method: e.payment_method,
         project_id: e.project_id,
-        project_name: getProjectName(e.projects)
+        project_name: getProjectName(e.projects),
+        person: e.employee_profile?.full_name || null
     })) || [];
+
+    if (!projectId) {
+        const financials = await getCompanyFinancials();
+        financials.projectBreakdown?.forEach(project => {
+            if (project.net !== 0) {
+                history.push({
+                    id: `project-net-${project.id}`,
+                    type: project.net > 0 ? 'revenue' : 'expense',
+                    amount: Math.abs(project.net),
+                    title: `Project Net ${project.net > 0 ? 'Profit' : 'Loss'}: ${project.name}`,
+                    subtitle: `Aggregated project result`,
+                    date: new Date().toISOString().split('T')[0],
+                    created_at: new Date().toISOString(),
+                    category: project.net > 0 ? "Project Profit" : "Project Loss",
+                    method: "-",
+                    project_id: project.id,
+                    project_name: project.name
+                } as any);
+            }
+        });
+    }
 
     const history = [...normalizedRevenue, ...normalizedExpenses].sort((a, b) =>
         new Date(b.date).getTime() - new Date(a.date).getTime() ||
