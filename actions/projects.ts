@@ -317,7 +317,9 @@ export async function getProjectDetailsAction(id: string) {
         }
     }
 
-    const members = (projectRow.project_team_members || []).map((m: any) => m.profiles).filter(Boolean);
+    const members = (projectRow.project_team_members || []).map((m: any) =>
+        Array.isArray(m.profiles) ? m.profiles[0] : m.profiles
+    ).filter(Boolean);
 
     const enriched = {
         ...projectRow,
@@ -446,7 +448,9 @@ export async function getProjectMembersAction(projectId: string) {
 
     if (error) return { ok: false, message: error.message };
 
-    const formattedMembers = members.map(m => m.profiles).filter(Boolean);
+    const formattedMembers = members.map(m =>
+        Array.isArray(m.profiles) ? m.profiles[0] : m.profiles
+    ).filter(Boolean);
     return { ok: true, data: formattedMembers };
 }
 

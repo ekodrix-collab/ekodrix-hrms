@@ -31,7 +31,7 @@ import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import {
     Calendar, CheckCircle2, Clock, UsersIcon as Users,
-    KanbanSquare, ArrowLeft, ChevronRight, AlertCircle, Edit3, Trash2, Search, XCircle, CheckCircle, Plus, ChevronDown, Rocket
+    KanbanSquare, ArrowLeft, ChevronRight, Edit3, Trash2, Search, XCircle, CheckCircle, ChevronDown
 } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
