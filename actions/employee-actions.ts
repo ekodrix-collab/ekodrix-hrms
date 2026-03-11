@@ -223,7 +223,7 @@ export async function getEmployeeFinanceData() {
 
     const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("monthly_salary")
+        .select("monthly_salary, role")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -285,11 +285,26 @@ export async function getEmployeeFinanceData() {
         reimbursement: 0
     };
 
-    const projectSharePayments: any[] = [];
+    type EmployeePaymentType = keyof typeof breakdown | "other";
+    type EmployeePaymentRow = {
+        amount: number | string;
+        payment_type: EmployeePaymentType;
+        date: string;
+        notes: string | null;
+        projects: { name: string } | { name: string }[] | null;
+    };
+
+    const projectSharePayments: {
+        amount: number;
+        description: string;
+        date: string;
+        project_name: string;
+        payment_type: "project_share" | "commission";
+    }[] = [];
     let totalEarnedYTD = 0;
     const currentYear = new Date().getFullYear();
 
-    payments?.forEach((p: any) => {
+    (payments as EmployeePaymentRow[] | null)?.forEach((p) => {
         const type = p.payment_type as keyof typeof breakdown;
         const amount = Number(p.amount || 0);
         if (breakdown[type] !== undefined) {
@@ -301,11 +316,12 @@ export async function getEmployeeFinanceData() {
         }
 
         if (type === "project_share" || type === "commission") {
+            const project = Array.isArray(p.projects) ? p.projects[0] : p.projects;
             projectSharePayments.push({
                 amount,
                 description: p.notes || (type === "project_share" ? "Project Share" : "Commission"),
                 date: p.date,
-                project_name: p.projects?.name || "N/A",
+                project_name: project?.name || "N/A",
                 payment_type: type
             });
         }
@@ -314,6 +330,7 @@ export async function getEmployeeFinanceData() {
     return {
         ok: true,
         data: {
+            role: profile?.role || "employee",
             salary: profile?.monthly_salary || 0,
             accruals: accruals || [],
             totalReimbursed,

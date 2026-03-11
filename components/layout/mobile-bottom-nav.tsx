@@ -1,14 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { adminNav, employeeNav, getPrimaryMobileNav } from "@/components/layout/sidebar";
+import { useQuery } from "@tanstack/react-query";
+import { getCurrentUser } from "@/actions/auth";
+import { adminNav, getEmployeeNavByRole, getPrimaryMobileNav, isNavItemActive } from "@/components/layout/sidebar";
 
 export function MobileBottomNav() {
   const pathname = usePathname() ?? "";
+  const searchParams = useSearchParams();
   const isAdmin = pathname.startsWith("/admin");
-  const navGroups = isAdmin ? adminNav : employeeNav;
+  const { data: user } = useQuery({
+    queryKey: ["current-user"],
+    queryFn: () => getCurrentUser(),
+  });
+  const navGroups = isAdmin ? adminNav : getEmployeeNavByRole(user?.profile?.role);
   const navItems = getPrimaryMobileNav(navGroups);
 
   if (!navItems.length) {
@@ -19,7 +26,7 @@ export function MobileBottomNav() {
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-card/92 backdrop-blur-2xl lg:hidden">
       <ul className="mx-auto flex max-w-xl items-center justify-between px-2 pb-[max(env(safe-area-inset-bottom),0.55rem)] pt-2">
         {navItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const isActive = isNavItemActive(pathname, searchParams, item.href);
           return (
             <li key={item.href} className="flex-1">
               <Link
