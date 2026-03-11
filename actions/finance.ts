@@ -1,6 +1,7 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { normalizeExpenseCategory } from "@/lib/finance-categories";
 import { getOrgContext } from "@/lib/auth-utils";
@@ -8,6 +9,55 @@ import { eachMonthOfInterval, endOfMonth, format, startOfMonth, subMonths } from
 
 type ProjectRelation = { name: string } | { name: string }[] | null;
 type ProjectBreakdownItem = { id: string; name: string; revenue: number; expenses: number; net: number };
+const COMPANY_FINANCE_VIEW_ROLES = new Set(["admin", "founder"]);
+
+function canViewCompanyFinance(role: string | null | undefined) {
+    return Boolean(role && COMPANY_FINANCE_VIEW_ROLES.has(role));
+}
+
+function emptyCompanyFinancials() {
+    return {
+        totalLiability: 0,
+        totalPaid: 0,
+        totalSalaryPaid: 0,
+        totalBusinessExpenses: 0,
+        totalRevenue: 0,
+        netBalance: 0,
+        projectBreakdown: [] as ProjectBreakdownItem[]
+    };
+}
+
+function emptyCompanyFinanceDashboard(fromKey: string, toKey: string) {
+    return {
+        dateRange: {
+            from: fromKey,
+            to: toKey
+        },
+        summary: {
+            openingBalance: 0,
+            periodRevenue: 0,
+            periodExpenses: 0,
+            netChange: 0,
+            closingBalance: 0,
+            cashRevenue: 0,
+            approvedClaimRevenue: 0,
+            reimbursedClaimExpense: 0,
+            directExpenses: 0,
+            salaryExpenses: 0,
+            totalTransactions: 0,
+            salaryLiability: 0,
+            pendingClaims: { count: 0, amount: 0 },
+            approvedClaims: { count: 0, amount: 0 },
+            reimbursedClaims: { count: 0, amount: 0 },
+            rejectedClaims: { count: 0, amount: 0 }
+        },
+        monthly: [],
+        ledger: [],
+        claims: [],
+        contributors: [],
+        categoryBreakdown: []
+    };
+}
 
 function getProjectName(projects: ProjectRelation, fallback = "Unknown") {
     if (Array.isArray(projects)) {
@@ -37,6 +87,8 @@ type FinanceRevenueRow = {
     description: string | null;
     received_date: string;
     created_at: string;
+    project_id?: string | null;
+    projects?: ProjectRelation;
 };
 
 type FinanceExpenseRow = {
@@ -52,7 +104,37 @@ type FinanceExpenseRow = {
     approved_at: string | null;
     reimbursed_at: string | null;
     status: "pending" | "approved" | "partially_paid" | "rejected" | "paid" | string;
+    project_id?: string | null;
+    projects?: ProjectRelation;
     profiles: FinanceProfile[] | FinanceProfile | null;
+};
+
+type FinancialHistoryExpenseRow = {
+    id: string;
+    amount: number | string;
+    category: string | null;
+    description: string;
+    expense_date: string;
+    payment_method: string;
+    created_at: string;
+    project_id: string | null;
+    projects: ProjectRelation;
+    employee_profile: { full_name: string | null } | { full_name: string | null }[] | null;
+};
+
+type FinancialHistoryItem = {
+    id: string;
+    type: "revenue" | "expense";
+    amount: number | string;
+    title: string;
+    subtitle: string;
+    date: string;
+    created_at: string;
+    category: string;
+    method: string;
+    project_id: string | null;
+    project_name: string;
+    person?: string | null;
 };
 
 type FinanceReimbursementRow = {
@@ -320,19 +402,11 @@ export async function postBusinessExpense(data: {
 }
 
 export async function getCompanyFinancials(projectId?: string) {
-    const supabase = createSupabaseServerClient();
-    const { organizationId } = await getOrgContext();
+    const supabase = createSupabaseAdminClient();
+    const { organizationId, role } = await getOrgContext();
 
-    if (!organizationId) {
-        return {
-            totalLiability: 0,
-            totalPaid: 0,
-            totalSalaryPaid: 0,
-            totalBusinessExpenses: 0,
-            totalRevenue: 0,
-            netBalance: 0,
-            projectBreakdown: []
-        };
+    if (!organizationId || !canViewCompanyFinance(role)) {
+        return emptyCompanyFinancials();
     }
 
     const accrualQuery = supabase
@@ -415,40 +489,12 @@ export async function getCompanyFinancials(projectId?: string) {
 }
 
 export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) {
-    const supabase = createSupabaseServerClient();
-    const { organizationId } = await getOrgContext();
+    const supabase = createSupabaseAdminClient();
+    const { organizationId, role } = await getOrgContext();
     const { from, to, fromKey, toKey } = normalizeRange(range);
 
-    if (!organizationId) {
-        return {
-            dateRange: {
-                from: fromKey,
-                to: toKey
-            },
-            summary: {
-                openingBalance: 0,
-                periodRevenue: 0,
-                periodExpenses: 0,
-                netChange: 0,
-                closingBalance: 0,
-                cashRevenue: 0,
-                approvedClaimRevenue: 0,
-                reimbursedClaimExpense: 0,
-                directExpenses: 0,
-                salaryExpenses: 0,
-                totalTransactions: 0,
-                salaryLiability: 0,
-                pendingClaims: { count: 0, amount: 0 },
-                approvedClaims: { count: 0, amount: 0 },
-                reimbursedClaims: { count: 0, amount: 0 },
-                rejectedClaims: { count: 0, amount: 0 }
-            },
-            monthly: [],
-            ledger: [],
-            claims: [],
-            contributors: [],
-            categoryBreakdown: []
-        };
+    if (!organizationId || !canViewCompanyFinance(role)) {
+        return emptyCompanyFinanceDashboard(fromKey, toKey);
     }
 
     const [revenueResult, expenseResult, reimbursementResult, accrualResult, projectFinancialsResult] = await Promise.all([
@@ -488,7 +534,7 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
             .from("salary_accruals")
             .select("remaining_amount, profiles!user_id!inner(organization_id)")
             .eq("profiles.organization_id", organizationId),
-        getCompanyFinancials() // This is safe as it returns aggregated data
+        getCompanyFinancials() // Aggregated project final verdicts (net)
     ]);
 
     const revenueRows = (revenueResult.data ?? []) as FinanceRevenueRow[];
@@ -510,7 +556,7 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
     }, {});
 
     const allEvents: FinanceLedgerEvent[] = revenueRows
-        .filter(row => !(row as any).project_id) // Exclude project specific revenue from main treasury ledger
+        .filter(row => !row.project_id) // Keep treasury cash revenue company-level only
         .map((row) => ({
             id: `revenue-${row.id}`,
             date: row.received_date,
@@ -525,19 +571,19 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
             person: null
         }));
 
-    // Add aggregated project net profits as virtual revenue events
+    // Add project final verdict as virtual treasury events (not raw project income/expense lines)
     projectFinancialsResult.projectBreakdown?.forEach((project) => {
         if (project.net > 0) {
             allEvents.push({
                 id: `project-profit-${project.id}`,
-                date: toKey, // Use end of period for simplicity or latest transaction date
+                date: toKey,
                 createdAt: new Date().toISOString(),
                 amount: project.net,
                 type: "revenue",
                 sourceType: "cash_revenue",
-                title: `Project Net Profit: ${project.name}`,
-                description: `Aggregated net profit from project ${project.name}`,
-                category: "Project Profit",
+                title: `Income from ${project.name}`,
+                description: `Final project verdict registered as income`,
+                category: project.name, // badge shows project name
                 method: "-",
                 person: null
             });
@@ -549,9 +595,9 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
                 amount: Math.abs(project.net),
                 type: "expense",
                 sourceType: "business_expense",
-                title: `Project Net Loss: ${project.name}`,
-                description: `Aggregated net loss from project ${project.name}`,
-                category: "Project Loss",
+                title: `Loss from ${project.name}`,
+                description: `Final project verdict registered as expense`,
+                category: project.name, // badge shows project name
                 method: "-",
                 person: null
             });
@@ -565,7 +611,6 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         const category = normalizeExpenseCategory(expense.category);
         const person = expense.profiles?.full_name || null;
         const isEmployeeClaim = expense.profiles?.role === "employee";
-
         if (isEmployeeClaim) {
             const approvedDate = toIsoDate(expense.approved_at);
             const claimPayments = reimbursementsByExpense[expense.id] || [];
@@ -631,7 +676,7 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
             return;
         }
 
-        if ((expense as any).project_id) return; // Exclude project specific expenses from main treasury ledger
+        if (expense.project_id) return; // Keep direct project expenses out of treasury ledger
 
         const isSalaryExpense = category === "Salary Payments";
         allEvents.push({
@@ -861,10 +906,10 @@ export async function getUserAccruals(userId: string) {
 // Categories are hardcoded on frontend now
 
 export async function getFinancialHistory(projectId?: string) {
-    const supabase = createSupabaseServerClient();
-    const { organizationId } = await getOrgContext();
+    const supabase = createSupabaseAdminClient();
+    const { organizationId, role } = await getOrgContext();
 
-    if (!organizationId) return [];
+    if (!organizationId || !canViewCompanyFinance(role)) return [];
 
     let revenueQuery = supabase
         .from("revenue_logs")
@@ -890,7 +935,7 @@ export async function getFinancialHistory(projectId?: string) {
     const [{ data: revenue }, { data: expenses }] = await Promise.all([revenueQuery, expenseQuery]);
 
     // Normalize and merge
-    const normalizedRevenue = revenue?.map(r => ({
+    const normalizedRevenue: FinancialHistoryItem[] = revenue?.map(r => ({
         id: r.id,
         type: 'revenue',
         amount: r.amount,
@@ -904,7 +949,9 @@ export async function getFinancialHistory(projectId?: string) {
         project_name: getProjectName(r.projects)
     })) || [];
 
-    const normalizedExpenses = (expenses as any[])?.map(e => ({
+    const normalizedExpenses: FinancialHistoryItem[] = ((expenses || []) as FinancialHistoryExpenseRow[])?.map(e => {
+        const employeeProfile = normalizeJoinedProfile(e.employee_profile);
+        return {
         id: e.id,
         type: 'expense',
         amount: e.amount,
@@ -916,8 +963,11 @@ export async function getFinancialHistory(projectId?: string) {
         method: e.payment_method,
         project_id: e.project_id,
         project_name: getProjectName(e.projects),
-        person: e.employee_profile?.full_name || null
-    })) || [];
+        person: employeeProfile?.full_name || null
+    };
+    }) || [];
+
+    const history = [...normalizedRevenue, ...normalizedExpenses];
 
     if (!projectId) {
         const financials = await getCompanyFinancials();
@@ -935,28 +985,33 @@ export async function getFinancialHistory(projectId?: string) {
                     method: "-",
                     project_id: project.id,
                     project_name: project.name
-                } as any);
+                });
             }
         });
     }
 
-    const history = [...normalizedRevenue, ...normalizedExpenses].sort((a, b) =>
+    return history.sort((a, b) =>
         new Date(b.date).getTime() - new Date(a.date).getTime() ||
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-
-    return history;
 }
 
 export async function getFinanceVerdicts(projectId: string) {
-    const supabase = createSupabaseServerClient();
+    const supabase = createSupabaseAdminClient();
+    const { organizationId, role } = await getOrgContext();
+    if (!organizationId || !canViewCompanyFinance(role)) {
+        return { ok: false, message: "Finance access required" };
+    }
+
     const { data, error } = await supabase
         .from("finance_verdicts")
         .select(`
             *,
-            profiles:created_by(full_name, avatar_url)
+            profiles:created_by(full_name, avatar_url),
+            org_project:projects!inner(organization_id)
         `)
         .eq("project_id", projectId)
+        .eq("org_project.organization_id", organizationId)
         .order("created_at", { ascending: false });
 
     if (error) return { ok: false, message: error.message };
@@ -965,7 +1020,21 @@ export async function getFinanceVerdicts(projectId: string) {
 
 export async function postFinanceVerdict(projectId: string, content: string) {
     const supabase = createSupabaseServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { user, organizationId, role } = await getOrgContext();
+    if (!user || !organizationId || role !== "admin") {
+        return { ok: false, message: "Admin access required" };
+    }
+
+    const { data: project, error: projectError } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("id", projectId)
+        .eq("organization_id", organizationId)
+        .single();
+
+    if (projectError || !project) {
+        return { ok: false, message: "Project not found for your organization" };
+    }
 
     const { data, error } = await supabase
         .from("finance_verdicts")
@@ -984,11 +1053,18 @@ export async function postFinanceVerdict(projectId: string, content: string) {
 }
 
 export async function getProjectContractAmount(projectId: string) {
-    const supabase = createSupabaseServerClient();
+    const supabase = createSupabaseAdminClient();
+    const { organizationId, role } = await getOrgContext();
+
+    if (!organizationId || !canViewCompanyFinance(role)) {
+        return { ok: false, message: "Finance access required", amount: 0 };
+    }
+
     const { data, error } = await supabase
         .from("projects")
         .select("contract_amount")
         .eq("id", projectId)
+        .eq("organization_id", organizationId)
         .single();
 
     if (error) return { ok: false, message: error.message, amount: 0 };

@@ -33,7 +33,7 @@ const schema = z.object({
     fullName: z.string().min(2, "Name must be at least 2 characters"),
     department: z.string().optional(),
     designation: z.string().optional(),
-    role: z.enum(["admin", "employee"]),
+    role: z.enum(["admin", "employee", "founder"]),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -251,7 +251,7 @@ export default function InviteEmployeePage() {
                                     <Label>Role</Label>
                                     <Select
                                         value={form.watch("role")}
-                                        onValueChange={(v: "admin" | "employee") =>
+                                        onValueChange={(v: "admin" | "employee" | "founder") =>
                                             form.setValue("role", v)
                                         }
                                     >
@@ -260,11 +260,12 @@ export default function InviteEmployeePage() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="employee">Employee</SelectItem>
+                                            <SelectItem value="founder">Founder</SelectItem>
                                             <SelectItem value="admin">Admin</SelectItem>
                                         </SelectContent>
                                     </Select>
                                     <p className="text-xs text-muted-foreground">
-                                        Admins can manage employees and settings
+                                        Founder gets employee access plus company and project finance visibility.
                                     </p>
                                 </div>
 
