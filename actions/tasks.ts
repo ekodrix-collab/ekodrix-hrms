@@ -88,8 +88,11 @@ export async function createAdminTaskAction(params: {
   projectId?: string;
   isOpenAssignment?: boolean;
   subtasks?: TaskSubtask[];
+  estimatedHours?: number;
+  difficultyScore?: number;
+  taskType?: string;
 }) {
-  const { userId, title, description, priority, status, dueDate, projectId, isOpenAssignment, subtasks = [] } = params;
+  const { userId, title, description, priority, status, dueDate, projectId, isOpenAssignment, subtasks = [], estimatedHours, difficultyScore, taskType } = params;
 
   if (!title) return { ok: false, message: "Title is required" };
 
@@ -161,7 +164,10 @@ export async function createAdminTaskAction(params: {
       subtasks: subtasks || [],
       project_id: projectId || null,
       is_open_assignment: isOpenAssignment || false,
-      assignment_status: isOpenAssignment ? 'open' : 'assigned'
+      assignment_status: isOpenAssignment ? 'open' : 'assigned',
+      estimated_hours: estimatedHours ?? null,
+      difficulty_score: difficultyScore ?? null,
+      task_type: taskType || null,
     })
     .select("*")
     .single();
@@ -278,9 +284,12 @@ export async function updateAdminTaskAction(params: {
   dueDate?: string;
   isOpenAssignment?: boolean;
   subtasks?: TaskSubtask[];
+  estimatedHours?: number;
+  difficultyScore?: number;
+  taskType?: string;
 }) {
   const supabase = createSupabaseServerClient();
-  const { id, userId, title, description, priority, status, dueDate, isOpenAssignment, subtasks } = params;
+  const { id, userId, title, description, priority, status, dueDate, isOpenAssignment, subtasks, estimatedHours, difficultyScore, taskType } = params;
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Not authenticated" };
@@ -310,13 +319,19 @@ export async function updateAdminTaskAction(params: {
     is_open_assignment?: boolean;
     assignment_status?: "open" | "assigned";
     user_id?: string | null;
+    estimated_hours?: number | null;
+    difficulty_score?: number | null;
+    task_type?: string | null;
   } = {
     title,
     description,
     priority,
     due_date: dueDate || null,
     subtasks: subtasks || [],
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
+    estimated_hours: estimatedHours ?? null,
+    difficulty_score: difficultyScore ?? null,
+    task_type: taskType || null,
   };
 
   if (status) {
