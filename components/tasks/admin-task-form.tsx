@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -52,6 +52,8 @@ interface AdminTaskFormProps {
         difficulty_score?: number | null;
         task_type?: string | null;
     };
+    projectMembers?: { id: string }[];
+    projectManagerId?: string;
     trigger?: React.ReactNode;
 }
 
@@ -85,6 +87,8 @@ export function AdminTaskForm({
     projectOverview,
     isMarketplaceDefault = false,
     initialData,
+    projectMembers,
+    projectManagerId,
     trigger
 }: AdminTaskFormProps) {
     const [isOpen, setIsOpen] = useState(false);
@@ -116,6 +120,19 @@ export function AdminTaskForm({
         initialData?.difficulty_score != null ? String(initialData.difficulty_score) : ""
     );
     const [taskType, setTaskType] = useState<string>(initialData?.task_type || "");
+
+    // Filter employees if projectMembers is provided
+    const displayEmployees = useMemo(() => {
+        if (!projectMembers && !projectManagerId) return employees;
+
+        const projectMemberIds = new Set(projectMembers?.map(m => m.id) || []);
+        if (projectManagerId) projectMemberIds.add(projectManagerId);
+
+        return employees.filter(emp =>
+            projectMemberIds.has(emp.id) ||
+            (initialData?.user_id && emp.id === initialData.user_id)
+        );
+    }, [employees, projectMembers, projectManagerId, initialData?.user_id]);
 
     const isMarketplace = selectedEmployee === "marketplace";
 
@@ -420,7 +437,7 @@ export function AdminTaskForm({
                                                     </div>
                                                 </div>
                                             </SelectItem>
-                                            {employees.map((emp) => (
+                                            {displayEmployees.map((emp) => (
                                                 <SelectItem key={emp.id} value={emp.id} className="py-3">
                                                     <div className="flex items-center gap-3">
                                                         <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -428,7 +445,9 @@ export function AdminTaskForm({
                                                         </div>
                                                         <div className="flex flex-col">
                                                             <span className="font-bold text-sm">{emp.full_name}</span>
-                                                            <span className="text-[10px] text-zinc-400 uppercase font-black">{emp.department || 'Staff'}</span>
+                                                            <span className="text-[10px] text-zinc-400 uppercase font-black">
+                                                                {emp.id === projectManagerId ? 'Project Manager' : (emp.department || 'Staff')}
+                                                            </span>
                                                         </div>
                                                     </div>
                                                 </SelectItem>
