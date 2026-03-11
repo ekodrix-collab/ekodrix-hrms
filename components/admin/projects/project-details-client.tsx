@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,14 +32,14 @@ import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import {
     Calendar, CheckCircle2, Clock, UsersIcon as Users,
-    KanbanSquare, ArrowLeft, ChevronRight, Edit3, Trash2, Search, XCircle, CheckCircle, ChevronDown
+    KanbanSquare, ArrowLeft, ChevronRight, Edit3, Trash2, Search, XCircle, CheckCircle, ChevronDown, Check
 } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AdminTaskForm } from "@/components/tasks/admin-task-form";
 import { approveTaskClaimAction, rejectTaskClaimAction, deleteTaskAction } from "@/actions/tasks";
-import { assignProjectManagerAction, updateProjectMembersAction } from "@/actions/projects";
+import { assignProjectManagerAction, updateProjectMembersAction, updateProjectDescriptionAction } from "@/actions/projects";
 import { toast } from "sonner";
 import type { Employee, Task, Project } from "@/types/dashboard";
 
@@ -80,7 +81,33 @@ export function ProjectDetailsClient({
     const [managerSelection, setManagerSelection] = useState(project.project_manager_id || "unassigned");
     const [isSavingManager, setIsSavingManager] = useState(false);
 
+    // Inline overview editing
+    const [isEditingOverview, setIsEditingOverview] = useState(false);
+    const [editName, setEditName] = useState(project.name);
+    const [editDescription, setEditDescription] = useState(project.description || "");
+    const [isSavingOverview, setIsSavingOverview] = useState(false);
+
     const currentProjectManagerName = project.project_manager?.full_name || "Unassigned";
+
+    const handleSaveOverview = async () => {
+        if (!editName.trim()) {
+            toast.error("Project name cannot be empty");
+            return;
+        }
+        setIsSavingOverview(true);
+        const res = await updateProjectDescriptionAction(project.id, {
+            name: editName,
+            description: editDescription,
+        });
+        if (res.ok) {
+            toast.success("Project updated");
+            setIsEditingOverview(false);
+            router.refresh();
+        } else {
+            toast.error(res.message || "Failed to update project");
+        }
+        setIsSavingOverview(false);
+    };
 
     const handleApprove = async (taskId: string) => {
         setIsActionLoading(taskId);
@@ -202,8 +229,60 @@ export function ProjectDetailsClient({
                             <Badge variant="outline" className="text-[10px] uppercase font-black tracking-widest text-primary border-primary/20 bg-primary/5">{project.status}</Badge>
                             <Badge variant="outline" className="text-[10px] uppercase font-black tracking-widest text-zinc-400 border-zinc-200/50">{project.priority} Priority</Badge>
                         </div>
-                        <h1 className="text-4xl font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-tight leading-none">{project.name}</h1>
-                        <p className="text-zinc-500 font-medium leading-relaxed">{project.description || "No detailed objective provided for this project."}</p>
+
+                        {isEditingOverview ? (
+                            <div className="space-y-3">
+                                <Input
+                                    value={editName}
+                                    onChange={(e) => setEditName(e.target.value)}
+                                    placeholder="Project name"
+                                    className="text-2xl font-black rounded-xl border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                                />
+                                <Textarea
+                                    value={editDescription}
+                                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditDescription(e.target.value)}
+                                    placeholder="Describe the project objective, tech stack, scope..."
+                                    className="min-h-[100px] rounded-xl border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 font-medium resize-none"
+                                />
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        size="sm"
+                                        onClick={handleSaveOverview}
+                                        disabled={isSavingOverview}
+                                        className="h-9 px-4 font-bold rounded-xl bg-primary hover:bg-primary/90 text-white"
+                                    >
+                                        {isSavingOverview ? <><Clock className="h-3.5 w-3.5 mr-1.5 animate-spin" />Saving...</> : <><Check className="h-3.5 w-3.5 mr-1.5" />Save</>}
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => { setIsEditingOverview(false); setEditName(project.name); setEditDescription(project.description || ""); }}
+                                        disabled={isSavingOverview}
+                                        className="h-9 px-4 font-bold rounded-xl text-zinc-500"
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex items-start gap-3">
+                                    <h1 className="text-4xl font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-tight leading-none">{project.name}</h1>
+                                    {canManageTasks && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 rounded-xl text-zinc-400 hover:text-primary hover:bg-primary/10 mt-1 shrink-0"
+                                            onClick={() => { setEditName(project.name); setEditDescription(project.description || ""); setIsEditingOverview(true); }}
+                                            title="Edit project name & description"
+                                        >
+                                            <Edit3 className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                </div>
+                                <p className="text-zinc-500 font-medium leading-relaxed">{project.description || "No detailed objective provided for this project."}</p>
+                            </>
+                        )}
                         <div className="flex items-center gap-6 pt-2">
                             <div className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-widest">
                                 <Calendar className="h-4 w-4 text-primary" />
@@ -297,6 +376,7 @@ export function ProjectDetailsClient({
                             <AdminTaskForm
                                 employees={employees}
                                 projectId={project.id}
+                                projectOverview={project.description || ""}
                                 onSuccess={() => router.refresh()}
                             />
                         )}
@@ -428,6 +508,7 @@ export function ProjectDetailsClient({
                                                         <AdminTaskForm
                                                             employees={employees}
                                                             projectId={project.id}
+                                                            projectOverview={project.description || ""}
                                                             initialData={{
                                                                 id: task.id,
                                                                 title: task.title,
@@ -438,6 +519,9 @@ export function ProjectDetailsClient({
                                                                 assignment_status: task.assignment_status || "open",
                                                                 user_id: task.user_id || "",
                                                                 subtasks: task.subtasks || [],
+                                                                estimated_hours: task.estimated_hours,
+                                                                difficulty_score: task.difficulty_score,
+                                                                task_type: task.task_type,
                                                             }}
                                                             onSuccess={() => router.refresh()}
                                                             trigger={

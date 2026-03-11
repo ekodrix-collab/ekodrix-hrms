@@ -332,6 +332,43 @@ export async function getProjectDetailsAction(id: string) {
     return { ok: true, data: enriched };
 }
 
+export async function updateProjectDescriptionAction(
+    projectId: string,
+    params: { name?: string; description?: string }
+) {
+    if (!projectId) return { ok: false, message: "Project ID is required" };
+
+    const supabase = createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, message: "Not authenticated" };
+
+    const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+    if (profile?.role !== "admin") return { ok: false, message: "Admin access required" };
+
+    const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (params.name !== undefined) updatePayload.name = params.name.trim() || null;
+    if (params.description !== undefined) updatePayload.description = params.description.trim() || null;
+
+    const { error } = await supabase
+        .from("projects")
+        .update(updatePayload)
+        .eq("id", projectId);
+
+    if (error) return { ok: false, message: error.message };
+
+    revalidatePath("/admin/projects");
+    revalidatePath(`/admin/projects/${projectId}`);
+    revalidatePath("/employee/projects");
+    revalidatePath(`/employee/projects/${projectId}`);
+
+    return { ok: true };
+}
+
 export async function deleteProjectAction(id: string) {
     const supabase = createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
