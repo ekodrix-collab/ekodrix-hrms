@@ -377,6 +377,8 @@ export function ProjectDetailsClient({
                                 employees={employees}
                                 projectId={project.id}
                                 projectOverview={project.description || ""}
+                                projectMembers={project.members}
+                                projectManagerId={project.project_manager_id || undefined}
                                 onSuccess={() => router.refresh()}
                             />
                         )}
@@ -523,6 +525,8 @@ export function ProjectDetailsClient({
                                                                 difficulty_score: task.difficulty_score,
                                                                 task_type: task.task_type,
                                                             }}
+                                                            projectMembers={project.members}
+                                                            projectManagerId={project.project_manager_id || undefined}
                                                             onSuccess={() => router.refresh()}
                                                             trigger={
                                                                 <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-primary transition-all">

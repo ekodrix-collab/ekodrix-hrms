@@ -136,9 +136,11 @@ export async function createAdminTaskAction(params: {
       return { ok: false, message: "Employee not found" };
     }
 
-    if (assignedEmployee.role !== "employee") {
-      return { ok: false, message: "Only employees can be assigned to project tasks" };
-    }
+    /*
+        if (assignedEmployee.role !== "employee") {
+          return { ok: false, message: "Only employees can be assigned to project tasks" };
+        }
+    */
 
     if (assignedEmployee.status !== "active") {
       return { ok: false, message: "Employee is not active" };
