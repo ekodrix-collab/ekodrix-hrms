@@ -57,6 +57,10 @@ export interface Task {
     claimants?: { id: string; name: string }[];
     claimed_by_others?: string[];
     has_my_claim?: boolean;
+    // AI-generated fields
+    estimated_hours?: number | null;
+    difficulty_score?: number | null;
+    task_type?: string | null;
 }
 
 export interface AttendanceRecord {
