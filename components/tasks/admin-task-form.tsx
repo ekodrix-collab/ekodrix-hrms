@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createAdminTaskAction, updateAdminTaskAction } from "@/actions/tasks";
 import { toast } from "sonner";
-import { Loader2, X, PlusCircle, Zap, Users } from "lucide-react";
+import { Loader2, X, PlusCircle, Zap, Users, Sparkles, Clock, AlertTriangle, Tag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface Employee {
@@ -36,6 +36,7 @@ interface AdminTaskFormProps {
     employees: Employee[];
     onSuccess?: () => void;
     projectId?: string;
+    projectOverview?: string;
     isMarketplaceDefault?: boolean;
     initialData?: {
         id: string;
@@ -47,6 +48,9 @@ interface AdminTaskFormProps {
         assignment_status: string;
         user_id?: string;
         subtasks: Subtask[];
+        estimated_hours?: number | null;
+        difficulty_score?: number | null;
+        task_type?: string | null;
     };
     trigger?: React.ReactNode;
 }
@@ -56,18 +60,39 @@ interface Subtask {
     completed: boolean;
 }
 
+interface AiRefinedTask {
+    title: string;
+    description: string;
+    subtasks: string[];
+    estimated_hours: number;
+    difficulty_score: number;
+    priority: "Low" | "Medium" | "High";
+    task_type: "Feature" | "Bug Fix" | "Improvement" | "Refactor";
+}
+
+const DIFFICULTY_LABELS: Record<number, string> = {
+    1: "1 — Trivial",
+    2: "2 — Small",
+    3: "3 — Medium",
+    4: "4 — Complex",
+    5: "5 — Major",
+};
+
 export function AdminTaskForm({
     employees,
     onSuccess,
     projectId,
+    projectOverview,
     isMarketplaceDefault = false,
     initialData,
     trigger
 }: AdminTaskFormProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isRefining, setIsRefining] = useState(false);
+    const [roughInput, setRoughInput] = useState("");
 
-    // Initialize state from initialData or defaults
+    // Core task fields
     const [selectedEmployee, setSelectedEmployee] = useState<string>(
         initialData
             ? (initialData.assignment_status === 'open' ? 'marketplace' : (initialData.user_id || ""))
@@ -82,6 +107,15 @@ export function AdminTaskForm({
     const [subtaskInput, setSubtaskInput] = useState("");
     const [editingSubtaskIndex, setEditingSubtaskIndex] = useState<number | null>(null);
     const [editingSubtaskValue, setEditingSubtaskValue] = useState("");
+
+    // AI-generated fields
+    const [estimatedHours, setEstimatedHours] = useState<string>(
+        initialData?.estimated_hours != null ? String(initialData.estimated_hours) : ""
+    );
+    const [difficultyScore, setDifficultyScore] = useState<string>(
+        initialData?.difficulty_score != null ? String(initialData.difficulty_score) : ""
+    );
+    const [taskType, setTaskType] = useState<string>(initialData?.task_type || "");
 
     const isMarketplace = selectedEmployee === "marketplace";
 
@@ -116,18 +150,61 @@ export function AdminTaskForm({
     const saveEditingSubtask = () => {
         if (editingSubtaskIndex === null) return;
 
-        const title = editingSubtaskValue.trim();
-        if (!title) {
+        const updatedTitle = editingSubtaskValue.trim();
+        if (!updatedTitle) {
             toast.error("Subtask title cannot be empty");
             return;
         }
 
         setSubtasks(
             subtasks.map((subtask, index) =>
-                index === editingSubtaskIndex ? { ...subtask, title } : subtask
+                index === editingSubtaskIndex ? { ...subtask, title: updatedTitle } : subtask
             )
         );
         resetEditingSubtask();
+    };
+
+    const handleRefineWithAI = async () => {
+        if (!roughInput.trim()) {
+            toast.error("Please describe the task briefly before refining");
+            return;
+        }
+
+        setIsRefining(true);
+        try {
+            const res = await fetch("/api/ai/refine-task", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    projectOverview: projectOverview || "",
+                    taskInput: roughInput.trim(),
+                }),
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "AI request failed");
+            }
+
+            const data: AiRefinedTask = await res.json();
+
+            // Populate all fields
+            setTitle(data.title);
+            setDescription(data.description);
+            setSubtasks(data.subtasks.map((s) => ({ title: s, completed: false })));
+            setEstimatedHours(String(data.estimated_hours));
+            setDifficultyScore(String(data.difficulty_score));
+            setTaskType(data.task_type);
+            // Map AI priority (Low/Medium/High) → system priority (low/medium/high/urgent)
+            setPriority(data.priority.toLowerCase());
+
+            toast.success("✨ Task refined by AI — review and edit before saving");
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Unknown error";
+            toast.error(`AI refinement failed: ${message}`);
+        } finally {
+            setIsRefining(false);
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -145,6 +222,9 @@ export function AdminTaskForm({
 
         setIsSubmitting(true);
 
+        const parsedHours = estimatedHours ? parseFloat(estimatedHours) : undefined;
+        const parsedScore = difficultyScore ? parseInt(difficultyScore, 10) : undefined;
+
         let result;
         if (initialData) {
             result = await updateAdminTaskAction({
@@ -156,10 +236,12 @@ export function AdminTaskForm({
                 status: status as "todo" | "in_progress" | "review" | "done",
                 dueDate: dueDate || undefined,
                 isOpenAssignment: isMarketplace,
-                subtasks: subtasks
+                subtasks: subtasks,
+                estimatedHours: parsedHours,
+                difficultyScore: parsedScore,
+                taskType: taskType || undefined,
             });
         } else {
-            // Create new task
             result = await createAdminTaskAction({
                 userId: isMarketplace ? "" : selectedEmployee,
                 title: title.trim(),
@@ -169,7 +251,10 @@ export function AdminTaskForm({
                 dueDate: dueDate || undefined,
                 projectId: projectId,
                 isOpenAssignment: isMarketplace,
-                subtasks: subtasks
+                subtasks: subtasks,
+                estimatedHours: parsedHours,
+                difficultyScore: parsedScore,
+                taskType: taskType || undefined,
             });
         }
 
@@ -178,7 +263,6 @@ export function AdminTaskForm({
         if (result.ok) {
             toast.success(initialData ? "Task updated successfully" : "Task created and assigned successfully");
             if (!initialData) {
-                // Reset form only if creating
                 setTitle("");
                 setDescription("");
                 setPriority("medium");
@@ -186,6 +270,10 @@ export function AdminTaskForm({
                 setDueDate("");
                 setSelectedEmployee(isMarketplaceDefault ? "marketplace" : "");
                 setSubtasks([]);
+                setEstimatedHours("");
+                setDifficultyScore("");
+                setTaskType("");
+                setRoughInput("");
             }
             setSubtaskInput("");
             resetEditingSubtask();
@@ -221,7 +309,7 @@ export function AdminTaskForm({
                 </Button>
             )}
 
-            <DialogContent className="sm:max-w-[700px] rounded-[2.5rem] p-0 border-zinc-100 dark:border-zinc-800 overflow-hidden">
+            <DialogContent className="sm:max-w-[780px] rounded-[2.5rem] p-0 border-zinc-100 dark:border-zinc-800 overflow-hidden">
                 <form onSubmit={handleSubmit} className="flex flex-col max-h-[90vh]">
                     <div className="p-8 pb-4">
                         <DialogHeader>
@@ -229,7 +317,9 @@ export function AdminTaskForm({
                                 <Zap className="h-3.5 w-3.5 fill-current" />
                                 Task Management
                             </div>
-                            <DialogTitle className="text-3xl font-black uppercase tracking-tight text-zinc-900 dark:text-white italic">{initialData ? "Edit Task" : "Assign Task"}</DialogTitle>
+                            <DialogTitle className="text-3xl font-black uppercase tracking-tight text-zinc-900 dark:text-white italic">
+                                {initialData ? "Edit Task" : "Assign Task"}
+                            </DialogTitle>
                             <DialogDescription className="font-medium text-zinc-500 mt-2">
                                 {initialData ? "Update the task details and assignment." : "Define the objective and assign it to a team member or the marketplace."}
                             </DialogDescription>
@@ -238,7 +328,45 @@ export function AdminTaskForm({
 
                     <div className="flex-1 overflow-y-auto p-8 pt-0 custom-scrollbar">
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                        {/* ── AI Refine Section ─────────────────────────────── */}
+                        <div className="mb-6 p-5 rounded-2xl bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-950/30 dark:to-indigo-950/30 border border-violet-100 dark:border-violet-800/40 space-y-3">
+                            <div className="flex items-center gap-2">
+                                <Sparkles className="h-4 w-4 text-violet-600" />
+                                <span className="text-[11px] font-black uppercase tracking-widest text-violet-600">AI Task Refinement</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <Textarea
+                                    placeholder='Briefly describe the task, e.g. "fix cart quantity issue" or "add user profile page"'
+                                    value={roughInput}
+                                    onChange={(e) => setRoughInput(e.target.value)}
+                                    className="min-h-[72px] rounded-xl border-violet-100 dark:border-violet-800/40 bg-white/80 dark:bg-zinc-900/60 font-medium text-sm resize-none"
+                                />
+                            </div>
+                            <Button
+                                type="button"
+                                onClick={handleRefineWithAI}
+                                disabled={isRefining || !roughInput.trim()}
+                                className="w-full h-10 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-violet-500/20 transition-all active:scale-95 disabled:opacity-60"
+                            >
+                                {isRefining ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Refining with AI...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles className="mr-2 h-4 w-4" />
+                                        ✨ Refine with AI
+                                    </>
+                                )}
+                            </Button>
+                            <p className="text-[10px] text-violet-400 font-medium">
+                                AI will generate title, description, subtasks, estimated hours, difficulty &amp; type. You can edit all fields after.
+                            </p>
+                        </div>
+
+                        {/* ── Main Fields ──────────────────────────────────── */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
                             <div className="space-y-6">
                                 {/* Task Title */}
                                 <div className="space-y-2">
@@ -249,7 +377,7 @@ export function AdminTaskForm({
                                         id="title"
                                         value={title}
                                         onChange={(e) => setTitle(e.target.value)}
-                                        placeholder="e.g., UI Refinement"
+                                        placeholder="e.g., Fix Checkout Quantity Bug"
                                         required
                                         className="rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-bold"
                                     />
@@ -270,7 +398,7 @@ export function AdminTaskForm({
                                 </div>
                             </div>
 
-                            <div className="space-y-6">
+                            <div className="space-y-5">
                                 {/* Assignment Strategy */}
                                 <div className="space-y-2">
                                     <Label htmlFor="employee" className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
@@ -310,6 +438,7 @@ export function AdminTaskForm({
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
+                                    {/* Priority */}
                                     <div className="space-y-2">
                                         <Label htmlFor="priority" className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
                                             Priority
@@ -326,6 +455,7 @@ export function AdminTaskForm({
                                             </SelectContent>
                                         </Select>
                                     </div>
+                                    {/* Status */}
                                     <div className="space-y-2">
                                         <Label htmlFor="status" className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
                                             Status
@@ -344,6 +474,7 @@ export function AdminTaskForm({
                                     </div>
                                 </div>
 
+                                {/* Due Date */}
                                 <div className="space-y-2">
                                     <Label htmlFor="dueDate" className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
                                         Due Date
@@ -359,8 +490,62 @@ export function AdminTaskForm({
                             </div>
                         </div>
 
-                        {/* Subtasks Section */}
-                        <div className="space-y-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                        {/* ── AI Meta Fields ───────────────────────────────── */}
+                        <div className="mt-6 grid grid-cols-3 gap-4">
+                            {/* Estimated Hours */}
+                            <div className="space-y-2">
+                                <Label htmlFor="estimatedHours" className="text-[10px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-1.5">
+                                    <Clock className="h-3 w-3" /> Est. Hours
+                                </Label>
+                                <Input
+                                    id="estimatedHours"
+                                    type="number"
+                                    min="0.5"
+                                    max="200"
+                                    step="0.5"
+                                    value={estimatedHours}
+                                    onChange={(e) => setEstimatedHours(e.target.value)}
+                                    placeholder="e.g. 4"
+                                    className="rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-bold"
+                                />
+                            </div>
+                            {/* Difficulty Score */}
+                            <div className="space-y-2">
+                                <Label htmlFor="difficultyScore" className="text-[10px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-1.5">
+                                    <AlertTriangle className="h-3 w-3" /> Difficulty
+                                </Label>
+                                <Select value={difficultyScore} onValueChange={setDifficultyScore}>
+                                    <SelectTrigger id="difficultyScore" className="rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-bold">
+                                        <SelectValue placeholder="Score 1–5" />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-xl">
+                                        {[1, 2, 3, 4, 5].map((n) => (
+                                            <SelectItem key={n} value={String(n)}>{DIFFICULTY_LABELS[n]}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            {/* Task Type */}
+                            <div className="space-y-2">
+                                <Label htmlFor="taskType" className="text-[10px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-1.5">
+                                    <Tag className="h-3 w-3" /> Task Type
+                                </Label>
+                                <Select value={taskType} onValueChange={setTaskType}>
+                                    <SelectTrigger id="taskType" className="rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-bold">
+                                        <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-xl">
+                                        <SelectItem value="Feature">⚡ Feature</SelectItem>
+                                        <SelectItem value="Bug Fix">🐛 Bug Fix</SelectItem>
+                                        <SelectItem value="Improvement">✨ Improvement</SelectItem>
+                                        <SelectItem value="Refactor">🔧 Refactor</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        {/* ── Subtasks ─────────────────────────────────────── */}
+                        <div className="space-y-4 pt-6 border-t border-zinc-100 dark:border-zinc-800 mt-6">
                             <div className="flex items-center justify-between">
                                 <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
                                     Action Items (Subtasks)
@@ -468,7 +653,6 @@ export function AdminTaskForm({
                                 )}
                             </div>
                         </div>
-
                     </div>
 
                     <div className="p-8 pt-4 bg-zinc-50/50 dark:bg-zinc-800/20 border-t border-zinc-100 dark:border-zinc-800">
