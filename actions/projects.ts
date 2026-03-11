@@ -84,8 +84,8 @@ export async function createProjectAction(formData: FormData) {
             .eq("id", projectManagerId)
             .maybeSingle();
 
-        if (!manager || manager.role !== "employee") {
-            return { ok: false, message: "Project manager must be an active employee" };
+        if (!manager || (manager.role !== "employee" && manager.role !== "founder")) {
+            return { ok: false, message: "Project manager must be an active employee or founder" };
         }
 
         if (manager.status !== "active") {
@@ -102,7 +102,7 @@ export async function createProjectAction(formData: FormData) {
             .from("profiles")
             .select("id")
             .in("id", teamMemberIds)
-            .eq("role", "employee")
+            .in("role", ["employee", "founder"])
             .eq("status", "active");
 
         if (profile.organization_id) {
@@ -412,8 +412,8 @@ export async function assignProjectManagerAction(projectId: string, managerId: s
             .eq("id", managerId)
             .maybeSingle();
 
-        if (!manager || manager.role !== "employee") {
-            return { ok: false, message: "Project manager must be an employee" };
+        if (!manager || (manager.role !== "employee" && manager.role !== "founder")) {
+            return { ok: false, message: "Project manager must be an employee or founder" };
         }
 
         if (manager.status !== "active") {

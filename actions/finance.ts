@@ -604,13 +604,13 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         }
     });
 
-    const claims = expenses.filter((expense) => expense.profiles?.role === "employee");
+    const claims = expenses.filter((expense) => expense.profiles?.role === "employee" || expense.profiles?.role === "founder");
 
     expenses.forEach((expense) => {
         const amount = Number(expense.amount) || 0;
         const category = normalizeExpenseCategory(expense.category);
         const person = expense.profiles?.full_name || null;
-        const isEmployeeClaim = expense.profiles?.role === "employee";
+        const isEmployeeClaim = expense.profiles?.role === "employee" || expense.profiles?.role === "founder";
         if (isEmployeeClaim) {
             const approvedDate = toIsoDate(expense.approved_at);
             const claimPayments = reimbursementsByExpense[expense.id] || [];
@@ -952,19 +952,19 @@ export async function getFinancialHistory(projectId?: string) {
     const normalizedExpenses: FinancialHistoryItem[] = ((expenses || []) as FinancialHistoryExpenseRow[])?.map(e => {
         const employeeProfile = normalizeJoinedProfile(e.employee_profile);
         return {
-        id: e.id,
-        type: 'expense',
-        amount: e.amount,
-        title: e.description,
-        subtitle: normalizeExpenseCategory(e.category),
-        date: e.expense_date,
-        created_at: e.created_at,
-        category: normalizeExpenseCategory(e.category),
-        method: e.payment_method,
-        project_id: e.project_id,
-        project_name: getProjectName(e.projects),
-        person: employeeProfile?.full_name || null
-    };
+            id: e.id,
+            type: 'expense',
+            amount: e.amount,
+            title: e.description,
+            subtitle: normalizeExpenseCategory(e.category),
+            date: e.expense_date,
+            created_at: e.created_at,
+            category: normalizeExpenseCategory(e.category),
+            method: e.payment_method,
+            project_id: e.project_id,
+            project_name: getProjectName(e.projects),
+            person: employeeProfile?.full_name || null
+        };
     }) || [];
 
     const history = [...normalizedRevenue, ...normalizedExpenses];
