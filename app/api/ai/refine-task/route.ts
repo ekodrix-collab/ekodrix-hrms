@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
             generationConfig: {
                 temperature: 0.1,
                 maxOutputTokens: 800,
-                // @ts-ignore
+                // @ts-expect-error: thinkingConfig is not yet in types
                 thinkingConfig: { thinkingBudget: 0 },
             },
         });
@@ -84,7 +84,7 @@ Return ONLY this JSON, no extra text:
         let parsed: RefinedTask;
         try {
             parsed = JSON.parse(clean);
-        } catch (e) {
+        } catch {
             console.error("[AI refine-task] JSON Parse Failed. Raw:", text);
             throw new Error("AI returned malformed JSON. Please try again.");
         }
