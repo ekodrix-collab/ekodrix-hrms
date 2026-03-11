@@ -32,7 +32,7 @@ export async function getAnalyticsStats() {
             .from('profiles')
             .select('*', { count: 'exact', head: true })
             .eq('organization_id', organizationId)
-            .eq('role', 'employee')
+            .in('role', ['employee', 'founder'])
             .eq('is_active', true);
 
         // 2. Avg Attendance Rate
@@ -151,7 +151,7 @@ export async function getDepartmentDistribution() {
             .from('profiles')
             .select('department')
             .eq('organization_id', organizationId)
-            .eq('role', 'employee')
+            .in('role', ['employee', 'founder'])
             .eq('is_active', true);
 
         const counts: Record<string, number> = {};

@@ -673,7 +673,7 @@ export async function getFreeEmployeesAction() {
       role,
       tasks:tasks(id)
     `)
-    .eq("role", "employee")
+    .in("role", ["employee", "founder"])
     .eq("is_active", true);
 
   if (error) return { ok: false, message: error.message };
@@ -711,7 +711,7 @@ export async function getAllEmployeesAction() {
       tasks:tasks!tasks_user_id_fkey(id)
     `)
     .eq("is_active", true)
-    .eq("role", "employee");
+    .in("role", ["employee", "founder"]);
 
   if (profile?.organization_id) {
     query.eq("organization_id", profile.organization_id);

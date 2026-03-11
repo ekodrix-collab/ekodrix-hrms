@@ -47,7 +47,7 @@ export async function getAbsentEmployees(date: string) {
         .from('profiles')
         .select('id, full_name, avatar_url, department, role')
         .eq('organization_id', organizationId)
-        .eq('role', 'employee')
+        .in('role', ['employee', 'founder'])
         .eq('status', 'active'); // Assuming status column exists based on other files, or is_active
 
     // Get attendance for the date
@@ -87,7 +87,7 @@ export async function getDashboardStats() {
         .from('profiles')
         .select('*', { count: 'exact', head: true })
         .eq('organization_id', organizationId)
-        .eq('role', 'employee');
+        .in('role', ['employee', 'founder']);
 
     // 2. Get today's attendance count in org
     const istDate = new Intl.DateTimeFormat('en-CA', {
@@ -174,12 +174,12 @@ export async function getUrgentBlockers(): Promise<Blocker[]> {
     return (standups || []).map(s => {
         const profile = normalizeProfileRelation(s.profiles as RelatedProfile | RelatedProfile[] | null);
         return ({
-        id: s.id,
-        title: "Team Blocker",
-        description: s.blockers || "",
-        priority: "high" as const,
-        userName: profile?.full_name || "Unknown",
-    });
+            id: s.id,
+            title: "Team Blocker",
+            description: s.blockers || "",
+            priority: "high" as const,
+            userName: profile?.full_name || "Unknown",
+        });
     });
 }
 
@@ -192,7 +192,7 @@ export async function getDepartmentDistribution() {
         .from('profiles')
         .select('department')
         .eq('organization_id', organizationId)
-        .eq('role', 'employee');
+        .in('role', ['employee', 'founder']);
 
     const counts: Record<string, number> = {};
     profiles?.forEach(p => {
@@ -222,15 +222,15 @@ export async function getRecentActivities(): Promise<Activity[]> {
     return (logs || []).map(log => {
         const profile = normalizeProfileRelation(log.profiles as RelatedProfile | RelatedProfile[] | null);
         return ({
-        id: log.id,
-        action: log.action,
-        type: log.entity_type,
-        time: log.created_at,
-        user: {
-            name: profile?.full_name || "System",
-            avatar: profile?.avatar_url || null,
-        }
-    });
+            id: log.id,
+            action: log.action,
+            type: log.entity_type,
+            time: log.created_at,
+            user: {
+                name: profile?.full_name || "System",
+                avatar: profile?.avatar_url || null,
+            }
+        });
     });
 }
 
