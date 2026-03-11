@@ -1,22 +1,29 @@
 "use client";
 
 import * as React from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { CalendarDays, Search } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { InboxBell } from "@/components/admin/inbox/inbox-bell";
 import { Input } from "@/components/ui/input";
+import { useQuery } from "@tanstack/react-query";
+import { getCurrentUser } from "@/actions/auth";
 
 import { MobileNav } from "@/components/layout/mobile-nav";
-import { adminNav, employeeNav, getNavLabel } from "@/components/layout/sidebar";
+import { adminNav, getEmployeeNavByRole, getNavLabel } from "@/components/layout/sidebar";
 
 export function Header() {
   const pathname = usePathname() ?? "";
+  const searchParams = useSearchParams();
   const isAdmin = pathname.startsWith("/admin");
-  const navGroups = isAdmin ? adminNav : employeeNav;
+  const { data: user } = useQuery({
+    queryKey: ["current-user"],
+    queryFn: () => getCurrentUser(),
+  });
+  const navGroups = isAdmin ? adminNav : getEmployeeNavByRole(user?.profile?.role);
   const currentLabel =
-    getNavLabel(pathname, navGroups) ?? (isAdmin ? "Admin Workspace" : "Employee Workspace");
+    getNavLabel(pathname, navGroups, searchParams) ?? (isAdmin ? "Admin Workspace" : "Employee Workspace");
   const todayLabel = new Intl.DateTimeFormat("en-US", {
     weekday: "short",
     month: "short",

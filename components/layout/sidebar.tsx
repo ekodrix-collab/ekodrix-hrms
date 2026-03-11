@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   LayoutDashboard,
@@ -19,7 +19,8 @@ import {
   CalendarCheck,
   Inbox,
   LayoutGrid,
-  KeyRound
+  KeyRound,
+  Landmark
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -117,29 +118,74 @@ export const employeeNav: NavGroup[] = [
   }
 ];
 
+export const employeeFounderNav: NavGroup[] = employeeNav.map((group) => {
+  if (group.group !== "Finance") return group;
+  return {
+    ...group,
+    items: [
+      { href: "/employee/finance?tab=personal", label: "Personal Finance", icon: CreditCard },
+      { href: "/employee/finance?tab=founder", label: "Company Treasury", icon: Landmark },
+    ]
+  };
+});
+
+type SearchParamsLike = {
+  get: (name: string) => string | null;
+} | null | undefined;
+
+function splitHref(href: string) {
+  const [path, queryString] = href.split("?");
+  return {
+    path,
+    query: new URLSearchParams(queryString ?? "")
+  };
+}
+
+export function getEmployeeNavByRole(role: string | null | undefined): NavGroup[] {
+  return role === "founder" ? employeeFounderNav : employeeNav;
+}
+
+export function isNavItemActive(pathname: string, searchParams: SearchParamsLike, href: string): boolean {
+  const { path, query } = splitHref(href);
+  if (pathname !== path && !pathname.startsWith(`${path}/`)) return false;
+
+  if ([...query.keys()].length === 0) {
+    return pathname === path || pathname.startsWith(`${path}/`);
+  }
+
+  if (pathname !== path) return false;
+  for (const [key, value] of query.entries()) {
+    if ((searchParams?.get(key) ?? null) !== value) return false;
+  }
+  return true;
+}
+
 export function flattenNavItems(navGroups: NavGroup[]): NavItem[] {
   return navGroups.flatMap((group) => group.items).filter((item) => !item.disabled);
 }
 
-export function getNavLabel(pathname: string, navGroups: NavGroup[]): string | null {
+export function getNavLabel(pathname: string, navGroups: NavGroup[], searchParams?: SearchParamsLike): string | null {
   const navItems = flattenNavItems(navGroups);
-  const exact = navItems.find((item) => pathname === item.href);
+  const exact = navItems.find((item) => isNavItemActive(pathname, searchParams, item.href));
   if (exact) return exact.label;
 
   const nestedMatch = navItems.find(
-    (item) => pathname.startsWith(`${item.href}/`) && item.href !== "/"
+    (item) => {
+      const { path, query } = splitHref(item.href);
+      return [...query.keys()].length === 0 && pathname.startsWith(`${path}/`) && path !== "/";
+    }
   );
   return nestedMatch?.label ?? null;
 }
 
 export function getPrimaryMobileNav(navGroups: NavGroup[]): NavItem[] {
   const navItems = flattenNavItems(navGroups);
-  const hasEmployeeFinance = navItems.some((item) => item.href === "/employee/finance");
+  const hasEmployeeFinance = navItems.some((item) => item.href.startsWith("/employee/finance"));
 
   if (hasEmployeeFinance) {
     const priority = ["/employee/dashboard", "/employee/tasks", "/employee/finance", "/employee/attendance"];
     return priority
-      .map((href) => navItems.find((item) => item.href === href))
+      .map((href) => navItems.find((item) => item.href === href || item.href.startsWith(`${href}?`)))
       .filter((item): item is NavItem => Boolean(item));
   }
 
@@ -148,8 +194,8 @@ export function getPrimaryMobileNav(navGroups: NavGroup[]): NavItem[] {
 
 export function Sidebar() {
   const pathname = usePathname() ?? "";
+  const searchParams = useSearchParams();
   const isAdmin = pathname.startsWith("/admin");
-  const navGroups = isAdmin ? adminNav : employeeNav;
 
   const { data: user } = useQuery({
     queryKey: ["current-user"],
@@ -164,6 +210,8 @@ export function Sidebar() {
     },
     refetchInterval: 30000, // Refresh counts every 30s
   });
+
+  const navGroups = isAdmin ? adminNav : getEmployeeNavByRole(user?.profile?.role);
 
   return (
     <aside className="glass-panel sticky top-3 z-20 hidden h-[calc(100vh-1.5rem)] w-[300px] shrink-0 flex-col overflow-hidden rounded-3xl lg:mx-3 lg:flex">
@@ -191,7 +239,7 @@ export function Sidebar() {
             </h3>
             <ul className="space-y-1.5">
               {group.items.map((item) => {
-                const isActive = pathname === item.href;
+                const isActive = isNavItemActive(pathname, searchParams, item.href);
                 return (
                   <li key={item.href}>
                     <Link
