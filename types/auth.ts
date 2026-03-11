@@ -18,7 +18,7 @@ export interface InviteFormData {
     fullName?: string;
     department?: string;
     designation?: string;
-    role?: "admin" | "employee";
+    role?: "admin" | "employee" | "founder";
 }
 
 export interface Profile {
@@ -27,7 +27,7 @@ export interface Profile {
     full_name: string;
     avatar_url: string | null;
     phone: string | null;
-    role: "admin" | "employee";
+    role: "admin" | "employee" | "founder";
     department: string | null;
     designation: string | null;
     date_of_joining: string | null;
@@ -56,7 +56,7 @@ export interface Invitation {
     full_name: string | null;
     department: string | null;
     designation: string | null;
-    role: "admin" | "employee";
+    role: "admin" | "employee" | "founder";
     token: string;
     invited_by: string | null;
     status: "pending" | "accepted" | "expired" | "cancelled";
@@ -66,4 +66,4 @@ export interface Invitation {
     organization?: Organization;
 }
 
-export type UserRole = "admin" | "employee";
+export type UserRole = "admin" | "employee" | "founder";

@@ -21,7 +21,7 @@ export interface InviteEmployeeData {
     fullName: string;
     department?: string;
     designation?: string;
-    role?: "admin" | "employee";
+    role?: "admin" | "employee" | "founder";
 }
 
 export async function inviteEmployee(data: InviteEmployeeData) {
@@ -64,11 +64,7 @@ export async function inviteEmployee(data: InviteEmployeeData) {
         return { error: "A user with this email already exists" };
     }
 
-    // 3. Get organization name for email
-    const orgName =
-        (adminProfile.organization as { name?: string })?.name || "the team";
-
-    // 4. Invite user using Supabase Admin API
+    // 3. Invite user using Supabase Admin API
     const { data: inviteData, error: inviteError } =
         await adminClient.auth.admin.inviteUserByEmail(data.email.toLowerCase(), {
             data: {

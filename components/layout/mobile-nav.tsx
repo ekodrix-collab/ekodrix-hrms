@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Menu, LogOut, X, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -17,13 +17,13 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { getCurrentUser, signOut } from "@/actions/auth";
 import { getSidebarCountsAction } from "@/actions/sidebar";
-import { adminNav, employeeNav } from "./sidebar";
+import { adminNav, getEmployeeNavByRole, isNavItemActive } from "./sidebar";
 
 export function MobileNav() {
   const [open, setOpen] = React.useState(false);
   const pathname = usePathname() ?? "";
+  const searchParams = useSearchParams();
   const isAdmin = pathname.startsWith("/admin");
-  const navGroups = isAdmin ? adminNav : employeeNav;
 
   const { data: user } = useQuery({
     queryKey: ["current-user"],
@@ -38,6 +38,8 @@ export function MobileNav() {
     },
     refetchInterval: 30000,
   });
+
+  const navGroups = isAdmin ? adminNav : getEmployeeNavByRole(user?.profile?.role);
 
   React.useEffect(() => {
     setOpen(false);
@@ -85,7 +87,7 @@ export function MobileNav() {
                 </h3>
                 <ul className="space-y-1.5">
                   {group.items.map((item) => {
-                    const isActive = pathname === item.href;
+                    const isActive = isNavItemActive(pathname, searchParams, item.href);
                     return (
                       <li key={item.href}>
                         <Link

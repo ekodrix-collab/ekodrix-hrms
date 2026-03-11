@@ -1,7 +1,8 @@
 "use client";
 
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
     CheckCircle2,
     Clock3,
@@ -34,11 +35,13 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createExpenseClaim, getMyClaims } from "@/actions/finance-actions";
 import { toast } from "sonner";
 import { UnpaidAccrual } from "@/types/dashboard";
 import { Expense } from "@/types/common";
 import { EXPENSE_CATEGORIES } from "@/lib/finance-categories";
+import { FounderFinanceView } from "@/components/employee/founder-finance-view";
 
 const PAYMENT_METHODS = [
     { value: "cash", label: "Cash" },
@@ -66,12 +69,16 @@ interface ProjectEarning {
 }
 
 export default function EmployeeFinancePage() {
+    const [financeTab, setFinanceTab] = useState<"founder" | "personal">("personal");
     const [selectedCategory, setSelectedCategory] = useState<string>(EXPENSE_CATEGORIES[0]);
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(PAYMENT_METHODS[0].value);
     const [claimSearch, setClaimSearch] = useState("");
     const [claimStatusFilter, setClaimStatusFilter] = useState("all");
     const [claimSort, setClaimSort] = useState("latest");
     const deferredClaimSearch = useDeferredValue(claimSearch);
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const router = useRouter();
     const { data, isLoading: isFinanceLoading } = useQuery({
         queryKey: ["employee-finance-data"],
         queryFn: async () => {
@@ -88,6 +95,17 @@ export default function EmployeeFinancePage() {
         }
     });
 
+    const isFounder = data?.role === "founder";
+    const tabParam = searchParams?.get("tab");
+
+    useEffect(() => {
+        if (!isFounder) return;
+        if (tabParam === "founder" || tabParam === "personal") {
+            setFinanceTab(tabParam);
+            return;
+        }
+        setFinanceTab("personal");
+    }, [isFounder, tabParam]);
     const [isClaimOpen, setIsClaimOpen] = useState(false);
     const claims = (claimsData || []) as ExpenseClaim[];
 
@@ -161,6 +179,16 @@ export default function EmployeeFinancePage() {
         }).format(amount);
     };
 
+    const onFinanceTabChange = (value: string) => {
+        if (value === "founder" || value === "personal") {
+            setFinanceTab(value);
+            if (!isFounder) return;
+            const params = new URLSearchParams(searchParams?.toString() ?? "");
+            params.set("tab", value);
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        }
+    };
+
     return (
         <div className="bg-[#fafafa] dark:bg-black/95 transition-colors duration-500 min-h-screen">
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -169,92 +197,115 @@ export default function EmployeeFinancePage() {
             </div>
 
             <div className="relative space-y-6 px-4 md:px-8 max-w-[1600px] mx-auto animate-in fade-in duration-700 pb-8">
-                <header className="pt-6">
-                    <motion.div
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        className="space-y-1"
-                    >
-                        <div className="flex items-center gap-2 mb-1">
-                            <div className="p-1.5 bg-primary rounded-lg text-white shadow-lg shadow-primary/20">
-                                <Wallet className="h-4 w-4" />
-                            </div>
-                            <span className="text-xs font-black uppercase tracking-[0.2em] text-primary">Financial Insights</span>
+                {isFounder && (
+                    <section className="pt-4">
+                        <Tabs value={financeTab} onValueChange={onFinanceTabChange} className="w-full">
+                            <TabsList className="h-auto gap-2 rounded-2xl border border-zinc-200 bg-white/70 p-1 dark:border-zinc-700 dark:bg-zinc-900/60">
+                                <TabsTrigger value="personal" className="rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-[0.12em]">
+                                    Personal Finance
+                                </TabsTrigger>
+                                <TabsTrigger value="founder" className="rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-[0.12em]">
+                                    Company Treasury
+                                </TabsTrigger>
+                            </TabsList>
+                        </Tabs>
+                    </section>
+                )}
+
+                {isFounder && (
+                    <section className={financeTab === "founder" ? "pt-4" : "hidden"}>
+                        <FounderFinanceView />
+                    </section>
+                )}
+
+                {(!isFounder || financeTab === "personal") && (
+                    <>
+                        <header className="pt-6">
+                            <motion.div
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="space-y-1"
+                            >
+                                <div className="flex items-center gap-2 mb-1">
+                                    <div className="p-1.5 bg-primary rounded-lg text-white shadow-lg shadow-primary/20">
+                                        <Wallet className="h-4 w-4" />
+                                    </div>
+                                    <span className="text-xs font-black uppercase tracking-[0.2em] text-primary">Financial Insights</span>
+                                </div>
+                                <h1 className="text-4xl font-black text-zinc-900 dark:text-zinc-100">My Earnings & Expenses</h1>
+                                <p className="text-zinc-500 dark:text-zinc-400 font-medium max-w-xl">
+                                    Track salary, reimbursement claims, and every company expense you have covered.
+                                </p>
+                            </motion.div>
+                        </header>
+
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                            <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Total Earned (YTD)</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-black text-zinc-900 dark:text-zinc-100">{formatCurrency(totalEarnedYTD)}</div>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Total earnings this year</p>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Monthly Salary</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-black text-green-600">{formatCurrency(salary)}</div>
+                                    <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1">
+                                        <TrendingUp className="h-3 w-3" />
+                                        Base gross amount
+                                    </p>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Project Earnings</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-black text-primary">
+                                        {formatCurrency(incomeBreakdown.project_share)}
+                                    </div>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                                        Share from contribution
+                                    </p>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Commission</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-black text-emerald-600">
+                                        {formatCurrency(incomeBreakdown.commission)}
+                                    </div>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                                        Sales & referrals
+                                    </p>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Reimbursements</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-black text-sky-600">{formatCurrency(incomeBreakdown.reimbursement)}</div>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 flex items-center gap-1">
+                                        <CheckCircle2 className="h-3 w-3" />
+                                        Paid expenses
+                                    </p>
+                                </CardContent>
+                            </Card>
                         </div>
-                        <h1 className="text-4xl font-black text-zinc-900 dark:text-zinc-100">My Earnings & Expenses</h1>
-                        <p className="text-zinc-500 dark:text-zinc-400 font-medium max-w-xl">
-                            Track salary, reimbursement claims, and every company expense you have covered.
-                        </p>
-                    </motion.div>
-                </header>
 
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-                    <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Total Earned (YTD)</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-black text-zinc-900 dark:text-zinc-100">{formatCurrency(totalEarnedYTD)}</div>
-                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Total earnings this year</p>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Monthly Salary</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-black text-green-600">{formatCurrency(salary)}</div>
-                            <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1">
-                                <TrendingUp className="h-3 w-3" />
-                                Base gross amount
-                            </p>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Project Earnings</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-black text-primary">
-                                {formatCurrency(incomeBreakdown.project_share)}
-                            </div>
-                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                                Share from contribution
-                            </p>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Commission</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-black text-emerald-600">
-                                {formatCurrency(incomeBreakdown.commission)}
-                            </div>
-                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                                Sales & referrals
-                            </p>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-bold text-zinc-600 dark:text-zinc-400">Reimbursements</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-black text-sky-600">{formatCurrency(incomeBreakdown.reimbursement)}</div>
-                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 flex items-center gap-1">
-                                <CheckCircle2 className="h-3 w-3" />
-                                Paid expenses
-                            </p>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                <div className="grid lg:grid-cols-3 gap-6">
+                        <div className="grid lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2 space-y-6">
                         <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
                             <CardHeader>
@@ -650,6 +701,8 @@ export default function EmployeeFinancePage() {
                         </Card>
                     </div>
                 </div>
+                    </>
+                )}
             </div>
         </div>
     );
