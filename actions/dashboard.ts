@@ -87,7 +87,8 @@ export async function getDashboardStats() {
         .from('profiles')
         .select('*', { count: 'exact', head: true })
         .eq('organization_id', organizationId)
-        .in('role', ['employee', 'founder']);
+        .in('role', ['employee', 'founder'])
+        .eq('status', 'active');
 
     // 2. Get today's attendance count in org
     const istDate = new Intl.DateTimeFormat('en-CA', {
@@ -99,10 +100,11 @@ export async function getDashboardStats() {
 
     const { count: presentToday } = await supabase
         .from('attendance')
-        .select('id, user_id, profiles!inner(organization_id)', { count: 'exact', head: true })
+        .select('id, user_id, profiles!inner(organization_id, status)', { count: 'exact', head: true })
         .eq('date', istDate)
         .eq('status', 'present')
-        .eq('profiles.organization_id', organizationId);
+        .eq('profiles.organization_id', organizationId)
+        .eq('profiles.status', 'active');
 
     // 3. Get pending standups/blockers in org
     const { count: pendingRequests } = await supabase
@@ -124,28 +126,61 @@ export async function getAttendanceTrends() {
     const { organizationId } = await getOrgContext();
     if (!organizationId) return [];
 
-    const now = new Date();
-    const istSevenDaysAgo = new Date(new Intl.DateTimeFormat('en-CA', {
+    const formatISTDate = (date: Date) => new Intl.DateTimeFormat('en-CA', {
         timeZone: 'Asia/Kolkata',
         year: 'numeric',
         month: '2-digit',
         day: '2-digit'
-    }).format(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)));
+    }).format(date);
+
+    const toISTDate = (dateKey: string) => new Date(`${dateKey}T00:00:00+05:30`);
+    const toISTWeekday = (dateKey: string) => new Intl.DateTimeFormat('en-US', {
+        weekday: 'short',
+        timeZone: 'Asia/Kolkata',
+    }).format(toISTDate(dateKey));
+
+    // Build a strict rolling window of exactly 7 IST dates, oldest -> newest.
+    const todayKey = formatISTDate(new Date());
+    const todayISTMidnight = toISTDate(todayKey);
+    const lastSevenDateKeys = Array.from({ length: 7 }, (_, index) => {
+        const offsetFromToday = 6 - index;
+        return formatISTDate(new Date(todayISTMidnight.getTime() - (offsetFromToday * 24 * 60 * 60 * 1000)));
+    });
+    const oldestKey = lastSevenDateKeys[0];
+    const yesterdayKey = lastSevenDateKeys[5];
 
     const { data: logs } = await supabase
         .from('attendance')
-        .select('date, status, profiles!inner(organization_id)')
+        .select('date, user_id, status, profiles!inner(organization_id, status)')
         .eq('profiles.organization_id', organizationId)
-        .gte('date', istSevenDaysAgo.toISOString().split('T')[0])
+        .eq('profiles.status', 'active')
+        .gte('date', oldestKey)
+        .lte('date', todayKey)
         .order('date', { ascending: true });
 
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const trends = days.map(day => {
-        const count = logs?.filter(l => {
-            const date = new Date(l.date);
-            return days[date.getDay()] === day && l.status === 'present';
-        }).length || 0;
-        return { name: day, attendance: count };
+    const uniquePresentByDate = new Map<string, Set<string>>();
+    for (const dateKey of lastSevenDateKeys) {
+        uniquePresentByDate.set(dateKey, new Set());
+    }
+
+    for (const log of logs || []) {
+        if (log.status !== 'present') continue;
+        const dateKey = String(log.date);
+        if (!uniquePresentByDate.has(dateKey)) continue;
+        uniquePresentByDate.get(dateKey)?.add(String(log.user_id));
+    }
+
+    const trends = lastSevenDateKeys.map((dateKey) => {
+        let label = toISTWeekday(dateKey);
+        if (dateKey === todayKey) label = 'Today';
+        else if (dateKey === yesterdayKey) label = 'Yesterday';
+
+        return {
+            name: label,
+            attendance: uniquePresentByDate.get(dateKey)?.size || 0,
+            date: dateKey,
+            isToday: dateKey === todayKey,
+        };
     });
 
     return trends;
