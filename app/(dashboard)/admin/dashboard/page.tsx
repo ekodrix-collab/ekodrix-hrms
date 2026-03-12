@@ -7,12 +7,14 @@ import { TeamOverview } from "@/components/admin/dashboard/team-overview";
 import { RecentActivity } from "@/components/admin/dashboard/recent-activity";
 import { QuickActions } from "@/components/admin/dashboard/quick-actions";
 import { TeamMood } from "@/components/admin/dashboard/team-mood";
+import { InviteEmployeeModal } from "@/components/admin/dashboard/invite-employee-modal";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, FileText, LayoutDashboard, Settings2, RefreshCcw } from "lucide-react";
+import { FileText, LayoutDashboard, Settings2, RefreshCcw } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import Link from "next/link";
 import { getAdminDashboardData } from "@/actions/dashboard";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -76,14 +78,13 @@ export default function AdminDashboardPage() {
               <RefreshCcw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               Sync Data
             </Button>
-            <Button variant="outline" size="sm" className="hidden sm:flex h-10 gap-2 border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
-              <FileText className="h-4 w-4" />
-              Analytics
+            <Button asChild variant="outline" size="sm" className="hidden sm:flex h-10 gap-2 border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
+              <Link href="/admin/analytics">
+                <FileText className="h-4 w-4" />
+                Analytics
+              </Link>
             </Button>
-            <Button className="h-10 px-6 gap-2 shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all duration-300 bg-primary hover:bg-primary/90 font-bold border-none">
-              <PlusCircle className="h-4 w-4" />
-              Invite Employee
-            </Button>
+            <InviteEmployeeModal triggerClassName="h-10 px-6 gap-2 shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all duration-300 bg-primary hover:bg-primary/90 font-bold border-none" />
           </motion.div>
         </header>
 
