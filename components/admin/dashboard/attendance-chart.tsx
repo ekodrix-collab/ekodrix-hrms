@@ -24,6 +24,8 @@ import { motion } from "framer-motion";
 interface AttendanceTrend {
     name: string;
     attendance: number;
+    date?: string;
+    isToday?: boolean;
 }
 
 export function AttendanceChart({ data: initialData }: { data?: AttendanceTrend[] }) {
@@ -48,7 +50,7 @@ export function AttendanceChart({ data: initialData }: { data?: AttendanceTrend[
                 <CardHeader>
                     <CardTitle>Attendance Trends</CardTitle>
                     <CardDescription>
-                        Check-in volume over the last 7 days
+                        Presence over the last 7 days
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="pl-2">
@@ -62,15 +64,31 @@ export function AttendanceChart({ data: initialData }: { data?: AttendanceTrend[
                                     fontSize={12}
                                     tickLine={false}
                                     axisLine={false}
+                                    tickMargin={8}
                                 />
                                 <YAxis
                                     stroke="#888888"
                                     fontSize={12}
                                     tickLine={false}
                                     axisLine={false}
+                                    allowDecimals={false}
                                     tickFormatter={(value) => `${value}`}
                                 />
                                 <Tooltip
+                                    formatter={(value: number) => [
+                                        `${value} ${value === 1 ? "employee" : "employees"}`,
+                                        "Present",
+                                    ]}
+                                    labelFormatter={(_, payload) => {
+                                        const entry = payload?.[0]?.payload as AttendanceTrend | undefined;
+                                        if (!entry?.date) return "Presence";
+                                        const formattedDate = new Intl.DateTimeFormat("en-US", {
+                                            month: "short",
+                                            day: "numeric",
+                                            timeZone: "Asia/Kolkata",
+                                        }).format(new Date(`${entry.date}T00:00:00+05:30`));
+                                        return `${entry.name} - ${formattedDate}`;
+                                    }}
                                     contentStyle={{
                                         backgroundColor: "hsl(var(--card))",
                                         border: "none",
@@ -81,13 +99,14 @@ export function AttendanceChart({ data: initialData }: { data?: AttendanceTrend[
                                 />
                                 <Bar
                                     dataKey="attendance"
-                                    radius={[6, 6, 0, 0]}
+                                    radius={[8, 8, 0, 0]}
                                     fill="hsl(var(--primary))"
+                                    maxBarSize={56}
                                 >
                                     {trends?.map((entry: AttendanceTrend, index: number) => (
                                         <Cell
                                             key={`cell-${index}`}
-                                            fill={entry.attendance > 10 ? "hsl(var(--primary))" : "hsl(var(--primary)/0.4)"}
+                                            fill={entry.isToday ? "hsl(var(--primary))" : "hsl(var(--primary)/0.35)"}
                                             className="transition-all duration-300 hover:opacity-80"
                                         />
                                     ))}
