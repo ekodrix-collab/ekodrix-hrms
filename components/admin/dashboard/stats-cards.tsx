@@ -1,10 +1,25 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, UserCheck, AlertTriangle, TrendingUp } from "lucide-react";
+import { Users, UserCheck, AlertTriangle, TrendingUp, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
+import Link from "next/link";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getDashboardStats } from "@/actions/dashboard";
+import { getAttendanceLogs, getDashboardStats } from "@/actions/dashboard";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import type { AttendanceLog } from "@/types/dashboard";
+
+type StatCardKey = "employees" | "attendance" | "standups" | "health";
 
 export function StatsCards({ data: initialData }: {
     data?: {
@@ -20,9 +35,27 @@ export function StatsCards({ data: initialData }: {
         initialData,
         refetchInterval: initialData ? false : 30000,
     });
+    const [activeCard, setActiveCard] = useState<StatCardKey | null>(null);
+    const todayIstDate = useMemo(
+        () =>
+            new Intl.DateTimeFormat("en-CA", {
+                timeZone: "Asia/Kolkata",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+            }).format(new Date()),
+        []
+    );
+
+    const { data: attendanceLogs = [], isLoading: isAttendanceLoading } = useQuery<AttendanceLog[]>({
+        queryKey: ["dashboard-attendance-modal", todayIstDate],
+        queryFn: () => getAttendanceLogs(todayIstDate),
+        enabled: activeCard === "attendance",
+    });
 
     const cards = [
         {
+            key: "employees" as const,
             title: "Total Employees",
             value: stats?.totalEmployees ?? "0",
             change: "+2 this month",
@@ -32,6 +65,7 @@ export function StatsCards({ data: initialData }: {
             border: "border-primary/20",
         },
         {
+            key: "attendance" as const,
             title: "Present Today",
             value: stats?.presentToday ?? "0",
             change: `${stats?.totalEmployees ? Math.round((stats.presentToday / stats.totalEmployees) * 100) : 0}% attendance`,
@@ -41,6 +75,7 @@ export function StatsCards({ data: initialData }: {
             border: "border-green-200/50",
         },
         {
+            key: "standups" as const,
             title: "Pending Standups",
             value: stats?.pendingRequests ?? "0",
             change: "Items to review",
@@ -50,6 +85,7 @@ export function StatsCards({ data: initialData }: {
             border: "border-amber-200/50",
         },
         {
+            key: "health" as const,
             title: "Company Health",
             value: `${stats?.performance ?? 92}%`,
             change: "Target: 95%",
@@ -59,6 +95,47 @@ export function StatsCards({ data: initialData }: {
             border: "border-purple-200/50",
         },
     ];
+
+    const activeStat = cards.find((card) => card.key === activeCard) || null;
+    const currentAttendance = attendanceLogs.filter((log) => log.status === "present");
+
+    const modalContent = useMemo(
+        () => ({
+            employees: {
+                title: "Team Capacity",
+                description: "Headcount trends, invite status, and role distribution.",
+                primaryCta: "Open Employee Directory",
+                primaryHref: "/admin/employees",
+                secondaryCta: "Invite Employee",
+                secondaryHref: "/admin/employees/invite",
+            },
+            attendance: {
+                title: "Attendance Snapshot",
+                description: "Track who is in, late arrivals, and recent attendance patterns.",
+                primaryCta: "Open Attendance",
+                primaryHref: "/admin/attendance",
+                secondaryCta: "Review Standups",
+                secondaryHref: "/admin/standups",
+            },
+            standups: {
+                title: "Standup Review Queue",
+                description: "Review daily standup submissions and blockers from the team.",
+                primaryCta: "Open Standups",
+                primaryHref: "/admin/standups",
+                secondaryCta: "Open Inbox",
+                secondaryHref: "/admin/inbox",
+            },
+            health: {
+                title: "Performance Pulse",
+                description: "Cross-check company score against analytics and current operational signals.",
+                primaryCta: "Open Analytics",
+                primaryHref: "/admin/analytics",
+                secondaryCta: "Open Finance",
+                secondaryHref: "/admin/finance",
+            },
+        }),
+        []
+    );
 
     if (isLoading) {
         return (
@@ -71,34 +148,132 @@ export function StatsCards({ data: initialData }: {
     }
 
     return (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {cards.map((stat, index) => (
-                <motion.div
-                    key={stat.title}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: index * 0.1 }}
-                    whileHover={{ y: -5, transition: { duration: 0.2 } }}
-                >
-                    <Card className={`relative overflow-hidden border ${stat.border} bg-white/60 dark:bg-zinc-900/60 backdrop-blur-xl shadow-lg hover:shadow-xl transition-all duration-300`}>
-                        <div className={`absolute top-0 right-0 w-24 h-24 -mt-8 -mr-8 rounded-full ${stat.bg} blur-2xl opacity-50`} />
-                        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{stat.title}</CardTitle>
-                            <div className={`p-2 rounded-xl ${stat.bg} ${stat.color} border ${stat.border}`}>
-                                <stat.icon className="h-5 w-5" />
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-3xl font-bold">{stat.value}</div>
-                            <div className="flex items-center gap-1.5 mt-1.5">
-                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${stat.bg} ${stat.color} border ${stat.border}`}>
-                                    {stat.change}
+        <>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {cards.map((stat, index) => (
+                    <motion.div
+                        key={stat.title}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, delay: index * 0.1 }}
+                        whileHover={{ y: -5, transition: { duration: 0.2 } }}
+                    >
+                        <button
+                            type="button"
+                            onClick={() => setActiveCard(stat.key)}
+                            className="w-full text-left rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
+                            aria-label={`Open details for ${stat.title}`}
+                        >
+                            <Card className={`relative overflow-hidden border ${stat.border} bg-white/60 dark:bg-zinc-900/60 backdrop-blur-xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer`}>
+                                <div className={`absolute top-0 right-0 w-24 h-24 -mt-8 -mr-8 rounded-full ${stat.bg} blur-2xl opacity-50`} />
+                                <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                                    <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{stat.title}</CardTitle>
+                                    <div className={`p-2 rounded-xl ${stat.bg} ${stat.color} border ${stat.border}`}>
+                                        <stat.icon className="h-5 w-5" />
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-3xl font-bold">{stat.value}</div>
+                                    <div className="flex items-center gap-1.5 mt-1.5">
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${stat.bg} ${stat.color} border ${stat.border}`}>
+                                            {stat.change}
+                                        </span>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </button>
+                    </motion.div>
+                ))}
+            </div>
+
+            <Dialog open={Boolean(activeCard)} onOpenChange={(open) => !open && setActiveCard(null)}>
+                <DialogContent className="sm:max-w-[560px]">
+                    {activeStat && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>{modalContent[activeStat.key].title}</DialogTitle>
+                                <DialogDescription>{modalContent[activeStat.key].description}</DialogDescription>
+                            </DialogHeader>
+
+                            <div className={`rounded-2xl border ${activeStat.border} p-4 space-y-2`}>
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                                        {activeStat.title}
+                                    </p>
+                                    <div className={`p-1.5 rounded-lg ${activeStat.bg} ${activeStat.color} border ${activeStat.border}`}>
+                                        <activeStat.icon className="h-4 w-4" />
+                                    </div>
+                                </div>
+                                <p className="text-3xl font-black">{activeStat.value}</p>
+                                <span className={`inline-flex text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeStat.bg} ${activeStat.color} border ${activeStat.border}`}>
+                                    {activeStat.change}
                                 </span>
                             </div>
-                        </CardContent>
-                    </Card>
-                </motion.div>
-            ))}
-        </div>
+
+                            {activeStat.key === "attendance" ? (
+                                <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 max-h-[260px] overflow-y-auto">
+                                    {isAttendanceLoading ? (
+                                        <div className="py-10 text-center">
+                                            <Loader2 className="h-5 w-5 animate-spin mx-auto text-primary" />
+                                        </div>
+                                    ) : currentAttendance.length > 0 ? (
+                                        <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                                            {currentAttendance.map((log) => (
+                                                <div key={log.id} className="px-3 py-2.5 flex items-center justify-between gap-3">
+                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                        <Avatar className="h-8 w-8 border border-zinc-200 dark:border-zinc-700">
+                                                            <AvatarImage src={log.profiles?.avatar_url || undefined} />
+                                                            <AvatarFallback className="text-[10px] font-black">
+                                                                {log.profiles?.full_name?.charAt(0) || "U"}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                        <div className="min-w-0">
+                                                            <p className="text-xs font-bold truncate">{log.profiles?.full_name || "Unknown"}</p>
+                                                            <p className="text-[10px] text-muted-foreground truncate">
+                                                                {log.profiles?.department || "General"}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right shrink-0">
+                                                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Punch in</p>
+                                                        <p className="text-xs font-bold">
+                                                            {log.punch_in
+                                                                ? new Date(log.punch_in).toLocaleTimeString("en-IN", {
+                                                                    hour: "2-digit",
+                                                                    minute: "2-digit",
+                                                                    hour12: true,
+                                                                    timeZone: "Asia/Kolkata",
+                                                                })
+                                                                : "-"}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="py-8 text-center text-sm font-semibold text-muted-foreground">
+                                            No present employees found for today.
+                                        </p>
+                                    )}
+                                </div>
+                            ) : (
+                                <DialogFooter className="gap-2 sm:justify-between">
+                                    <Button variant="outline" asChild>
+                                        <Link href={modalContent[activeStat.key].secondaryHref}>
+                                            {modalContent[activeStat.key].secondaryCta}
+                                        </Link>
+                                    </Button>
+                                    <Button asChild>
+                                        <Link href={modalContent[activeStat.key].primaryHref}>
+                                            {modalContent[activeStat.key].primaryCta}
+                                        </Link>
+                                    </Button>
+                                </DialogFooter>
+                            )}
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+        </>
     );
 }

@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getOrgContext } from "@/lib/auth-utils";
 import type { Blocker, Activity } from "@/types/dashboard";
+import { revalidatePath } from "next/cache";
 
 type RelatedProfile = {
     full_name?: string | null;
@@ -267,6 +268,49 @@ export async function getRecentActivities(): Promise<Activity[]> {
             }
         });
     });
+}
+
+export async function postDashboardUpdate(input: {
+    title?: string;
+    message: string;
+    audience?: "all" | "management" | "operations";
+}) {
+    const message = input.message?.trim();
+    const title = input.title?.trim();
+    const audience = input.audience ?? "all";
+
+    if (!message) {
+        return { ok: false, message: "Update message is required" };
+    }
+
+    const supabase = createSupabaseServerClient();
+    const { user, organizationId, role } = await getOrgContext();
+    if (!user || !organizationId || role !== "admin") {
+        return { ok: false, message: "Admin organization context missing" };
+    }
+
+    const action = title ? `posted update: ${title}` : "posted update";
+    const { error } = await supabase
+        .from("activity_logs")
+        .insert({
+            user_id: user.id,
+            action,
+            entity_type: "announcement",
+            entity_id: user.id,
+            metadata: {
+                title: title || null,
+                message,
+                audience,
+                source: "admin_dashboard_quick_action",
+            },
+        });
+
+    if (error) {
+        return { ok: false, message: error.message };
+    }
+
+    revalidatePath("/admin/dashboard");
+    return { ok: true };
 }
 
 export async function getAllTasks() {
