@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { type ReactElement, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -33,7 +33,13 @@ const departments = [
   { value: "operations", label: "Operations" },
 ];
 
-export function InviteEmployeeModal({ triggerClassName }: { triggerClassName?: string }) {
+export function InviteEmployeeModal({
+  triggerClassName,
+  trigger,
+}: {
+  triggerClassName?: string;
+  trigger?: ReactElement;
+}) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [success, setSuccess] = useState(false);
@@ -96,10 +102,12 @@ export function InviteEmployeeModal({ triggerClassName }: { triggerClassName?: s
       }}
     >
       <DialogTrigger asChild>
-        <Button className={triggerClassName}>
-          <PlusCircle className="h-4 w-4" />
-          Invite Employee
-        </Button>
+        {trigger ?? (
+          <Button className={triggerClassName}>
+            <PlusCircle className="h-4 w-4" />
+            Invite Employee
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
