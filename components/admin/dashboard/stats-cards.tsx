@@ -18,16 +18,18 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import type { AttendanceLog } from "@/types/dashboard";
+import { AdminTeamPresence } from "@/components/admin/dashboard/admin-team-presence";
 
 type StatCardKey = "employees" | "attendance" | "standups" | "health";
 
-export function StatsCards({ data: initialData }: {
+export function StatsCards({ data: initialData, teamPresence = [] }: {
     data?: {
         totalEmployees: number;
         presentToday: number;
         pendingRequests: number;
         performance: number;
-    }
+    },
+    teamPresence?: any[]
 }) {
     const { data: stats, isLoading } = useQuery({
         queryKey: ["dashboard-stats"],
@@ -210,70 +212,17 @@ export function StatsCards({ data: initialData }: {
                                 </span>
                             </div>
 
-                            {activeStat.key === "attendance" ? (
-                                <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 max-h-[260px] overflow-y-auto">
-                                    {isAttendanceLoading ? (
-                                        <div className="py-10 text-center">
-                                            <Loader2 className="h-5 w-5 animate-spin mx-auto text-primary" />
-                                        </div>
-                                    ) : currentAttendance.length > 0 ? (
-                                        <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                                            {currentAttendance.map((log) => (
-                                                <div key={log.id} className="px-3 py-2.5 flex items-center justify-between gap-3">
-                                                    <div className="flex items-center gap-2.5 min-w-0">
-                                                        <Avatar className="h-8 w-8 border border-zinc-200 dark:border-zinc-700">
-                                                            <AvatarImage src={log.profiles?.avatar_url || undefined} />
-                                                            <AvatarFallback className="text-[10px] font-black">
-                                                                {log.profiles?.full_name?.charAt(0) || "U"}
-                                                            </AvatarFallback>
-                                                        </Avatar>
-                                                        <div className="min-w-0">
-                                                            <p className="text-xs font-bold truncate">{log.profiles?.full_name || "Unknown"}</p>
-                                                            <p className="text-[10px] text-muted-foreground truncate">
-                                                                {log.profiles?.department || "General"}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right shrink-0">
-                                                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Punch in</p>
-                                                        <p className="text-xs font-bold">
-                                                            {log.punch_in
-                                                                ? new Date(log.punch_in).toLocaleTimeString("en-IN", {
-                                                                    hour: "2-digit",
-                                                                    minute: "2-digit",
-                                                                    hour12: true,
-                                                                    timeZone: "Asia/Kolkata",
-                                                                })
-                                                                : "-"}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <p className="py-8 text-center text-sm font-semibold text-muted-foreground">
-                                            No present employees found for today.
-                                        </p>
-                                    )}
-                                </div>
-                            ) : (
-                                <DialogFooter className="gap-2 sm:justify-between">
-                                    <Button variant="outline" asChild>
-                                        <Link href={modalContent[activeStat.key].secondaryHref}>
-                                            {modalContent[activeStat.key].secondaryCta}
-                                        </Link>
-                                    </Button>
-                                    <Button asChild>
-                                        <Link href={modalContent[activeStat.key].primaryHref}>
-                                            {modalContent[activeStat.key].primaryCta}
-                                        </Link>
-                                    </Button>
-                                </DialogFooter>
-                            )}
                         </>
                     )}
                 </DialogContent>
             </Dialog>
+
+            <AdminTeamPresence
+                isOpen={activeCard === "attendance"}
+                onOpenChange={(open: boolean) => !open && setActiveCard(null)}
+                teamPresence={teamPresence}
+                triggerElement={<span className="hidden" />}
+            />
         </>
     );
 }

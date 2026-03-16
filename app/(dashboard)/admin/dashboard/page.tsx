@@ -17,6 +17,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { getAdminDashboardData } from "@/actions/dashboard";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Users } from "lucide-react";
 
 export default function AdminDashboardPage() {
   const queryClient = useQueryClient();
@@ -90,7 +91,10 @@ export default function AdminDashboardPage() {
 
         <section className="space-y-8">
           <QuickActions />
-          <StatsCards data={dashboardData?.stats} />
+          <StatsCards
+            data={dashboardData?.stats}
+            teamPresence={dashboardData?.teamPresence}
+          />
         </section>
 
         <Tabs defaultValue="overview" className="space-y-6">
