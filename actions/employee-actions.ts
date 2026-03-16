@@ -74,6 +74,10 @@ export async function getEmployeeDashboardStats(localDate?: string) {
                 full_name,
                 avatar_url,
                 role
+            ),
+            attendance_breaks (
+                start_time,
+                end_time
             )
         `)
         .eq("date", today)
@@ -85,21 +89,23 @@ export async function getEmployeeDashboardStats(localDate?: string) {
     }
 
     // Map into TeamMemberPresence shape
-    const teamPresence = (todayAttendanceRecords || []).map((record: {
-        user_id: string;
-        punch_in: string | null;
-        punch_out: string | null;
-        status: string | null;
-        profiles: { id: string; full_name: string | null; avatar_url: string | null; role: string | null } | { id: string; full_name: string | null; avatar_url: string | null; role: string | null }[] | null;
-    }) => {
+    const teamPresence = (todayAttendanceRecords || []).map((record: any) => {
         const profile = Array.isArray(record.profiles) ? record.profiles[0] : record.profiles;
-        const memberStatus = record.status || (record.punch_out ? "completed" : "present");
+
+        // Check if they have an active break (end_time is null)
+        const breaks = record.attendance_breaks || [];
+        const isActiveBreak = breaks.some((b: any) => !b.end_time);
+
+        // Priority: if punch_out is set → completed. If active break → on_break. Otherwise default to present.
+        const memberStatus = record.punch_out ? "completed" : (isActiveBreak ? "on_break" : "present");
         return {
             id: (profile as { id: string } | null)?.id || record.user_id,
             full_name: (profile as { full_name: string | null } | null)?.full_name || null,
             avatar_url: (profile as { avatar_url: string | null } | null)?.avatar_url || null,
             role: (profile as { role: string | null } | null)?.role || null,
             status: memberStatus,
+            punch_in: record.punch_in || null,
+            punch_out: record.punch_out || null,
         };
     });
 

@@ -67,15 +67,16 @@ export async function getAdminDashboardData() {
     const { organizationId, error: authError } = await getOrgContext();
     if (authError || !organizationId) return null;
 
-    const [stats, trends, blockers, distributions, activities] = await Promise.all([
+    const [stats, trends, blockers, distributions, activities, teamPresence] = await Promise.all([
         getDashboardStats(),
         getAttendanceTrends(),
         getUrgentBlockers(),
         getDepartmentDistribution(),
-        getRecentActivities()
+        getRecentActivities(),
+        getAdminTeamPresence()
     ]);
 
-    return { stats, trends, blockers, distributions, activities };
+    return { stats, trends, blockers, distributions, activities, teamPresence };
 }
 
 export async function getDashboardStats() {
@@ -396,4 +397,65 @@ export async function getAllExpenses() {
         .order('expense_date', { ascending: false });
 
     return expenses || [];
+}
+
+export async function getAdminTeamPresence() {
+    const supabase = createSupabaseServerClient();
+    const { organizationId, error: authError } = await getOrgContext();
+    if (authError || !organizationId) return [];
+
+    const today = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+    }).format(new Date());
+
+    const { data: records, error } = await supabase
+        .from("attendance")
+        .select(`
+            user_id,
+            punch_in,
+            punch_out,
+            status,
+            profiles!inner(
+                id,
+                full_name,
+                avatar_url,
+                role,
+                organization_id
+            ),
+            attendance_breaks (
+                start_time,
+                end_time
+            )
+        `)
+        .eq("date", today)
+        .eq("profiles.organization_id", organizationId)
+        .not("punch_in", "is", null)
+        .order("punch_in", { ascending: true });
+
+    if (error) {
+        console.error("Error fetching admin team presence:", error);
+        return [];
+    }
+
+    return (records || []).map((record: any) => {
+        const profile = Array.isArray(record.profiles) ? record.profiles[0] : record.profiles;
+
+        const breaks = record.attendance_breaks || [];
+        const isActiveBreak = breaks.some((b: any) => !b.end_time);
+
+        const memberStatus = record.punch_out ? "completed" : (isActiveBreak ? "on_break" : "present");
+
+        return {
+            id: profile?.id || record.user_id,
+            full_name: profile?.full_name || null,
+            avatar_url: profile?.avatar_url || null,
+            role: profile?.role || null,
+            status: memberStatus,
+            punch_in: record.punch_in || null,
+            punch_out: record.punch_out || null,
+        };
+    });
 }
