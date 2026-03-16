@@ -50,7 +50,7 @@ export function AdminTeamPresence({ teamPresence = [], isOpen, onOpenChange, tri
                             <Users className="w-5 h-5 text-primary" />
                         </div>
                         <div className="flex flex-col gap-0.5">
-                            <span className="text-xl font-bold">Who's In Today</span>
+                            <span className="text-xl font-bold">Who&apos;s In Today</span>
                             <span className="text-xs font-medium text-zinc-500">
                                 {workingMembers.length} working · {breakMembers.length} on break · {punchedOutMembers.length} punched out
                             </span>
