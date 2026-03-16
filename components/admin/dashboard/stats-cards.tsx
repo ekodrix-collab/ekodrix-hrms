@@ -1,34 +1,38 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, UserCheck, AlertTriangle, TrendingUp, Loader2 } from "lucide-react";
+import { Users, UserCheck, AlertTriangle, TrendingUp } from "lucide-react";
 import { motion } from "framer-motion";
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getAttendanceLogs, getDashboardStats } from "@/actions/dashboard";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getDashboardStats } from "@/actions/dashboard";
 import {
     Dialog,
     DialogContent,
-    DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import type { AttendanceLog } from "@/types/dashboard";
+import { AdminTeamPresence } from "@/components/admin/dashboard/admin-team-presence";
 
 type StatCardKey = "employees" | "attendance" | "standups" | "health";
 
-export function StatsCards({ data: initialData }: {
+export function StatsCards({ data: initialData, teamPresence = [] }: {
     data?: {
         totalEmployees: number;
         presentToday: number;
         pendingRequests: number;
         performance: number;
-    }
-}) {
+    },
+    teamPresence?: Array<{
+        id: string;
+        full_name: string | null;
+        avatar_url: string | null;
+        role: string | null;
+        status: string;
+        punch_in: string | null;
+        punch_out: string | null;
+    }>
+}): React.ReactElement | null {
     const { data: stats, isLoading } = useQuery({
         queryKey: ["dashboard-stats"],
         queryFn: () => getDashboardStats(),
@@ -36,22 +40,6 @@ export function StatsCards({ data: initialData }: {
         refetchInterval: initialData ? false : 30000,
     });
     const [activeCard, setActiveCard] = useState<StatCardKey | null>(null);
-    const todayIstDate = useMemo(
-        () =>
-            new Intl.DateTimeFormat("en-CA", {
-                timeZone: "Asia/Kolkata",
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-            }).format(new Date()),
-        []
-    );
-
-    const { data: attendanceLogs = [], isLoading: isAttendanceLoading } = useQuery<AttendanceLog[]>({
-        queryKey: ["dashboard-attendance-modal", todayIstDate],
-        queryFn: () => getAttendanceLogs(todayIstDate),
-        enabled: activeCard === "attendance",
-    });
 
     const cards = [
         {
@@ -97,45 +85,6 @@ export function StatsCards({ data: initialData }: {
     ];
 
     const activeStat = cards.find((card) => card.key === activeCard) || null;
-    const currentAttendance = attendanceLogs.filter((log) => log.status === "present");
-
-    const modalContent = useMemo(
-        () => ({
-            employees: {
-                title: "Team Capacity",
-                description: "Headcount trends, invite status, and role distribution.",
-                primaryCta: "Open Employee Directory",
-                primaryHref: "/admin/employees",
-                secondaryCta: "Invite Employee",
-                secondaryHref: "/admin/employees/invite",
-            },
-            attendance: {
-                title: "Attendance Snapshot",
-                description: "Track who is in, late arrivals, and recent attendance patterns.",
-                primaryCta: "Open Attendance",
-                primaryHref: "/admin/attendance",
-                secondaryCta: "Review Standups",
-                secondaryHref: "/admin/standups",
-            },
-            standups: {
-                title: "Standup Review Queue",
-                description: "Review daily standup submissions and blockers from the team.",
-                primaryCta: "Open Standups",
-                primaryHref: "/admin/standups",
-                secondaryCta: "Open Inbox",
-                secondaryHref: "/admin/inbox",
-            },
-            health: {
-                title: "Performance Pulse",
-                description: "Cross-check company score against analytics and current operational signals.",
-                primaryCta: "Open Analytics",
-                primaryHref: "/admin/analytics",
-                secondaryCta: "Open Finance",
-                secondaryHref: "/admin/finance",
-            },
-        }),
-        []
-    );
 
     if (isLoading) {
         return (
@@ -191,8 +140,7 @@ export function StatsCards({ data: initialData }: {
                     {activeStat && (
                         <>
                             <DialogHeader>
-                                <DialogTitle>{modalContent[activeStat.key].title}</DialogTitle>
-                                <DialogDescription>{modalContent[activeStat.key].description}</DialogDescription>
+                                <DialogTitle>{activeStat.title} Details</DialogTitle>
                             </DialogHeader>
 
                             <div className={`rounded-2xl border ${activeStat.border} p-4 space-y-2`}>
@@ -210,70 +158,17 @@ export function StatsCards({ data: initialData }: {
                                 </span>
                             </div>
 
-                            {activeStat.key === "attendance" ? (
-                                <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 max-h-[260px] overflow-y-auto">
-                                    {isAttendanceLoading ? (
-                                        <div className="py-10 text-center">
-                                            <Loader2 className="h-5 w-5 animate-spin mx-auto text-primary" />
-                                        </div>
-                                    ) : currentAttendance.length > 0 ? (
-                                        <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                                            {currentAttendance.map((log) => (
-                                                <div key={log.id} className="px-3 py-2.5 flex items-center justify-between gap-3">
-                                                    <div className="flex items-center gap-2.5 min-w-0">
-                                                        <Avatar className="h-8 w-8 border border-zinc-200 dark:border-zinc-700">
-                                                            <AvatarImage src={log.profiles?.avatar_url || undefined} />
-                                                            <AvatarFallback className="text-[10px] font-black">
-                                                                {log.profiles?.full_name?.charAt(0) || "U"}
-                                                            </AvatarFallback>
-                                                        </Avatar>
-                                                        <div className="min-w-0">
-                                                            <p className="text-xs font-bold truncate">{log.profiles?.full_name || "Unknown"}</p>
-                                                            <p className="text-[10px] text-muted-foreground truncate">
-                                                                {log.profiles?.department || "General"}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right shrink-0">
-                                                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Punch in</p>
-                                                        <p className="text-xs font-bold">
-                                                            {log.punch_in
-                                                                ? new Date(log.punch_in).toLocaleTimeString("en-IN", {
-                                                                    hour: "2-digit",
-                                                                    minute: "2-digit",
-                                                                    hour12: true,
-                                                                    timeZone: "Asia/Kolkata",
-                                                                })
-                                                                : "-"}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <p className="py-8 text-center text-sm font-semibold text-muted-foreground">
-                                            No present employees found for today.
-                                        </p>
-                                    )}
-                                </div>
-                            ) : (
-                                <DialogFooter className="gap-2 sm:justify-between">
-                                    <Button variant="outline" asChild>
-                                        <Link href={modalContent[activeStat.key].secondaryHref}>
-                                            {modalContent[activeStat.key].secondaryCta}
-                                        </Link>
-                                    </Button>
-                                    <Button asChild>
-                                        <Link href={modalContent[activeStat.key].primaryHref}>
-                                            {modalContent[activeStat.key].primaryCta}
-                                        </Link>
-                                    </Button>
-                                </DialogFooter>
-                            )}
                         </>
                     )}
                 </DialogContent>
             </Dialog>
+
+            <AdminTeamPresence
+                isOpen={activeCard === "attendance"}
+                onOpenChange={(open: boolean) => !open && setActiveCard(null)}
+                teamPresence={teamPresence}
+                triggerElement={<span className="hidden" />}
+            />
         </>
     );
 }
