@@ -17,7 +17,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { getAdminDashboardData } from "@/actions/dashboard";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users } from "lucide-react";
 
 export default function AdminDashboardPage() {
   const queryClient = useQueryClient();

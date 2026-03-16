@@ -1,23 +1,17 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, UserCheck, AlertTriangle, TrendingUp, Loader2 } from "lucide-react";
+import { Users, UserCheck, AlertTriangle, TrendingUp } from "lucide-react";
 import { motion } from "framer-motion";
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getAttendanceLogs, getDashboardStats } from "@/actions/dashboard";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getDashboardStats } from "@/actions/dashboard";
 import {
     Dialog,
     DialogContent,
-    DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import type { AttendanceLog } from "@/types/dashboard";
 import { AdminTeamPresence } from "@/components/admin/dashboard/admin-team-presence";
 
 type StatCardKey = "employees" | "attendance" | "standups" | "health";
@@ -29,8 +23,16 @@ export function StatsCards({ data: initialData, teamPresence = [] }: {
         pendingRequests: number;
         performance: number;
     },
-    teamPresence?: any[]
-}) {
+    teamPresence?: Array<{
+        id: string;
+        full_name: string | null;
+        avatar_url: string | null;
+        role: string | null;
+        status: string;
+        punch_in: string | null;
+        punch_out: string | null;
+    }>
+}): React.ReactElement | null {
     const { data: stats, isLoading } = useQuery({
         queryKey: ["dashboard-stats"],
         queryFn: () => getDashboardStats(),
@@ -38,22 +40,6 @@ export function StatsCards({ data: initialData, teamPresence = [] }: {
         refetchInterval: initialData ? false : 30000,
     });
     const [activeCard, setActiveCard] = useState<StatCardKey | null>(null);
-    const todayIstDate = useMemo(
-        () =>
-            new Intl.DateTimeFormat("en-CA", {
-                timeZone: "Asia/Kolkata",
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-            }).format(new Date()),
-        []
-    );
-
-    const { data: attendanceLogs = [], isLoading: isAttendanceLoading } = useQuery<AttendanceLog[]>({
-        queryKey: ["dashboard-attendance-modal", todayIstDate],
-        queryFn: () => getAttendanceLogs(todayIstDate),
-        enabled: activeCard === "attendance",
-    });
 
     const cards = [
         {
@@ -99,45 +85,6 @@ export function StatsCards({ data: initialData, teamPresence = [] }: {
     ];
 
     const activeStat = cards.find((card) => card.key === activeCard) || null;
-    const currentAttendance = attendanceLogs.filter((log) => log.status === "present");
-
-    const modalContent = useMemo(
-        () => ({
-            employees: {
-                title: "Team Capacity",
-                description: "Headcount trends, invite status, and role distribution.",
-                primaryCta: "Open Employee Directory",
-                primaryHref: "/admin/employees",
-                secondaryCta: "Invite Employee",
-                secondaryHref: "/admin/employees/invite",
-            },
-            attendance: {
-                title: "Attendance Snapshot",
-                description: "Track who is in, late arrivals, and recent attendance patterns.",
-                primaryCta: "Open Attendance",
-                primaryHref: "/admin/attendance",
-                secondaryCta: "Review Standups",
-                secondaryHref: "/admin/standups",
-            },
-            standups: {
-                title: "Standup Review Queue",
-                description: "Review daily standup submissions and blockers from the team.",
-                primaryCta: "Open Standups",
-                primaryHref: "/admin/standups",
-                secondaryCta: "Open Inbox",
-                secondaryHref: "/admin/inbox",
-            },
-            health: {
-                title: "Performance Pulse",
-                description: "Cross-check company score against analytics and current operational signals.",
-                primaryCta: "Open Analytics",
-                primaryHref: "/admin/analytics",
-                secondaryCta: "Open Finance",
-                secondaryHref: "/admin/finance",
-            },
-        }),
-        []
-    );
 
     if (isLoading) {
         return (
@@ -193,8 +140,7 @@ export function StatsCards({ data: initialData, teamPresence = [] }: {
                     {activeStat && (
                         <>
                             <DialogHeader>
-                                <DialogTitle>{modalContent[activeStat.key].title}</DialogTitle>
-                                <DialogDescription>{modalContent[activeStat.key].description}</DialogDescription>
+                                <DialogTitle>{activeStat.title} Details</DialogTitle>
                             </DialogHeader>
 
                             <div className={`rounded-2xl border ${activeStat.border} p-4 space-y-2`}>
