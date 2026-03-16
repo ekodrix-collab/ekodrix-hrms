@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
   Loader2, Kanban, List, AlertCircle, Users,
-  Check, X, Zap, Search, Filter, ChevronDown, FolderSearch,
+  Check, X, Zap, Search, Filter, ChevronDown, FolderSearch, Eye, Edit3, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
@@ -21,7 +21,7 @@ import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskStatsBar } from "@/components/tasks/task-stats-bar";
 import { toast } from "sonner";
-import { approveTaskClaimAction, rejectTaskClaimAction } from "@/actions/tasks";
+import { approveTaskClaimAction, rejectTaskClaimAction, deleteTaskAction } from "@/actions/tasks";
 import { useState, useMemo, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import {
@@ -32,6 +32,13 @@ import {
   DropdownMenuTrigger,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const isUnclaimedTask = (task: Task) => task.assignment_status === "open" && !task.user_id;
 
@@ -69,6 +76,7 @@ export default function AdminTasksPage() {
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
   const [assigneeSearchQuery, setAssigneeSearchQuery] = useState("");
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const projectOptions = useMemo(() => {
     if (!tasks) return [];
@@ -218,6 +226,41 @@ export default function AdminTasksPage() {
     } catch { toast.error("An unexpected error occurred"); }
     finally { setProcessingId(null); }
   };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!window.confirm("Delete this task?")) return;
+
+    setProcessingId(taskId);
+    try {
+      const res = await deleteTaskAction(taskId);
+      if (res.ok) {
+        toast.success("Task deleted");
+        if (selectedTask?.id === taskId) setSelectedTask(null);
+        refetch();
+      } else {
+        toast.error(res.message || "Failed to delete task");
+      }
+    } catch {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const getTaskFormInitialData = (task: Task) => ({
+    id: task.id,
+    title: task.title,
+    description: task.description || "",
+    priority: task.priority || "medium",
+    status: task.status || "todo",
+    dueDate: task.due_date ? String(task.due_date).split("T")[0] : "",
+    assignment_status: task.assignment_status || (task.is_open_assignment ? "open" : "assigned"),
+    user_id: task.user_id || "",
+    subtasks: task.subtasks || [],
+    estimated_hours: task.estimated_hours,
+    difficulty_score: task.difficulty_score,
+    task_type: task.task_type,
+  });
 
   return (
     <main className="space-y-6 p-4 md:p-8 animate-in fade-in duration-700" aria-label="Task Management Dashboard">
@@ -442,7 +485,7 @@ export default function AdminTasksPage() {
             <Card className="border-none shadow-xl shadow-zinc-200/50 dark:shadow-none bg-white/60 dark:bg-zinc-900/60 backdrop-blur-xl">
               <CardContent className="p-0">
                 {/* Mobile View */}
-                <div className="block sm:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+                <div className="block lg:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
                   {isLoading ? (
                     <div className="p-12 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" /></div>
                   ) : filteredTasks.length > 0 ? (
@@ -486,6 +529,45 @@ export default function AdminTasksPage() {
                           <div className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Due Date</div>
                           <DueDateBadge dueDate={task.due_date} />
                         </div>
+                        <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8 rounded-lg"
+                            onClick={() => setSelectedTask(task)}
+                            aria-label="View task"
+                            title="View"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+                          <AdminTaskForm
+                            employees={employees}
+                            initialData={getTaskFormInitialData(task)}
+                            onSuccess={() => refetch()}
+                            trigger={
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-8 w-8 rounded-lg"
+                                aria-label="Edit task"
+                                title="Edit"
+                              >
+                                <Edit3 className="h-3.5 w-3.5" />
+                              </Button>
+                            }
+                          />
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8 rounded-lg border-red-200 text-red-600 hover:bg-red-50"
+                            onClick={() => handleDeleteTask(task.id)}
+                            disabled={processingId === task.id}
+                            aria-label="Delete task"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     ))
                   ) : (
@@ -500,7 +582,7 @@ export default function AdminTasksPage() {
                 </div>
 
                 {/* Desktop Table View */}
-                <div className="hidden sm:block overflow-x-auto">
+                <div className="hidden lg:block overflow-x-auto">
                   <table className="w-full text-left">
                     <thead className="bg-zinc-50/50 dark:bg-zinc-800/50 text-[10px] uppercase tracking-widest font-black text-muted-foreground">
                       <tr>
@@ -597,9 +679,9 @@ export default function AdminTasksPage() {
 
                             {/* Actions */}
                             <td className="px-6 py-4 text-right">
-                              <div className="flex justify-end gap-2">
-                                {hasClaimRequests(task) ? (
-                                  <>
+                              <div className="flex flex-col items-end gap-2">
+                                {hasClaimRequests(task) && (
+                                  <div className="flex justify-end gap-2">
                                     <Button size="sm" className="h-8 rounded-xl font-black text-[10px] uppercase tracking-widest bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/20" onClick={() => handleApproveClaim(task.id, primaryClaimantId(task))} disabled={processingId === task.id}>
                                       {processingId === task.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Check className="h-3 w-3 mr-1" />}
                                       Approve
@@ -607,12 +689,26 @@ export default function AdminTasksPage() {
                                     <Button size="sm" variant="outline" className="h-8 rounded-xl font-black text-[10px] uppercase tracking-widest border-red-200 text-red-600 hover:bg-red-50" onClick={() => handleRejectClaim(task.id, primaryClaimantId(task))} disabled={processingId === task.id}>
                                       <X className="h-3 w-3 mr-1" />Reject
                                     </Button>
-                                  </>
-                                ) : (
-                                  <Badge variant="secondary" className="text-[9px] font-black uppercase bg-zinc-100/50 text-zinc-400 border-none px-2 h-5">
-                                    No Action
-                                  </Badge>
+                                  </div>
                                 )}
+                                <div className="flex justify-end gap-2">
+                                  <Button size="icon" variant="outline" className="h-8 w-8 rounded-xl" onClick={() => setSelectedTask(task)} aria-label="View task" title="View">
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  <AdminTaskForm
+                                    employees={employees}
+                                    initialData={getTaskFormInitialData(task)}
+                                    onSuccess={() => refetch()}
+                                    trigger={
+                                      <Button size="icon" variant="outline" className="h-8 w-8 rounded-xl" aria-label="Edit task" title="Edit">
+                                        <Edit3 className="h-4 w-4" />
+                                      </Button>
+                                    }
+                                  />
+                                  <Button size="icon" variant="outline" className="h-8 w-8 rounded-xl border-red-200 text-red-600 hover:bg-red-50" onClick={() => handleDeleteTask(task.id)} disabled={processingId === task.id} aria-label="Delete task" title="Delete">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </div>
                             </td>
                           </motion.tr>
@@ -691,6 +787,87 @@ export default function AdminTasksPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={Boolean(selectedTask)} onOpenChange={(open) => !open && setSelectedTask(null)}>
+        <DialogContent className="sm:max-w-2xl rounded-[2rem] border-zinc-100 dark:border-zinc-800 p-0 overflow-hidden">
+          {selectedTask && (
+            <div className="max-h-[85vh] overflow-y-auto">
+              <DialogHeader className="px-6 pt-6 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+                <DialogTitle className="text-2xl font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100">
+                  {selectedTask.title}
+                </DialogTitle>
+                <DialogDescription className="text-sm font-medium text-zinc-500">
+                  Full task overview with assignment and execution details.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="px-6 py-5 space-y-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <TaskStatusBadge status={selectedTask.status} />
+                  <TaskPriorityBadge priority={selectedTask.priority} />
+                  {selectedTask.is_open_assignment && (
+                    <Badge variant="outline" className="text-[10px] font-black uppercase text-blue-600 border-blue-100 bg-blue-50/50">
+                      Marketplace
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-zinc-100 dark:border-zinc-800 p-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Project</p>
+                    <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      {selectedTask.projects?.name || "Internal"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-zinc-100 dark:border-zinc-800 p-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Assignee</p>
+                    <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      {selectedTask.profiles?.full_name || "Unassigned"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-zinc-100 dark:border-zinc-800 p-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Due Date</p>
+                    <div className="mt-1">
+                      <DueDateBadge dueDate={selectedTask.due_date} />
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-zinc-100 dark:border-zinc-800 p-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Claim Requests</p>
+                    <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      {selectedTask.claimants?.length || 0}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-zinc-100 dark:border-zinc-800 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Description</p>
+                  <p className="mt-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+                    {selectedTask.description || "No description provided."}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-zinc-100 dark:border-zinc-800 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Subtasks</p>
+                  {selectedTask.subtasks && selectedTask.subtasks.length > 0 ? (
+                    <div className="mt-3 space-y-2">
+                      {selectedTask.subtasks.map((subtask, idx) => (
+                        <div key={`${selectedTask.id}-subtask-${idx}`} className="flex items-center justify-between rounded-lg bg-zinc-50 dark:bg-zinc-900/50 px-3 py-2">
+                          <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{subtask.title}</span>
+                          <Badge variant={subtask.completed ? "default" : "secondary"} className="text-[10px] uppercase font-black">
+                            {subtask.completed ? "Done" : "Pending"}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm font-medium text-zinc-500">No subtasks added.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
