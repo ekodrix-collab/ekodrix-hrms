@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { TaskStatus } from "@/store/task-store";
+import { calculateProjectEmployeeShare } from "@/actions/project-profit";
 
 type TaskSubtask = {
   title: string;
@@ -192,11 +193,14 @@ export async function createAdminTaskAction(params: {
   revalidatePath("/admin/tasks");
   revalidatePath("/employee/tasks");
   revalidatePath("/employee/dashboard");
-  if (projectId) {
-    revalidatePath(`/admin/projects/${projectId}`);
-    revalidatePath(`/employee/projects/${projectId}`);
-  }
-  return { ok: true, task };
+    if (projectId) {
+      revalidatePath(`/admin/projects/${projectId}`);
+      revalidatePath(`/employee/projects/${projectId}`);
+      if (difficultyScore !== undefined) {
+        await calculateProjectEmployeeShare(projectId);
+      }
+    }
+    return { ok: true, task };
 }
 
 export async function updateTaskAction(params: {
