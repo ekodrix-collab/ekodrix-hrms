@@ -22,6 +22,12 @@ interface EmployeeProjectsClientProps {
     userId?: string;
 }
 
+type CountField = { count: number }[] | { count: number } | null | undefined;
+type ProjectWithCounts = Project & {
+    task_count?: CountField;
+    completed_count?: CountField;
+};
+
 const statusConfig: Record<string, string> = {
     active: "text-primary border-primary/20 bg-primary/5",
     completed: "text-green-600 border-green-200 bg-green-50/50",
@@ -49,6 +55,12 @@ export function EmployeeProjectsClient({ initialProjects, userId }: EmployeeProj
                 (p.description ?? "").toLowerCase().includes(search.toLowerCase())
         );
     }, [initialProjects, userId, search]);
+
+    const readCount = (field: CountField): number => {
+        if (!field) return 0;
+        if (Array.isArray(field)) return field[0]?.count ?? 0;
+        return field.count ?? 0;
+    };
 
     return (
         <div className="space-y-8">
@@ -87,10 +99,12 @@ export function EmployeeProjectsClient({ initialProjects, userId }: EmployeeProj
 
             {/* Projects Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {relevantProjects.map((project: Project) => {
-                    const totalTasks = project.tasks?.length || 0;
-                    const completedTasks = project.tasks?.filter((t: Task) => t.status === "done").length || 0;
-                    const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+                {relevantProjects.map((project: ProjectWithCounts) => {
+                    const totalTasksFromRelation = project.tasks?.length || 0;
+                    const completedTasksFromRelation = project.tasks?.filter((t: Task) => t.status === "done").length || 0;
+                    const totalTasks = readCount(project.task_count) || totalTasksFromRelation;
+                    const completedTasks = readCount(project.completed_count) || completedTasksFromRelation;
+                    const progress = totalTasks > 0 ? Math.min(100, Math.max(0, (completedTasks / totalTasks) * 100)) : 0;
                     const statusClass = statusConfig[project.status] ?? statusConfig.active;
 
                     return (
