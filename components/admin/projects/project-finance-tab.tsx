@@ -234,6 +234,8 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                 setIsContractOpen(false);
                 setContractInput("");
                 queryClient.invalidateQueries({ queryKey: ["project-contract", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-profit-dist", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-employee-shares", project.id] });
             } else {
                 toast.error(res.message);
             }
@@ -264,6 +266,8 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                 queryClient.invalidateQueries({ queryKey: ["project-financials", project.id] });
                 queryClient.invalidateQueries({ queryKey: ["project-history", project.id] });
                 queryClient.invalidateQueries({ queryKey: ["project-contract", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-profit-dist", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-employee-shares", project.id] });
                 queryClient.invalidateQueries({ queryKey: ["company-finance-dashboard"] });
             } else {
                 toast.error(res.error || "Failed to post revenue");
@@ -293,6 +297,8 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                 });
                 queryClient.invalidateQueries({ queryKey: ["project-financials", project.id] });
                 queryClient.invalidateQueries({ queryKey: ["project-history", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-profit-dist", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-employee-shares", project.id] });
                 queryClient.invalidateQueries({ queryKey: ["company-finance-dashboard"] });
             } else {
                 toast.error(res.error || "Failed to log expense");

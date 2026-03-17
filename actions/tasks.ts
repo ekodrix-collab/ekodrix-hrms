@@ -196,9 +196,7 @@ export async function createAdminTaskAction(params: {
     if (projectId) {
       revalidatePath(`/admin/projects/${projectId}`);
       revalidatePath(`/employee/projects/${projectId}`);
-      if (difficultyScore !== undefined) {
-        await calculateProjectEmployeeShare(projectId);
-      }
+      await calculateProjectEmployeeShare(projectId);
     }
     return { ok: true, task };
 }
@@ -276,6 +274,7 @@ export async function deleteTaskAction(id: string) {
   if (task.project_id) {
     revalidatePath(`/admin/projects/${task.project_id}`);
     revalidatePath(`/employee/projects/${task.project_id}`);
+    await calculateProjectEmployeeShare(task.project_id);
   }
   return { ok: true };
 }
@@ -367,6 +366,7 @@ export async function updateAdminTaskAction(params: {
   if (task.project_id) {
     revalidatePath(`/admin/projects/${task.project_id}`);
     revalidatePath(`/employee/projects/${task.project_id}`);
+    await calculateProjectEmployeeShare(task.project_id);
   }
   return { ok: true };
 }

@@ -398,9 +398,9 @@ export async function postBusinessExpense(data: {
 
     revalidatePath("/admin/finance");
     if (data.project_id) {
-        revalidatePath(`/admin/projects/${data.project_id}`);
-        revalidatePath(`/admin/projects/${data.project_id}/finance`);
-        revalidatePath("/admin/projects/finance");
+        revalidatePath(`/admin/project-finance/${data.project_id}`);
+        revalidatePath("/admin/project-finance");
+        revalidatePath("/admin/projects/finance"); // Legacy
         await calculateProjectProfit(data.project_id);
     }
     return { success: true };
@@ -1125,5 +1125,9 @@ export async function updateProjectContractAmount(projectId: string, amount: num
     revalidatePath(`/admin/projects/${projectId}`);
     revalidatePath(`/admin/projects/${projectId}/finance`);
     revalidatePath("/admin/projects/finance");
+    
+    // Recalculate profit distribution
+    await calculateProjectProfit(projectId);
+
     return { ok: true };
 }

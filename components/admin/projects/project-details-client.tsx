@@ -366,7 +366,7 @@ export function ProjectDetailsClient({
                             />
                         )}
                         {showFinanceWorkspace && (
-                            <Link href={`/admin/projects/${project.id}/finance`}>
+                            <Link href={`/admin/project-finance/${project.id}`}>
                                 <Button variant="outline" className="font-bold">
                                     Finance Workspace
                                 </Button>

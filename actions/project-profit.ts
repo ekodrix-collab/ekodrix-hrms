@@ -17,6 +17,7 @@ export async function calculateProjectProfit(projectId: string) {
     if (revenueError) return { success: false, error: revenueError.message };
 
     const totalRevenue = revenueData?.reduce((sum, r) => sum + Number(r.amount), 0) || 0;
+    const effectiveRevenue = totalRevenue;
 
     // 2. Fetch utility expenses for the specific project
     // Note: Salary and broker commission are excluded by category filter in real costs
@@ -31,7 +32,8 @@ export async function calculateProjectProfit(projectId: string) {
     const utilityExpenses = expenseData?.reduce((sum, e) => sum + Number(e.amount), 0) || 0;
 
     // 3. Calculate net_profit_pool
-    const netProfitPool = totalRevenue - utilityExpenses;
+    const netProfitPool = effectiveRevenue - utilityExpenses;
+    const calculationPool = Math.max(0, netProfitPool);
 
     // 4. apply distribution percentages
     // Get existing percentages or use defaults
@@ -45,9 +47,9 @@ export async function calculateProjectProfit(projectId: string) {
     const companyPercentage = existingDist?.company_percentage ?? 30;
     const employeePercentage = existingDist?.employee_percentage ?? 60;
 
-    const brokerAmount = (netProfitPool * brokerPercentage) / 100;
-    const companyAmount = (netProfitPool * companyPercentage) / 100;
-    const employeePoolAmount = (netProfitPool * employeePercentage) / 100;
+    const brokerAmount = (calculationPool * brokerPercentage) / 100;
+    const companyAmount = (calculationPool * companyPercentage) / 100;
+    const employeePoolAmount = (calculationPool * employeePercentage) / 100;
 
     // 5. Save results
     const { error: upsertError } = await supabase
@@ -69,7 +71,7 @@ export async function calculateProjectProfit(projectId: string) {
     // Trigger employee share recalculation
     await calculateProjectEmployeeShare(projectId, employeePoolAmount);
 
-    revalidatePath(`/admin/projects/${projectId}/finance`);
+    revalidatePath(`/admin/project-finance/${projectId}`);
     revalidatePath("/admin/finance");
     return { success: true };
 }
@@ -98,35 +100,51 @@ export async function calculateProjectEmployeeShare(projectId: string, employeeP
     const manualTotal = manualShares.reduce((sum, s) => sum + Number(s.manual_amount || 0), 0);
     const manualUserIds = new Set(manualShares.map(s => s.employee_id));
 
-    // 1. Fetch tasks only for the specific project
-    const { data: tasks, error: tasksError } = await supabase
-        .from("tasks")
-        .select("user_id, difficulty_score")
-        .eq("project_id", projectId)
-        .not("user_id", "is", null);
+    // 1. Fetch team members and tasks
+    const [teamRes, tasksRes] = await Promise.all([
+        supabase
+            .from("project_team_members")
+            .select("user_id")
+            .eq("project_id", projectId),
+        supabase
+            .from("tasks")
+            .select("user_id, difficulty_score")
+            .eq("project_id", projectId)
+            .not("user_id", "is", null)
+    ]);
 
-    if (tasksError) return { success: false, error: tasksError.message };
+    if (tasksRes.error) return { success: false, error: tasksRes.error.message };
 
-    // 2. Group tasks by employee_id and sum difficulty_score
+    const tasks = tasksRes.data || [];
+    const teamMembers = teamRes.data || [];
+    
+    // Get unique set of all employees associated with the project
+    const allEmployeeIds = new Set([
+        ...teamMembers.map(m => m.user_id),
+        ...tasks.map(t => t.user_id!).filter(Boolean)
+    ]);
+
+    if (allEmployeeIds.size === 0) {
+        // Clear existing shares if no employees
+        await supabase.from("project_employee_share").delete().eq("project_id", projectId);
+        return { success: true };
+    }
+
+    // 2. Calculate scores
     const employeeScores: Record<string, number> = {};
     let totalProjectScore = 0;
     let nonManualProjectScore = 0;
 
-    tasks?.forEach(task => {
+    tasks.forEach(task => {
         if (task.user_id && task.difficulty_score) {
-            employeeScores[task.user_id] = (employeeScores[task.user_id] || 0) + Number(task.difficulty_score);
-            totalProjectScore += Number(task.difficulty_score);
+            const score = Number(task.difficulty_score);
+            employeeScores[task.user_id] = (employeeScores[task.user_id] || 0) + score;
+            totalProjectScore += score;
             if (!manualUserIds.has(task.user_id)) {
-                nonManualProjectScore += Number(task.difficulty_score);
+                nonManualProjectScore += score;
             }
         }
     });
-
-    if (totalProjectScore === 0) {
-        // Clear existing shares if no scores
-        await supabase.from("project_employee_share").delete().eq("project_id", projectId);
-        return { success: true };
-    }
 
     const availablePoolForCalculated = Math.max(0, poolAmount - manualTotal);
 
@@ -150,41 +168,65 @@ export async function calculateProjectEmployeeShare(projectId: string, employeeP
         });
     });
 
-    // Add calculated shares
-    Object.entries(employeeScores).forEach(([employeeId, score]) => {
-        if (manualUserIds.has(employeeId)) return; // Already handled
+    const nonManualUserIds = Array.from(allEmployeeIds).filter(id => !manualUserIds.has(id));
 
-        const scorePercentage = totalProjectScore > 0 ? (score / totalProjectScore) * 100 : 0;
-        
-        let shareAmount = 0;
-        if (nonManualProjectScore > 0) {
-            shareAmount = (Number(score) / Number(nonManualProjectScore)) * availablePoolForCalculated;
-        }
+    if (totalProjectScore > 0) {
+        // Weighted distribution based on difficulty scores
+        nonManualUserIds.forEach(employeeId => {
+            const score = employeeScores[employeeId] || 0;
+            const scorePercentage = (score / totalProjectScore) * 100;
+            
+            let shareAmount = 0;
+            if (nonManualProjectScore > 0) {
+                shareAmount = (score / nonManualProjectScore) * availablePoolForCalculated;
+            }
 
-        // Get paid status if exists
-        const existing = existingShares?.find(s => s.employee_id === employeeId);
+            const existing = existingShares?.find(s => s.employee_id === employeeId);
 
-        shares.push({
-            project_id: projectId,
-            employee_id: employeeId,
-            task_score_total: score,
-            score_percentage: scorePercentage,
-            share_amount: shareAmount,
-            is_manual_override: false,
-            manual_amount: 0,
-            is_paid: existing?.is_paid || false,
-            paid_at: existing?.paid_at,
-            expense_id: existing?.expense_id
+            shares.push({
+                project_id: projectId,
+                employee_id: employeeId,
+                task_score_total: score,
+                score_percentage: scorePercentage,
+                share_amount: shareAmount,
+                is_manual_override: false,
+                manual_amount: 0,
+                is_paid: existing?.is_paid || false,
+                paid_at: existing?.paid_at,
+                expense_id: existing?.expense_id
+            });
         });
-    });
+    } else {
+        // Equal distribution fallback
+        const equalShare = nonManualUserIds.length > 0 ? availablePoolForCalculated / nonManualUserIds.length : 0;
+        const equalPercentage = nonManualUserIds.length > 0 ? 100 / nonManualUserIds.length : 0;
+
+        nonManualUserIds.forEach(employeeId => {
+            const existing = existingShares?.find(s => s.employee_id === employeeId);
+
+            shares.push({
+                project_id: projectId,
+                employee_id: employeeId,
+                task_score_total: 0,
+                score_percentage: equalPercentage,
+                share_amount: equalShare,
+                is_manual_override: false,
+                manual_amount: 0,
+                is_paid: existing?.is_paid || false,
+                paid_at: existing?.paid_at,
+                expense_id: existing?.expense_id
+            });
+        });
+    }
 
     // Delete existing and insert new
     await supabase.from("project_employee_share").delete().eq("project_id", projectId);
-    const { error: insertError } = await supabase.from("project_employee_share").insert(shares);
+    if (shares.length > 0) {
+        const { error: insertError } = await supabase.from("project_employee_share").insert(shares);
+        if (insertError) return { success: false, error: insertError.message };
+    }
 
-    if (insertError) return { success: false, error: insertError.message };
-
-    revalidatePath(`/admin/projects/${projectId}/finance`);
+    revalidatePath(`/admin/project-finance/${projectId}`);
     revalidatePath("/admin/finance");
     return { success: true };
 }
@@ -247,7 +289,7 @@ export async function updateProfitDistribution(projectId: string, updates: {
         await calculateProjectEmployeeShare(projectId, poolAmount);
     }
 
-    revalidatePath(`/admin/projects/${projectId}/finance`);
+    revalidatePath(`/admin/project-finance/${projectId}`);
     revalidatePath("/admin/finance");
     return { success: true };
 }
@@ -334,7 +376,7 @@ export async function updateEmployeeShare(projectId: string, employeeId: string,
     // Recalculate other shares
     await calculateProjectEmployeeShare(projectId);
     
-    revalidatePath(`/admin/projects/${projectId}/finance`);
+    revalidatePath(`/admin/project-finance/${projectId}`);
     revalidatePath("/admin/finance");
     return { success: true };
 }
@@ -409,7 +451,7 @@ export async function payEmployeeShare(projectId: string, employeeId: string, pa
     // 5. Update profit calculation and invalidate paths
     await calculateProjectProfit(projectId);
     
-    revalidatePath(`/admin/projects/${projectId}/finance`);
+    revalidatePath(`/admin/project-finance/${projectId}`);
     revalidatePath("/admin/finance");
     revalidatePath("/admin/employees");
     
