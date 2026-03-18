@@ -15,7 +15,6 @@ import {
 } from "@/actions/finance";
 import {
     calculateProjectProfit,
-    calculateProjectEmployeeShare,
     updateProfitDistribution,
     updateEmployeeShare,
     payEmployeeShare
@@ -53,7 +52,6 @@ import {
     Target,
     Users,
     Percent,
-    Sliders,
     Coins,
     RefreshCcw
 } from "lucide-react";
@@ -77,7 +75,6 @@ import {
 } from "@/components/ui/select";
 import type { Project } from "@/types/dashboard";
 import { PROJECT_EXPENSE_CATEGORIES } from "@/lib/finance-categories";
-import { getProjectMembersAction } from "@/actions/projects";
 
 interface ProjectFinanceTabProps {
     project: Project;
@@ -171,11 +168,6 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
         category: PROJECT_EXPENSE_CATEGORIES[0] as typeof PROJECT_EXPENSE_CATEGORIES[number],
         payment_method: "upi",
         employee_id: ""
-    });
-
-    const { data: projectMembers } = useQuery({
-        queryKey: ["project-members", project.id],
-        queryFn: () => getProjectMembersAction(project.id),
     });
 
     // ── Queries ──
@@ -346,14 +338,6 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
             setTouchedFields(new Set());
         }
     }, [profitDist]);
-
-    const syncDistributionWithServer = (currentDist: typeof distribution) => {
-        distributionMutation.mutate({
-            broker_percentage: currentDist.broker,
-            company_percentage: currentDist.company,
-            employee_percentage: currentDist.employees
-        });
-    };
 
     const handleDistributionUpdate = (updates: Partial<typeof distribution>) => {
         const current = pendingDistribution || distribution;
@@ -945,7 +929,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                                                     setFocusedValue(e.target.value);
                                                                     const val = parseFloat(e.target.value);
                                                                     if (!isNaN(val)) {
-                                                                        handleAmountEdit(segment.key as any, val);
+                                                                        handleAmountEdit(segment.key as keyof typeof distribution, val);
                                                                     }
                                                                 }}
                                                                 onBlur={() => setFocusedField(null)}
