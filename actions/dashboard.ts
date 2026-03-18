@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getOrgContext } from "@/lib/auth-utils";
 import type { Blocker, Activity } from "@/types/dashboard";
+import { revalidatePath } from "next/cache";
 
 type RelatedProfile = {
     full_name?: string | null;
@@ -66,15 +67,16 @@ export async function getAdminDashboardData() {
     const { organizationId, error: authError } = await getOrgContext();
     if (authError || !organizationId) return null;
 
-    const [stats, trends, blockers, distributions, activities] = await Promise.all([
+    const [stats, trends, blockers, distributions, activities, teamPresence] = await Promise.all([
         getDashboardStats(),
         getAttendanceTrends(),
         getUrgentBlockers(),
         getDepartmentDistribution(),
-        getRecentActivities()
+        getRecentActivities(),
+        getAdminTeamPresence()
     ]);
 
-    return { stats, trends, blockers, distributions, activities };
+    return { stats, trends, blockers, distributions, activities, teamPresence };
 }
 
 export async function getDashboardStats() {
@@ -87,7 +89,8 @@ export async function getDashboardStats() {
         .from('profiles')
         .select('*', { count: 'exact', head: true })
         .eq('organization_id', organizationId)
-        .in('role', ['employee', 'founder']);
+        .in('role', ['employee', 'founder'])
+        .eq('status', 'active');
 
     // 2. Get today's attendance count in org
     const istDate = new Intl.DateTimeFormat('en-CA', {
@@ -99,10 +102,11 @@ export async function getDashboardStats() {
 
     const { count: presentToday } = await supabase
         .from('attendance')
-        .select('id, user_id, profiles!inner(organization_id)', { count: 'exact', head: true })
+        .select('id, user_id, profiles!inner(organization_id, status)', { count: 'exact', head: true })
         .eq('date', istDate)
         .eq('status', 'present')
-        .eq('profiles.organization_id', organizationId);
+        .eq('profiles.organization_id', organizationId)
+        .eq('profiles.status', 'active');
 
     // 3. Get pending standups/blockers in org
     const { count: pendingRequests } = await supabase
@@ -124,28 +128,61 @@ export async function getAttendanceTrends() {
     const { organizationId } = await getOrgContext();
     if (!organizationId) return [];
 
-    const now = new Date();
-    const istSevenDaysAgo = new Date(new Intl.DateTimeFormat('en-CA', {
+    const formatISTDate = (date: Date) => new Intl.DateTimeFormat('en-CA', {
         timeZone: 'Asia/Kolkata',
         year: 'numeric',
         month: '2-digit',
         day: '2-digit'
-    }).format(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)));
+    }).format(date);
+
+    const toISTDate = (dateKey: string) => new Date(`${dateKey}T00:00:00+05:30`);
+    const toISTWeekday = (dateKey: string) => new Intl.DateTimeFormat('en-US', {
+        weekday: 'short',
+        timeZone: 'Asia/Kolkata',
+    }).format(toISTDate(dateKey));
+
+    // Build a strict rolling window of exactly 7 IST dates, oldest -> newest.
+    const todayKey = formatISTDate(new Date());
+    const todayISTMidnight = toISTDate(todayKey);
+    const lastSevenDateKeys = Array.from({ length: 7 }, (_, index) => {
+        const offsetFromToday = 6 - index;
+        return formatISTDate(new Date(todayISTMidnight.getTime() - (offsetFromToday * 24 * 60 * 60 * 1000)));
+    });
+    const oldestKey = lastSevenDateKeys[0];
+    const yesterdayKey = lastSevenDateKeys[5];
 
     const { data: logs } = await supabase
         .from('attendance')
-        .select('date, status, profiles!inner(organization_id)')
+        .select('date, user_id, status, profiles!inner(organization_id, status)')
         .eq('profiles.organization_id', organizationId)
-        .gte('date', istSevenDaysAgo.toISOString().split('T')[0])
+        .eq('profiles.status', 'active')
+        .gte('date', oldestKey)
+        .lte('date', todayKey)
         .order('date', { ascending: true });
 
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const trends = days.map(day => {
-        const count = logs?.filter(l => {
-            const date = new Date(l.date);
-            return days[date.getDay()] === day && l.status === 'present';
-        }).length || 0;
-        return { name: day, attendance: count };
+    const uniquePresentByDate = new Map<string, Set<string>>();
+    for (const dateKey of lastSevenDateKeys) {
+        uniquePresentByDate.set(dateKey, new Set());
+    }
+
+    for (const log of logs || []) {
+        if (log.status !== 'present') continue;
+        const dateKey = String(log.date);
+        if (!uniquePresentByDate.has(dateKey)) continue;
+        uniquePresentByDate.get(dateKey)?.add(String(log.user_id));
+    }
+
+    const trends = lastSevenDateKeys.map((dateKey) => {
+        let label = toISTWeekday(dateKey);
+        if (dateKey === todayKey) label = 'Today';
+        else if (dateKey === yesterdayKey) label = 'Yesterday';
+
+        return {
+            name: label,
+            attendance: uniquePresentByDate.get(dateKey)?.size || 0,
+            date: dateKey,
+            isToday: dateKey === todayKey,
+        };
     });
 
     return trends;
@@ -234,6 +271,49 @@ export async function getRecentActivities(): Promise<Activity[]> {
     });
 }
 
+export async function postDashboardUpdate(input: {
+    title?: string;
+    message: string;
+    audience?: "all" | "management" | "operations";
+}) {
+    const message = input.message?.trim();
+    const title = input.title?.trim();
+    const audience = input.audience ?? "all";
+
+    if (!message) {
+        return { ok: false, message: "Update message is required" };
+    }
+
+    const supabase = createSupabaseServerClient();
+    const { user, organizationId, role } = await getOrgContext();
+    if (!user || !organizationId || role !== "admin") {
+        return { ok: false, message: "Admin organization context missing" };
+    }
+
+    const action = title ? `posted update: ${title}` : "posted update";
+    const { error } = await supabase
+        .from("activity_logs")
+        .insert({
+            user_id: user.id,
+            action,
+            entity_type: "announcement",
+            entity_id: user.id,
+            metadata: {
+                title: title || null,
+                message,
+                audience,
+                source: "admin_dashboard_quick_action",
+            },
+        });
+
+    if (error) {
+        return { ok: false, message: error.message };
+    }
+
+    revalidatePath("/admin/dashboard");
+    return { ok: true };
+}
+
 export async function getAllTasks() {
     const supabase = createSupabaseServerClient();
     const adminClient = createSupabaseAdminClient();
@@ -317,4 +397,65 @@ export async function getAllExpenses() {
         .order('expense_date', { ascending: false });
 
     return expenses || [];
+}
+
+export async function getAdminTeamPresence() {
+    const supabase = createSupabaseServerClient();
+    const { organizationId, error: authError } = await getOrgContext();
+    if (authError || !organizationId) return [];
+
+    const today = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+    }).format(new Date());
+
+    const { data: records, error } = await supabase
+        .from("attendance")
+        .select(`
+            user_id,
+            punch_in,
+            punch_out,
+            status,
+            profiles!inner(
+                id,
+                full_name,
+                avatar_url,
+                role,
+                organization_id
+            ),
+            attendance_breaks (
+                start_time,
+                end_time
+            )
+        `)
+        .eq("date", today)
+        .eq("profiles.organization_id", organizationId)
+        .not("punch_in", "is", null)
+        .order("punch_in", { ascending: true });
+
+    if (error) {
+        console.error("Error fetching admin team presence:", error);
+        return [];
+    }
+
+    return (records || []).map((record: any) => {
+        const profile = Array.isArray(record.profiles) ? record.profiles[0] : record.profiles;
+
+        const breaks = record.attendance_breaks || [];
+        const isActiveBreak = breaks.some((b: any) => !b.end_time);
+
+        const memberStatus = record.punch_out ? "completed" : (isActiveBreak ? "on_break" : "present");
+
+        return {
+            id: profile?.id || record.user_id,
+            full_name: profile?.full_name || null,
+            avatar_url: profile?.avatar_url || null,
+            role: profile?.role || null,
+            status: memberStatus,
+            punch_in: record.punch_in || null,
+            punch_out: record.punch_out || null,
+        };
+    });
 }

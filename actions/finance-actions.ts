@@ -55,6 +55,110 @@ export async function createExpenseClaim(formData: FormData) {
     return { ok: true, message: "Claim submitted successfully" };
 }
 
+type CreateClaimOnBehalfInput = {
+    memberId: string;
+    amount: number;
+    category: string;
+    description: string;
+    date: string;
+    paymentMethod: string;
+};
+
+export async function getClaimEligibleMembers() {
+    const supabase = createSupabaseServerClient();
+    const { organizationId, role } = await getOrgContext();
+
+    if (!organizationId || role !== "admin") {
+        return { ok: false, message: "Admin organization context missing", data: [] };
+    }
+
+    const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, avatar_url, role, department")
+        .eq("organization_id", organizationId)
+        .eq("is_active", true)
+        .in("role", ["employee", "founder"])
+        .order("full_name", { ascending: true });
+
+    if (error) {
+        return { ok: false, message: error.message, data: [] };
+    }
+
+    return { ok: true, data: data || [] };
+}
+
+export async function createExpenseClaimForMember(payload: CreateClaimOnBehalfInput) {
+    const amount = Number(payload.amount);
+    const category = normalizeExpenseCategory(String(payload.category || ""));
+    const description = String(payload.description || "").trim();
+    const date = String(payload.date || "");
+    const paymentMethod = String(payload.paymentMethod || "cash");
+    const memberId = String(payload.memberId || "");
+
+    if (!memberId || !amount || !category || !date || !description) {
+        return { ok: false, message: "Missing required fields" };
+    }
+
+    if (amount <= 0) {
+        return { ok: false, message: "Amount must be greater than zero" };
+    }
+
+    const supabase = createSupabaseServerClient();
+    const { user, organizationId, role } = await getOrgContext();
+    if (!user || !organizationId || role !== "admin") {
+        return { ok: false, message: "Admin organization context missing" };
+    }
+
+    const { data: member, error: memberError } = await supabase
+        .from("profiles")
+        .select("id, full_name, role, organization_id, is_active")
+        .eq("id", memberId)
+        .single();
+
+    if (memberError || !member) {
+        return { ok: false, message: "Selected employee/founder was not found" };
+    }
+
+    if (member.organization_id !== organizationId) {
+        return { ok: false, message: "Cannot create claim for a user outside your organization" };
+    }
+
+    if (member.is_active === false) {
+        return { ok: false, message: "Selected user is not active" };
+    }
+
+    if (member.role !== "employee" && member.role !== "founder") {
+        return { ok: false, message: "Claims can only be created for employees or founders" };
+    }
+
+    const { error } = await supabase
+        .from("expenses")
+        .insert({
+            amount,
+            category,
+            description,
+            expense_date: date,
+            payment_method: paymentMethod,
+            paid_by: member.id,
+            created_by: user.id,
+            organization_id: organizationId,
+            status: "pending",
+            approved_at: null,
+            approved_by: null,
+            reimbursed_at: null,
+            reimbursed_by: null,
+            reimbursement_method: null
+        });
+
+    if (error) {
+        return { ok: false, message: `Failed to create claim: ${error.message}` };
+    }
+
+    revalidatePath("/admin/finance");
+    revalidatePath("/employee/finance");
+    return { ok: true, message: `Claim added for ${member.full_name || "selected member"}` };
+}
+
 export async function getMyClaims() {
     const supabase = createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -169,7 +273,7 @@ export async function getEmployeeExpenseWorkspace() {
             profiles:paid_by!inner(id, full_name, avatar_url, department, role, organization_id)
         `)
         .eq("profiles.organization_id", organizationId)
-        .eq("profiles.role", "employee")
+        .in("profiles.role", ["employee", "founder"])
         .order("created_at", { ascending: false });
 
     if (error) return { ok: false, message: error.message };
@@ -371,8 +475,8 @@ export async function markClaimAsPaid(claimId: string, reimbursementMethod: stri
     if (claimError || !claim) return { ok: false, message: "Claim not found for your organization" };
 
     const profile = normalizeJoinedProfile((claim as unknown as { profiles: ClaimPaymentProfile[] | ClaimPaymentProfile | null }).profiles);
-    if (!profile || profile.role !== "employee") {
-        return { ok: false, message: "Only employee claims can be marked as reimbursed." };
+    if (!profile || (profile.role !== "employee" && profile.role !== "founder")) {
+        return { ok: false, message: "Only employee/founder claims can be marked as reimbursed." };
     }
 
     if ((claim as { status?: string }).status !== "approved" && (claim as { status?: string }).status !== "partially_paid") {

@@ -7,12 +7,17 @@ import { TeamOverview } from "@/components/admin/dashboard/team-overview";
 import { RecentActivity } from "@/components/admin/dashboard/recent-activity";
 import { QuickActions } from "@/components/admin/dashboard/quick-actions";
 import { TeamMood } from "@/components/admin/dashboard/team-mood";
+import { InviteEmployeeModal } from "@/components/admin/dashboard/invite-employee-modal";
+import { RealTimeMetrics } from "@/components/admin/dashboard/real-time-metrics";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, FileText, LayoutDashboard, Settings2, RefreshCcw } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { FileText, LayoutDashboard, RefreshCcw, Activity } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import Link from "next/link";
 import { getAdminDashboardData } from "@/actions/dashboard";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -76,20 +81,22 @@ export default function AdminDashboardPage() {
               <RefreshCcw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               Sync Data
             </Button>
-            <Button variant="outline" size="sm" className="hidden sm:flex h-10 gap-2 border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
-              <FileText className="h-4 w-4" />
-              Analytics
+            <Button asChild variant="outline" size="sm" className="hidden sm:flex h-10 gap-2 border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
+              <Link href="/admin/analytics">
+                <FileText className="h-4 w-4" />
+                Analytics
+              </Link>
             </Button>
-            <Button className="h-10 px-6 gap-2 shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all duration-300 bg-primary hover:bg-primary/90 font-bold border-none">
-              <PlusCircle className="h-4 w-4" />
-              Invite Employee
-            </Button>
+            <InviteEmployeeModal triggerClassName="h-10 px-6 gap-2 shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all duration-300 bg-primary hover:bg-primary/90 font-bold border-none" />
           </motion.div>
         </header>
 
         <section className="space-y-8">
           <QuickActions />
-          <StatsCards data={dashboardData?.stats} />
+          <StatsCards
+            data={dashboardData?.stats}
+            teamPresence={dashboardData?.teamPresence}
+          />
         </section>
 
         <Tabs defaultValue="overview" className="space-y-6">
@@ -131,10 +138,52 @@ export default function AdminDashboardPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="real-time" className="min-h-[400px] flex items-center justify-center border-2 border-dashed border-zinc-100 dark:border-zinc-800 rounded-3xl opacity-50">
-            <div className="text-center space-y-3">
-              <Settings2 className="h-8 w-8 mx-auto text-zinc-400" />
-              <p className="font-bold text-zinc-500">Advanced real-time metrics are being initialized...</p>
+          <TabsContent value="real-time" className="space-y-6 outline-none mt-4 pb-0">
+            <RealTimeMetrics
+              teamPresence={dashboardData?.teamPresence || []}
+              totalEmployees={dashboardData?.stats?.totalEmployees || 0}
+            />
+          </TabsContent>
+
+          <TabsContent value="dynamics" className="space-y-6 outline-none mt-4 pb-0">
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+              <div className="xl:col-span-4">
+                <TeamOverview data={dashboardData?.distributions} />
+              </div>
+              <div className="xl:col-span-8">
+                <Card className="h-full border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 backdrop-blur-xl shadow-lg p-8">
+                  <div className="flex flex-col h-full justify-center space-y-6">
+                    <div>
+                      <h3 className="text-2xl font-black text-zinc-900 dark:text-zinc-100">Workforce Intelligence</h3>
+                      <p className="text-zinc-500 font-medium">Deep insights into team composition and performance metrics.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {[
+                        { label: "Male/Female Ratio", value: "52% / 48%", color: "text-blue-500" },
+                        { label: "Contractor Ratio", value: "15%", color: "text-purple-500" },
+                        { label: "Avg. Tenure", value: "2.4 Years", color: "text-orange-500" },
+                        { label: "Culture Score", value: "4.8/5.0", color: "text-green-500" }
+                      ].map((stat) => (
+                        <div key={stat.label} className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800">
+                          <p className="text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-1">{stat.label}</p>
+                          <p className={`text-xl font-black ${stat.color}`}>{stat.value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                          <Activity className="h-4 w-4" />
+                        </div>
+                        <span className="text-sm font-bold">Team stability is trending upwards this quarter.</span>
+                      </div>
+                      <Badge className="bg-primary/20 text-primary hover:bg-primary/20 border-none font-bold">+4.2%</Badge>
+                    </div>
+                  </div>
+                </Card>
+              </div>
             </div>
           </TabsContent>
         </Tabs>

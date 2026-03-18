@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useDeferredValue, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { format, startOfMonth, startOfYear, subMonths } from "date-fns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -21,7 +21,7 @@ import {
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { generateMonthlyAccruals, getCompanyFinanceDashboard, postBusinessExpense, postRevenue } from "@/actions/finance";
-import { markClaimAsPaid, updateClaimPayment, updateClaimStatus } from "@/actions/finance-actions";
+import { createExpenseClaimForMember, getClaimEligibleMembers, markClaimAsPaid, updateClaimPayment, updateClaimStatus } from "@/actions/finance-actions";
 import { getUnpaidAccruals, processSalaryPayment } from "@/actions/payroll-actions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -61,6 +61,24 @@ type ExpenseForm = {
   description: string;
   category: string;
   payment_method: string;
+};
+
+type AdminClaimForm = {
+  member_id: string;
+  amount: string;
+  description: string;
+  category: string;
+  payment_method: string;
+  date: string;
+};
+
+type ClaimEligibleMember = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  role: string | null;
+  department: string | null;
 };
 
 type FinanceSummary = {
@@ -205,6 +223,16 @@ export default function AdminFinancePage() {
   const [activePreset, setActivePreset] = useState("12m");
   const [revenueOpen, setRevenueOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
+  const createInitialAdminClaimForm = (): AdminClaimForm => ({
+    member_id: "",
+    amount: "",
+    description: "",
+    category: EXPENSE_CATEGORIES[0],
+    payment_method: "cash",
+    date: format(new Date(), "yyyy-MM-dd")
+  });
+  const [adminClaimOpen, setAdminClaimOpen] = useState(false);
+  const [adminClaimForm, setAdminClaimForm] = useState<AdminClaimForm>(createInitialAdminClaimForm);
   const [rejectingClaim, setRejectingClaim] = useState<ClaimItem | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [payingClaim, setPayingClaim] = useState<ClaimItem | null>(null);
@@ -234,7 +262,21 @@ export default function AdminFinancePage() {
     queryFn: () => getCompanyFinanceDashboard(range) as Promise<FinanceDashboardResult>
   });
 
+  const { data: claimEligibleMembers = [] } = useQuery<ClaimEligibleMember[]>({
+    queryKey: ["admin-claim-eligible-members"],
+    queryFn: async () => {
+      const result = await getClaimEligibleMembers();
+      return result.ok ? ((result.data ?? []) as ClaimEligibleMember[]) : [];
+    }
+  });
+
   const dashboard = data ?? EMPTY_DASHBOARD;
+
+  useEffect(() => {
+    if (!adminClaimForm.member_id && claimEligibleMembers.length > 0) {
+      setAdminClaimForm((previous) => ({ ...previous, member_id: claimEligibleMembers[0].id }));
+    }
+  }, [adminClaimForm.member_id, claimEligibleMembers]);
 
   const invalidateTreasury = () => {
     queryClient.invalidateQueries({ queryKey: ["company-finance-dashboard"] });
@@ -284,6 +326,28 @@ export default function AdminFinancePage() {
         return;
       }
       toast.error(result.error ?? "Failed to log expense");
+    }
+  });
+
+  const adminClaimMutation = useMutation({
+    mutationFn: () =>
+      createExpenseClaimForMember({
+        memberId: adminClaimForm.member_id,
+        amount: Number(adminClaimForm.amount),
+        description: adminClaimForm.description,
+        category: adminClaimForm.category,
+        date: adminClaimForm.date,
+        paymentMethod: adminClaimForm.payment_method
+      }),
+    onSuccess: (result) => {
+      if (result.ok) {
+        toast.success(result.message);
+        setAdminClaimOpen(false);
+        setAdminClaimForm(createInitialAdminClaimForm());
+        invalidateTreasury();
+        return;
+      }
+      toast.error(result.message);
     }
   });
 
@@ -421,7 +485,7 @@ export default function AdminFinancePage() {
                 </div>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-3 xl:w-[520px]">
+              <div className="grid gap-2 sm:grid-cols-2 xl:w-[760px] xl:grid-cols-4">
                 <Button
                   variant="outline"
                   onClick={() => accrualMutation.mutate()}
@@ -437,6 +501,14 @@ export default function AdminFinancePage() {
                 >
                   <Plus className="h-4 w-4" />
                   Add Revenue
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setAdminClaimOpen(true)}
+                  className="justify-center border-sky-500/30 bg-sky-500/10 text-sky-700 hover:bg-sky-500/15 dark:text-sky-200"
+                >
+                  <Receipt className="h-4 w-4" />
+                  Add Claim
                 </Button>
                 <Button
                   variant="outline"
@@ -852,6 +924,19 @@ export default function AdminFinancePage() {
 
       <RevenueDialog open={revenueOpen} onOpenChange={setRevenueOpen} form={revenueForm} setForm={setRevenueForm} mutation={revenueMutation} />
       <ExpenseDialog open={expenseOpen} onOpenChange={setExpenseOpen} form={expenseForm} setForm={setExpenseForm} mutation={expenseMutation} />
+      <AdminClaimDialog
+        open={adminClaimOpen}
+        onOpenChange={(open) => {
+          setAdminClaimOpen(open);
+          if (!open) {
+            setAdminClaimForm(createInitialAdminClaimForm());
+          }
+        }}
+        form={adminClaimForm}
+        setForm={setAdminClaimForm}
+        members={claimEligibleMembers}
+        mutation={adminClaimMutation}
+      />
 
       <Dialog open={Boolean(rejectingClaim)} onOpenChange={(open) => { if (!open) { setRejectingClaim(null); setRejectionReason(""); } }}>
         <DialogContent>
@@ -1144,6 +1229,103 @@ function RevenueDialog({
           <Button onClick={() => mutation.mutate()} disabled={!form.amount || !form.source || mutation.isPending}>
             {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             Save Revenue
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AdminClaimDialog({
+  open,
+  onOpenChange,
+  form,
+  setForm,
+  members,
+  mutation
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  form: AdminClaimForm;
+  setForm: Dispatch<SetStateAction<AdminClaimForm>>;
+  members: ClaimEligibleMember[];
+  mutation: { mutate: () => void; isPending: boolean };
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add Claim for Employee/Founder</DialogTitle>
+          <DialogDescription>
+            Create a claim on behalf of a team member. It will appear in their account as their claim.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Employee / Founder</Label>
+            <Select value={form.member_id} onValueChange={(value) => setForm((previous) => ({ ...previous, member_id: value }))}>
+              <SelectTrigger><SelectValue placeholder="Select employee or founder" /></SelectTrigger>
+              <SelectContent>
+                {members.map((member) => (
+                  <SelectItem key={member.id} value={member.id}>
+                    {(member.full_name || member.email || "Unknown user")} {member.role ? `(${member.role})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {!members.length && <p className="text-xs text-muted-foreground">No active employee/founder found in your organization.</p>}
+          </div>
+          <div className="space-y-2">
+            <Label>Amount</Label>
+            <Input
+              type="number"
+              min="0"
+              value={form.amount}
+              onChange={(event) => setForm((previous) => ({ ...previous, amount: event.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Description</Label>
+            <Input
+              value={form.description}
+              onChange={(event) => setForm((previous) => ({ ...previous, description: event.target.value }))}
+              placeholder="What was this paid for?"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Category</Label>
+            <Select value={form.category} onValueChange={(value) => setForm((previous) => ({ ...previous, category: value }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{EXPENSE_CATEGORIES.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Date</Label>
+            <DateField id="admin-claim-date" value={form.date} onChange={(value) => setForm((previous) => ({ ...previous, date: value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label>Payment Method</Label>
+            <Select value={form.payment_method} onValueChange={(value) => setForm((previous) => ({ ...previous, payment_method: value }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{METHODS.map((method) => <SelectItem key={method.value} value={method.value}>{method.label}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button
+            onClick={() => mutation.mutate()}
+            disabled={
+              mutation.isPending ||
+              !form.member_id ||
+              !form.amount ||
+              !form.description.trim() ||
+              !form.date ||
+              Number(form.amount) <= 0
+            }
+          >
+            {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Submit Claim
           </Button>
         </DialogFooter>
       </DialogContent>
