@@ -12,10 +12,10 @@ export const EXPENSE_CATEGORIES = [
 ] as const;
 
 export const PROJECT_EXPENSE_CATEGORIES = [
-  "Project Share",
-  "Commision / Broker",
   "Domain & Hosting",
   "Marketing & Ads",
+  "API / Tools",
+  "Software / SaaS",
   "Miscellaneous",
 ] as const;
 
