@@ -5,6 +5,7 @@ import { getOrgContext } from "@/lib/auth-utils";
 import { revalidatePath } from "next/cache";
 import { Expense } from "@/types/common";
 import { normalizeExpenseCategory } from "@/lib/finance-categories";
+import { calculateProjectProfit } from "@/actions/project-profit";
 
 export async function createExpenseClaim(formData: FormData) {
     const amount = parseFloat(formData.get("amount") as string);
@@ -392,7 +393,7 @@ export async function updateClaimStatus(claimId: string, status: "approved" | "r
 
     const { data: claim, error: claimError } = await supabase
         .from("expenses")
-        .select("id, status, profiles:paid_by!inner(organization_id)")
+        .select("id, status, project_id, profiles:paid_by!inner(organization_id)")
         .eq("id", claimId)
         .eq("profiles.organization_id", organizationId)
         .single();
@@ -442,6 +443,11 @@ export async function updateClaimStatus(claimId: string, status: "approved" | "r
 
     revalidatePath("/admin/finance");
     revalidatePath("/employee/finance"); // Revalidate employee view too
+
+    if (status === "approved" && (claim as any).project_id) {
+        await calculateProjectProfit((claim as any).project_id);
+    }
+
     return { ok: true, message: `Claim ${status}` };
 }
 

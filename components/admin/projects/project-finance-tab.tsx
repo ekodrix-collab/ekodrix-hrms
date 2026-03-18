@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
     getCompanyFinancials,
     getFinancialHistory,
@@ -12,6 +13,12 @@ import {
     getProjectContractAmount,
     updateProjectContractAmount
 } from "@/actions/finance";
+import {
+    calculateProjectProfit,
+    updateProfitDistribution,
+    updateEmployeeShare,
+    payEmployeeShare
+} from "@/actions/project-profit";
 import {
     Card,
     CardContent,
@@ -42,7 +49,11 @@ import {
     CheckCircle2,
     Receipt,
     Wallet,
-    Target
+    Target,
+    Users,
+    Percent,
+    Coins,
+    RefreshCcw
 } from "lucide-react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
@@ -64,7 +75,6 @@ import {
 } from "@/components/ui/select";
 import type { Project } from "@/types/dashboard";
 import { PROJECT_EXPENSE_CATEGORIES } from "@/lib/finance-categories";
-import { getProjectMembersAction } from "@/actions/projects";
 
 interface ProjectFinanceTabProps {
     project: Project;
@@ -90,6 +100,38 @@ interface VerdictItem {
     } | null;
 }
 
+interface ProfitDistribution {
+    id: string;
+    project_id: string;
+    net_profit_pool: number;
+    broker_percentage: number;
+    company_percentage: number;
+    employee_percentage: number;
+    broker_amount: number;
+    company_amount: number;
+    employee_pool_amount: number;
+    updated_at: string;
+}
+
+interface EmployeeShare {
+    id: string;
+    project_id: string;
+    employee_id: string;
+    task_score_total: number;
+    score_percentage: number;
+    share_amount: number;
+    is_manual_override: boolean;
+    manual_amount: number;
+    is_paid: boolean;
+    paid_at?: string;
+    expense_id?: string;
+    created_at: string;
+    profiles?: {
+        full_name: string;
+        avatar_url: string;
+    };
+}
+
 
 
 const fadeUp = {
@@ -103,7 +145,7 @@ const stagger = {
 };
 
 function inr(value: number) {
-    return `₹${value.toLocaleString("en-IN")}`;
+    return `₹${value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
@@ -114,6 +156,10 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
     const [isExpenseOpen, setIsExpenseOpen] = useState(false);
     const [isContractOpen, setIsContractOpen] = useState(false);
     const [contractInput, setContractInput] = useState("");
+    
+    // Employee Share Editing State
+    const [editingShareId, setEditingShareId] = useState<string | null>(null);
+    const [editShareAmount, setEditShareAmount] = useState<string>("");
 
     const [revenueForm, setRevenueForm] = useState({ amount: "", source: "", description: "" });
     const [expenseForm, setExpenseForm] = useState({
@@ -122,11 +168,6 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
         category: PROJECT_EXPENSE_CATEGORIES[0] as typeof PROJECT_EXPENSE_CATEGORIES[number],
         payment_method: "upi",
         employee_id: ""
-    });
-
-    const { data: projectMembers } = useQuery({
-        queryKey: ["project-members", project.id],
-        queryFn: () => getProjectMembersAction(project.id),
     });
 
     // ── Queries ──
@@ -150,6 +191,32 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
         queryFn: () => getProjectContractAmount(project.id),
     });
 
+    const { data: profitDist, isLoading: loadingProfit } = useQuery({
+        queryKey: ["project-profit-dist", project.id],
+        queryFn: async () => {
+            const supabase = createSupabaseBrowserClient();
+            const { data } = await supabase
+                .from("project_profit_distribution")
+                .select("*")
+                .eq("project_id", project.id)
+                .maybeSingle();
+            return data as ProfitDistribution | null;
+        }
+    });
+
+    const { data: employeeShares, isLoading: loadingShares } = useQuery({
+        queryKey: ["project-employee-shares", project.id],
+        queryFn: async () => {
+            const supabase = createSupabaseBrowserClient();
+            const { data } = await supabase
+                .from("project_employee_share")
+                .select("*, profiles:employee_id(full_name, avatar_url)")
+                .eq("project_id", project.id)
+                .order("share_amount", { ascending: false });
+            return data as unknown as EmployeeShare[];
+        }
+    });
+
     // ── Mutations ──
     const contractMutation = useMutation({
         mutationFn: (amount: number) => updateProjectContractAmount(project.id, amount),
@@ -159,6 +226,8 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                 setIsContractOpen(false);
                 setContractInput("");
                 queryClient.invalidateQueries({ queryKey: ["project-contract", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-profit-dist", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-employee-shares", project.id] });
             } else {
                 toast.error(res.message);
             }
@@ -189,6 +258,9 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                 queryClient.invalidateQueries({ queryKey: ["project-financials", project.id] });
                 queryClient.invalidateQueries({ queryKey: ["project-history", project.id] });
                 queryClient.invalidateQueries({ queryKey: ["project-contract", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-profit-dist", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-employee-shares", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["company-finance-dashboard"] });
             } else {
                 toast.error(res.error || "Failed to post revenue");
             }
@@ -217,6 +289,9 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                 });
                 queryClient.invalidateQueries({ queryKey: ["project-financials", project.id] });
                 queryClient.invalidateQueries({ queryKey: ["project-history", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-profit-dist", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-employee-shares", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["company-finance-dashboard"] });
             } else {
                 toast.error(res.error || "Failed to log expense");
             }
@@ -230,7 +305,152 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
     const receivedPercent = contractAmount > 0 ? Math.min(100, (receivedAmount / contractAmount) * 100) : 0;
     const isFullyPaid = contractAmount > 0 && dueAmount === 0;
 
-    if (loadingFin || loadingHistory || loadingVerdicts || loadingContract) {
+    const [distribution, setDistribution] = useState<{
+        broker: number;
+        company: number;
+        employees: number;
+    }>({
+        broker: 10,
+        company: 30,
+        employees: 60
+    });
+
+    const [pendingDistribution, setPendingDistribution] = useState<{
+        broker: number;
+        company: number;
+        employees: number;
+    } | null>(null);
+    const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
+    const [focusedField, setFocusedField] = useState<string | null>(null);
+    const [focusedValue, setFocusedValue] = useState<string>("");
+
+    const netProfitPool = (financials?.totalRevenue ?? 0) - (financials?.totalBusinessExpenses ?? 0);
+
+    // Sync from server
+    useEffect(() => {
+        if (profitDist) {
+            setDistribution({
+                broker: Number(profitDist.broker_percentage),
+                company: Number(profitDist.company_percentage),
+                employees: Number(profitDist.employee_percentage)
+            });
+            setPendingDistribution(null);
+            setTouchedFields(new Set());
+        }
+    }, [profitDist]);
+
+    const handleDistributionUpdate = (updates: Partial<typeof distribution>) => {
+        const current = pendingDistribution || distribution;
+        const next = { ...current, ...updates };
+        
+        // Track which fields have been manually touched in this session
+        const newTouched = new Set(touchedFields);
+        Object.keys(updates).forEach(key => newTouched.add(key));
+        setTouchedFields(newTouched);
+
+        // Smart Balancing Logic:
+        // Adjust the fields that haven't been touched yet to maintain 100%
+        const allFields = ['broker', 'company', 'employees'] as const;
+        const untouchedFields = allFields.filter(f => !newTouched.has(f));
+
+        if (untouchedFields.length > 0) {
+            const touchedSum = allFields
+                .filter(f => newTouched.has(f))
+                .reduce((sum, f) => sum + next[f], 0);
+            
+            const remaining = Math.max(0, 100 - touchedSum);
+            const currentUntouchedSum = untouchedFields.reduce((sum, f) => sum + current[f], 0);
+
+            untouchedFields.forEach(f => {
+                if (currentUntouchedSum > 0) {
+                    // Proportionally distribute the remaining percentage
+                    next[f] = (current[f] / currentUntouchedSum) * remaining;
+                } else {
+                    // Split equally if all untouched were 0
+                    next[f] = remaining / untouchedFields.length;
+                }
+            });
+        }
+
+        setPendingDistribution(next);
+    };
+
+    const handleAmountEdit = (key: keyof typeof distribution, amount: number) => {
+        if (netProfitPool <= 0) return;
+        const percentage = (amount / netProfitPool) * 100;
+        handleDistributionUpdate({ [key]: Math.max(0, percentage) });
+    };
+
+    const isDistributionDirty = pendingDistribution !== null;
+    const currentDisplayDistribution = pendingDistribution || distribution;
+    const pendingTotal = currentDisplayDistribution.broker + currentDisplayDistribution.company + currentDisplayDistribution.employees;
+    const isTotalValid = Math.abs(pendingTotal - 100) < 0.01;
+
+    const distributionMutation = useMutation({
+        mutationFn: (updates: {
+            broker_percentage?: number;
+            company_percentage?: number;
+            employee_percentage?: number;
+            broker_amount?: number;
+            company_amount?: number;
+            employee_pool_amount?: number;
+        }) => updateProfitDistribution(project.id, updates),
+        onSuccess: (res) => {
+            if (res.success) {
+                toast.success("Distribution updated");
+                queryClient.invalidateQueries({ queryKey: ["project-profit-dist", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-employee-shares", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["company-finance-dashboard"] });
+            } else {
+                toast.error(res.error || "Failed to update distribution");
+            }
+        }
+    });
+
+    const recalculateMutation = useMutation({
+        mutationFn: () => calculateProjectProfit(project.id),
+        onSuccess: (res) => {
+            if (res.success) {
+                toast.success("Financials recalculated");
+                queryClient.invalidateQueries({ queryKey: ["project-profit-dist", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-employee-shares", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-financials", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["company-finance-dashboard"] });
+            }
+        }
+    });
+
+    const updateShareAmountMutation = useMutation({
+        mutationFn: ({ employeeId, amount }: { employeeId: string, amount: number | null }) => 
+            updateEmployeeShare(project.id, employeeId, amount),
+        onSuccess: (res) => {
+            if (res.success) {
+                toast.success("Employee share updated");
+                queryClient.invalidateQueries({ queryKey: ["project-profit-dist", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-employee-shares", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["company-finance-dashboard"] });
+            } else {
+                toast.error(res.error || "Failed to update employee share");
+            }
+        }
+    });
+
+    const payShareMutation = useMutation({
+        mutationFn: ({ employeeId }: { employeeId: string }) => payEmployeeShare(project.id, employeeId, "bank_transfer"),
+        onSuccess: (res) => {
+            if (res.success) {
+                toast.success("Share paid successfully");
+                queryClient.invalidateQueries({ queryKey: ["project-employee-shares", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-financials", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-history", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["company-finance-dashboard"] });
+            } else {
+                toast.error(res.error || "Failed to pay employee share");
+            }
+        }
+    });
+
+    if (loadingFin || loadingHistory || loadingVerdicts || loadingContract || loadingProfit || loadingShares) {
         return (
             <div className="flex flex-col items-center justify-center py-24 gap-3">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -443,6 +663,16 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                             >
                                 <Plus className="h-3.5 w-3.5 mr-1.5" /> Expense
                             </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-9 px-4 font-black text-[10px] uppercase tracking-widest rounded-xl border-zinc-200 dark:border-zinc-700 hover:bg-primary/5 hover:text-primary hover:border-primary/20 dark:hover:bg-primary/10 transition-all duration-200"
+                                onClick={() => recalculateMutation.mutate()}
+                                disabled={recalculateMutation.isPending}
+                            >
+                                {recalculateMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TrendingUp className="h-3.5 w-3.5 mr-1.5" />}
+                                Recalculate
+                            </Button>
                         </div>
                     </CardHeader>
                     <CardContent className="p-0">
@@ -465,7 +695,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                             className="group hover:bg-zinc-50/80 dark:hover:bg-zinc-800/30 transition-colors duration-200"
                                         >
                                             <td className="px-6 py-4">
-                                                <p className="text-[11px] font-bold text-muted-foreground/70 tabular-nums">{format(new Date(item.date), 'MMM dd, yyyy')}</p>
+                                                <p className="text-[11px] font-bold text-muted-foreground/70 tabular-nums">{format(new Date(item.date), 'MMM dd, yyyy, h:mm a')}</p>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
@@ -608,6 +838,311 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                 </div>
             </motion.div>
 
+            {/* ━━━ Profit Distribution & Employee Share ━━━ */}
+            <motion.div className="grid grid-cols-1 lg:grid-cols-2 gap-8" variants={fadeUp}>
+                {/* Profit Distribution Panel */}
+                <Card className="border border-zinc-100 dark:border-zinc-800 shadow-xl shadow-zinc-200/30 dark:shadow-none bg-white/70 dark:bg-zinc-900/70 backdrop-blur-xl rounded-2xl overflow-hidden">
+                    <CardHeader className="pb-4">
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-lg font-black flex items-center gap-2.5">
+                                <div className="h-8 w-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                                    <Coins className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                </div>
+                                Profit Distribution
+                            </CardTitle>
+                            {isDistributionDirty && (
+                                <div className="flex gap-2">
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-8 px-3 font-bold text-[10px] uppercase tracking-wider rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                                        onClick={() => {
+                                            setPendingDistribution(null);
+                                            setTouchedFields(new Set());
+                                        }}
+                                    >
+                                        Reset
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        className={`${isTotalValid ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed'} h-8 px-4 font-black text-[10px] uppercase tracking-[0.15em] rounded-lg transition-all duration-200`}
+                                        onClick={() => {
+                                            if (!isTotalValid) {
+                                                toast.error(`Total distribution must be exactly 100% (current: ${pendingTotal.toFixed(2)}%)`);
+                                                return;
+                                            }
+                                            distributionMutation.mutate({
+                                                broker_percentage: pendingDistribution.broker,
+                                                company_percentage: pendingDistribution.company,
+                                                employee_percentage: pendingDistribution.employees
+                                            });
+                                        }}
+                                        disabled={distributionMutation.isPending}
+                                    >
+                                        {distributionMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <CheckCircle2 className="h-3 w-3 mr-2" />}
+                                        Save Changes
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                        <CardDescription>Manual distribution from net profit pool (Total must be 100%)</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="space-y-1">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Revenue</p>
+                                <p className="text-xl font-black text-emerald-600">{inr(financials?.totalRevenue ?? 0)}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Utility Costs</p>
+                                <p className="text-xl font-black text-rose-600">{inr(financials?.totalBusinessExpenses ?? 0)}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Net Profit</p>
+                                <p className="text-xl font-black text-primary">{inr((financials?.totalRevenue ?? 0) - (financials?.totalBusinessExpenses ?? 0))}</p>
+                            </div>
+                        </div>
+
+                        {profitDist && (
+                            <div className="space-y-8">
+                                <div className="space-y-6">
+                                    {[
+                                        { label: "Broker Fee", key: "broker", color: "bg-amber-500", percent: currentDisplayDistribution.broker, amount: (netProfitPool * currentDisplayDistribution.broker) / 100 },
+                                        { label: "Company Profit", key: "company", color: "bg-primary", percent: currentDisplayDistribution.company, amount: (netProfitPool * currentDisplayDistribution.company) / 100 },
+                                        { label: "Employee Pool", key: "employees", color: "bg-emerald-500", percent: currentDisplayDistribution.employees, amount: (netProfitPool * currentDisplayDistribution.employees) / 100 }
+                                    ].map((segment) => (
+                                        <div key={segment.key} className="space-y-3">
+                                            <div className="flex justify-between items-end">
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">{segment.label}</p>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="relative">
+                                                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground/40">₹</span>
+                                                            <Input
+                                                                type="number"
+                                                                value={focusedField === `${segment.key}-amount` ? focusedValue : segment.amount.toFixed(2)}
+                                                                onFocus={() => {
+                                                                    setFocusedField(`${segment.key}-amount`);
+                                                                    setFocusedValue(segment.amount.toFixed(2));
+                                                                }}
+                                                                onChange={(e) => {
+                                                                    setFocusedValue(e.target.value);
+                                                                    const val = parseFloat(e.target.value);
+                                                                    if (!isNaN(val)) {
+                                                                        handleAmountEdit(segment.key as keyof typeof distribution, val);
+                                                                    }
+                                                                }}
+                                                                onBlur={() => setFocusedField(null)}
+                                                                className={`h-8 pl-5 pr-2 w-28 bg-zinc-100/50 dark:bg-white/5 border-none text-xs font-black rounded-lg focus-visible:ring-1 focus-visible:ring-primary/30 no-spinner ${isDistributionDirty ? 'ring-1 ring-primary/20 bg-primary/[0.02]' : ''}`}
+                                                            />
+                                                        </div>
+                                                        <Badge variant="outline" className="text-[10px] font-black border-none bg-zinc-100 dark:bg-white/5 py-0 px-2 h-5 tabular-nums">
+                                                            {segment.percent.toFixed(2)}%
+                                                        </Badge>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <Percent className="h-3 w-3 text-muted-foreground/40" />
+                                                    <input
+                                                        type="number"
+                                                        value={focusedField === `${segment.key}-percent` ? focusedValue : segment.percent.toFixed(2)}
+                                                        step="0.01"
+                                                        onFocus={() => {
+                                                            setFocusedField(`${segment.key}-percent`);
+                                                            setFocusedValue(segment.percent.toFixed(2));
+                                                        }}
+                                                        onChange={(e) => {
+                                                            setFocusedValue(e.target.value);
+                                                            const val = parseFloat(e.target.value);
+                                                            if (!isNaN(val)) {
+                                                                handleDistributionUpdate({ [segment.key]: val });
+                                                            }
+                                                        }}
+                                                        onBlur={() => setFocusedField(null)}
+                                                        className={`w-14 bg-transparent border-b border-zinc-200 dark:border-zinc-800 text-xs font-black text-right focus:border-primary outline-none py-0.5 tabular-nums no-spinner ${isDistributionDirty ? 'text-primary' : ''}`}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Draggable Slider Wrapper */}
+                                            <div className="relative h-6 flex items-center group/slider">
+                                                <div className="absolute inset-0 h-2 my-auto bg-zinc-100 dark:bg-white/5 rounded-full" />
+                                                <div
+                                                    className={`absolute h-2 my-auto ${segment.color} rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(0,0,0,0.1)]`}
+                                                    style={{ width: `${segment.percent}%` }}
+                                                />
+                                                <input
+                                                    type="range"
+                                                    min="0"
+                                                    max="100"
+                                                    step="0.01"
+                                                    value={segment.percent}
+                                                    onChange={(e) => handleDistributionUpdate({ [segment.key]: Number(e.target.value) })}
+                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                                />
+                                                {/* Visual Handle */}
+                                                <motion.div
+                                                    className={`absolute h-4 w-4 bg-white dark:bg-zinc-800 border-2 border-zinc-300 dark:border-zinc-600 rounded-full shadow-md z-0 pointer-events-none group-hover/slider:scale-125 transition-transform`}
+                                                    animate={{ left: `calc(${segment.percent}% - 8px)` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Employee Project Share Table */}
+                <Card className="border border-zinc-100 dark:border-zinc-800 shadow-xl shadow-zinc-200/30 dark:shadow-none bg-white/70 dark:bg-zinc-900/70 backdrop-blur-xl rounded-2xl overflow-hidden">
+                    <CardHeader className="pb-4 flex flex-row items-center justify-between space-y-0">
+                        <div className="space-y-1">
+                            <CardTitle className="text-lg font-black flex items-center gap-2.5">
+                                <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center">
+                                    <Users className="h-4 w-4 text-primary" />
+                                </div>
+                                Employee Project Share
+                            </CardTitle>
+                            <CardDescription>Distributed by task difficulty scores</CardDescription>
+                        </div>
+                        <div className="flex flex-col items-end">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 mb-1">Total Pool</span>
+                            <div className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                                <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
+                                    {inr(employeeShares?.reduce((sum, share) => sum + Number(share.share_amount), 0) || 0)}
+                                </span>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <div className="overflow-hidden">
+                            <table className="w-full">
+                                <thead className="bg-zinc-50/80 dark:bg-zinc-800/50 text-[10px] uppercase font-black text-muted-foreground/60 border-y border-zinc-100 dark:border-zinc-800 tracking-widest">
+                                    <tr>
+                                        <th className="px-6 py-3.5 text-left">Employee</th>
+                                        <th className="px-6 py-3.5 text-center">Task Score</th>
+                                        <th className="px-6 py-3.5 text-center">Share %</th>
+                                        <th className="px-6 py-3.5 text-right">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-zinc-100/80 dark:divide-zinc-800/60">
+                                    {employeeShares?.map((share, idx) => (
+                                        <motion.tr
+                                            key={share.id}
+                                            initial={{ opacity: 0, x: 10 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ delay: idx * 0.05 }}
+                                            className="group hover:bg-zinc-50/80 dark:hover:bg-zinc-800/30 transition-colors"
+                                        >
+                                            <td className="px-6 py-3.5">
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar className="h-7 w-7 border border-white/20">
+                                                        <AvatarImage src={share.profiles?.avatar_url} />
+                                                        <AvatarFallback className="text-[10px]">{share.profiles?.full_name?.charAt(0)}</AvatarFallback>
+                                                    </Avatar>
+                                                    <span className="text-xs font-black">{share.profiles?.full_name}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-3.5 text-center">
+                                                <span className="text-xs font-bold tabular-nums text-muted-foreground">{share.task_score_total}</span>
+                                            </td>
+                                            <td className="px-6 py-3.5 text-center">
+                                                <Badge variant="outline" className="text-[10px] font-black border-none bg-primary/5 text-primary py-0 px-2 h-5 tabular-nums">
+                                                    {share.score_percentage.toFixed(2)}%
+                                                </Badge>
+                                            </td>
+                                            <td className="px-6 py-3.5 text-right relative">
+                                                <div className="flex items-center justify-end gap-3">
+                                                    {editingShareId === share.employee_id ? (
+                                                        <Input
+                                                            type="number"
+                                                            step="0.01"
+                                                            autoFocus
+                                                            className="h-8 w-28 text-right text-xs font-black tabular-nums border-primary/30 focus-visible:ring-primary/20"
+                                                            value={editShareAmount}
+                                                            onChange={(e) => setEditShareAmount(e.target.value)}
+                                                            onBlur={() => {
+                                                                const val = parseFloat(editShareAmount);
+                                                                if (!isNaN(val) && val >= 0) {
+                                                                    if (val !== share.share_amount) {
+                                                                        updateShareAmountMutation.mutate({ employeeId: share.employee_id, amount: val });
+                                                                    }
+                                                                }
+                                                                setEditingShareId(null);
+                                                            }}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') e.currentTarget.blur();
+                                                                if (e.key === 'Escape') setEditingShareId(null);
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <span 
+                                                            className={`text-xs font-black tabular-nums cursor-pointer hover:underline ${share.is_manual_override ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600'}`}
+                                                            onClick={() => {
+                                                                if (share.is_paid) return;
+                                                                setEditingShareId(share.employee_id);
+                                                                setEditShareAmount(share.share_amount.toFixed(2));
+                                                            }}
+                                                            title={share.is_manual_override ? 'Manually Overridden' : 'Auto-Calculated'}
+                                                        >
+                                                            {inr(share.share_amount)}
+                                                        </span>
+                                                    )}
+
+                                                    {share.is_paid ? (
+                                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20 text-[10px] uppercase font-black tracking-widest px-2 py-0 h-6 cursor-default">
+                                                            Paid
+                                                        </Badge>
+                                                    ) : (
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="outline"
+                                                            disabled={payShareMutation.isPending || Number(share.share_amount) <= 0}
+                                                            className="h-6 px-2 text-[10px] uppercase font-black tracking-widest text-primary hover:text-primary hover:bg-primary/10 border-primary/20 bg-primary/5"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                payShareMutation.mutate({ employeeId: share.employee_id });
+                                                            }}
+                                                        >
+                                                            {payShareMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin"/> : "Pay Now"}
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                                {share.is_manual_override && !editingShareId && (
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        className="absolute -right-2 top-1/2 -translate-y-1/2 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            updateShareAmountMutation.mutate({ employeeId: share.employee_id, amount: null });
+                                                        }}
+                                                        title="Reset to Auto Calculation"
+                                                    >
+                                                        <RefreshCcw className="h-3 w-3 text-muted-foreground" />
+                                                    </Button>
+                                                )}
+                                            </td>
+                                        </motion.tr>
+                                    ))}
+                                    {(!employeeShares || employeeShares.length === 0) && (
+                                        <tr>
+                                            <td colSpan={4} className="py-12 text-center">
+                                                <div className="flex flex-col items-center gap-2 opacity-30">
+                                                    <Users className="h-8 w-8" />
+                                                    <p className="text-[10px] font-black uppercase tracking-widest">No contribution scores yet</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </CardContent>
+                </Card>
+            </motion.div>
+
             {/* ━━━ Dialogs ━━━ */}
 
             {/* Verdict Dialog */}
@@ -746,7 +1281,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                             </div>
                             <div className="space-y-2">
                                 <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Category</Label>
-                                <Select value={expenseForm.category} onValueChange={(val) => setExpenseForm({ ...expenseForm, category: val as typeof PROJECT_EXPENSE_CATEGORIES[number], employee_id: ["Project Share", "Commision / Broker"].includes(val) ? expenseForm.employee_id : "" })}>
+                                <Select value={expenseForm.category} onValueChange={(val) => setExpenseForm({ ...expenseForm, category: val as typeof PROJECT_EXPENSE_CATEGORIES[number] })}>
                                     <SelectTrigger className="h-12 border-2 rounded-xl border-zinc-200 dark:border-zinc-700">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -761,33 +1296,6 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                             </div>
                         </div>
 
-                        {["Project Share", "Commision / Broker"].includes(expenseForm.category) && (
-                            <motion.div
-                                initial={{ opacity: 0, y: -10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="space-y-2"
-                            >
-                                <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Select Employee</Label>
-                                <Select value={expenseForm.employee_id} onValueChange={(val) => setExpenseForm({ ...expenseForm, employee_id: val })}>
-                                    <SelectTrigger className="h-12 border-2 rounded-xl border-zinc-200 dark:border-zinc-700">
-                                        <SelectValue placeholder="Select team member" />
-                                    </SelectTrigger>
-                                    <SelectContent className="rounded-xl">
-                                        {projectMembers?.data?.map((member: { id: string; avatar_url: string; full_name: string }) => (
-                                            <SelectItem key={member.id} value={member.id}>
-                                                <div className="flex items-center gap-2">
-                                                    <Avatar className="h-6 w-6">
-                                                        <AvatarImage src={member.avatar_url} />
-                                                        <AvatarFallback>{member.full_name?.charAt(0)}</AvatarFallback>
-                                                    </Avatar>
-                                                    <span>{member.full_name}</span>
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </motion.div>
-                        )}
                         <div className="space-y-2">
                             <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Description (Optional)</Label>
                             <Input

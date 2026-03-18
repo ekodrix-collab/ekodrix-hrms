@@ -133,6 +133,20 @@ export function CreateProjectDialog({ onSuccess }: { onSuccess?: () => void }) {
                         />
                     </div>
 
+                    <div className="space-y-2">
+                        <Label htmlFor="contractAmount" className="font-bold text-xs uppercase tracking-tighter text-zinc-500">
+                            Contract Amount
+                        </Label>
+                        <Input
+                            id="contractAmount"
+                            name="contractAmount"
+                            type="number"
+                            step="0.01"
+                            placeholder="e.g. 5000"
+                            className="rounded-xl border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50 font-medium h-12"
+                        />
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="priority" className="font-bold text-xs uppercase tracking-tighter text-zinc-500">
