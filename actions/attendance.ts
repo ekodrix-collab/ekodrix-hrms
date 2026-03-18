@@ -113,8 +113,7 @@ export async function punchOutAction() {
     .from("attendance")
     .update({
       punch_out: now.toISOString(),
-      total_hours: Math.max(0, Math.round(totalHours * 100) / 100),
-      status: "completed"
+      total_hours: Math.max(0, Math.round(totalHours * 100) / 100)
     })
     .eq("id", data.id);
 
@@ -300,12 +299,6 @@ export async function startBreakAction() {
 
   if (error) return { ok: false, message: error.message };
 
-  // Sync status column so team presence reflects on_break
-  await supabase
-    .from("attendance")
-    .update({ status: "on_break" })
-    .eq("id", attendance.id);
-
   revalidatePath("/employee/attendance");
   revalidatePath("/employee/dashboard");
   return { ok: true };
@@ -350,12 +343,6 @@ export async function resumeWorkAction() {
     .eq("id", activeBreak.id);
 
   if (error) return { ok: false, message: error.message };
-
-  // Sync status column so team presence reflects working again
-  await supabase
-    .from("attendance")
-    .update({ status: "present" })
-    .eq("id", attendance.id);
 
   revalidatePath("/employee/attendance");
   revalidatePath("/employee/dashboard");
