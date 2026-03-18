@@ -9,7 +9,7 @@ import { eachMonthOfInterval, endOfMonth, format, startOfMonth, subMonths } from
 import { calculateProjectProfit } from "@/actions/project-profit";
 
 type ProjectRelation = { name: string } | { name: string }[] | null;
-type ProjectBreakdownItem = { id: string; name: string; revenue: number; expenses: number; net: number };
+type ProjectBreakdownItem = { id: string; name: string; revenue: number; expenses: number; net: number; brokerAmount?: number; employeeShare?: number };
 const COMPANY_FINANCE_VIEW_ROLES = new Set(["admin", "founder"]);
 
 function canViewCompanyFinance(role: string | null | undefined) {
@@ -182,11 +182,11 @@ function normalizeJoinedProfile<T>(profile: T[] | T | null | undefined): T | nul
     return profile ?? null;
 }
 
-function toIsoDate(value: Date | string | null | undefined) {
+function toIsoDate(value: Date | string | null | undefined, includeTime = false) {
     if (!value) return null;
     const parsed = value instanceof Date ? value : new Date(value);
     if (Number.isNaN(parsed.getTime())) return null;
-    return format(parsed, "yyyy-MM-dd");
+    return includeTime ? parsed.toISOString() : format(parsed, "yyyy-MM-dd");
 }
 
 function normalizeRange(range?: FinanceDateRangeInput) {
@@ -461,7 +461,7 @@ export async function getCompanyFinancials(projectId?: string) {
                 .in("status", ["approved", "paid"]),
             supabase
                 .from("project_profit_distribution")
-                .select("project_id, company_amount")
+                .select("project_id, company_amount, broker_amount, employee_pool_amount")
         ]);
 
         const breakdownMap: Record<string, { id: string; name: string; revenue: number; expenses: number; net: number }> = {};
@@ -482,8 +482,12 @@ export async function getCompanyFinancials(projectId?: string) {
             breakdownMap[pId].expenses += Number(e.amount);
         });
 
-        const distMap = new Map<string, number>();
-        projDist?.forEach(d => distMap.set(d.project_id, Number(d.company_amount)));
+        const distMap = new Map<string, { company: number; broker: number; employee: number }>();
+        projDist?.forEach(d => distMap.set(d.project_id, {
+            company: Number(d.company_amount || 0),
+            broker: Number(d.broker_amount || 0),
+            employee: Number(d.employee_pool_amount || 0)
+        }));
 
         // Ensure all projects from distMap are in the breakdownMap even if they have no revenue/expenses
         distMap.forEach((companyAmount, pId) => {
@@ -495,10 +499,15 @@ export async function getCompanyFinancials(projectId?: string) {
             }
         });
 
-        projectBreakdown = Object.values(breakdownMap).map(p => ({ 
-            ...p, 
-            net: distMap.has(p.id) ? distMap.get(p.id)! : (p.revenue - p.expenses)
-        }));
+        projectBreakdown = Object.values(breakdownMap).map(p => {
+            const dist = distMap.get(p.id);
+            return { 
+                ...p, 
+                net: dist ? dist.company : (p.revenue - p.expenses),
+                brokerAmount: dist?.broker || 0,
+                employeeShare: dist?.employee || 0
+            };
+        });
     }
 
     return {
@@ -583,7 +592,7 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         .filter(row => !row.project_id) // Keep treasury cash revenue company-level only
         .map((row) => ({
             id: `revenue-${row.id}`,
-            date: row.received_date,
+            date: row.created_at,
             createdAt: row.created_at,
             amount: Number(row.amount) || 0,
             type: "revenue",
@@ -636,7 +645,7 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         const person = expense.profiles?.full_name || null;
         const isEmployeeClaim = expense.profiles?.role === "employee" || expense.profiles?.role === "founder";
         if (isEmployeeClaim) {
-            const approvedDate = toIsoDate(expense.approved_at);
+            const approvedDate = toIsoDate(expense.approved_at, true);
             const claimPayments = reimbursementsByExpense[expense.id] || [];
 
             if ((expense.status === "approved" || expense.status === "partially_paid" || expense.status === "paid") && approvedDate && approvedDate <= toKey) {
@@ -657,8 +666,8 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
 
             if (claimPayments.length) {
                 claimPayments.forEach((payment) => {
-                    const paidDate = toIsoDate(payment.paid_at);
-                    if (!paidDate || paidDate > toKey) return;
+                    const paidDate = toIsoDate(payment.paid_at, true);
+                    if (!paidDate || toIsoDate(paidDate)! > toKey) return;
 
                     allEvents.push({
                         id: `claim-paid-${payment.id}`,
@@ -675,8 +684,8 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
                     });
                 });
             } else {
-                const reimbursedDate = toIsoDate(expense.reimbursed_at);
-                if (expense.status === "paid" && reimbursedDate && reimbursedDate <= toKey) {
+                const reimbursedDate = toIsoDate(expense.reimbursed_at, true);
+                if (expense.status === "paid" && reimbursedDate && toIsoDate(reimbursedDate)! <= toKey) {
                     allEvents.push({
                         id: `claim-paid-legacy-${expense.id}`,
                         date: reimbursedDate,
@@ -718,7 +727,10 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         });
     });
 
-    const inRange = (dateValue: string) => dateValue >= fromKey && dateValue <= toKey;
+    const inRange = (dateValue: string) => {
+        const d = toIsoDate(dateValue);
+        return d && d >= fromKey && d <= toKey;
+    };
 
     const monthStarts = eachMonthOfInterval({
         start: startOfMonth(from),
@@ -965,7 +977,7 @@ export async function getFinancialHistory(projectId?: string) {
         amount: r.amount,
         title: r.source,
         subtitle: r.description || "Revenue",
-        date: r.received_date,
+        date: r.created_at,
         created_at: r.created_at,
         category: "Income",
         method: "-",

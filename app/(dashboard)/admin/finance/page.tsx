@@ -522,10 +522,10 @@ export default function AdminFinancePage() {
 
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList className="grid h-auto grid-cols-2 rounded-2xl border border-border/70 bg-background/80 p-1 md:grid-cols-4">
-          <TabsTrigger value="overview" className="rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-[0.08em]">Overview</TabsTrigger>
-          <TabsTrigger value="claims" className="rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-[0.08em]">Claims</TabsTrigger>
-          <TabsTrigger value="ledger" className="rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-[0.08em]">Ledger</TabsTrigger>
-          <TabsTrigger value="payroll" className="rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-[0.08em]">Payroll</TabsTrigger>
+          <TabsTrigger value="overview" className="rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Overview</TabsTrigger>
+          <TabsTrigger value="claims" className="rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Claims</TabsTrigger>
+          <TabsTrigger value="ledger" className="rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Ledger</TabsTrigger>
+          <TabsTrigger value="payroll" className="rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Payroll</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -1297,10 +1297,10 @@ function ClaimCard({
             </div>
             <p className="mt-1 text-sm text-muted-foreground">{claim.description}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {claim.profiles?.department || "Unassigned"} • {format(new Date(claim.expense_date), "MMM dd, yyyy")} • paid via {claim.payment_method}
+              {claim.profiles?.department || "Unassigned"} • {format(new Date(claim.expense_date), "MMM dd, yyyy, h:mm a")} • paid via {claim.payment_method}
             </p>
-            {claim.approved_at && <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-300">Approved {format(new Date(claim.approved_at), "MMM dd, yyyy")}</p>}
-            {claim.reimbursed_at && <p className="mt-1 text-xs text-sky-600 dark:text-sky-300">Reimbursed {format(new Date(claim.reimbursed_at), "MMM dd, yyyy")} via {claim.reimbursement_method || "bank_transfer"}</p>}
+            {claim.approved_at && <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-300">Approved {format(new Date(claim.approved_at), "MMM dd, yyyy, h:mm a")}</p>}
+            {claim.reimbursed_at && <p className="mt-1 text-xs text-sky-600 dark:text-sky-300">Reimbursed {format(new Date(claim.reimbursed_at), "MMM dd, yyyy, h:mm a")} via {claim.reimbursement_method || "bank_transfer"}</p>}
             {(Number(claim.reimbursed_amount || 0) > 0 || Number(claim.outstanding_amount || 0) > 0) && (
               <p className="mt-1 text-xs text-muted-foreground">
                 Paid so far {inr(Number(claim.reimbursed_amount || 0))} | Outstanding {inr(Number(claim.outstanding_amount || 0))}
@@ -1313,7 +1313,7 @@ function ClaimCard({
                     <div className="min-w-0">
                       <p className="font-semibold text-foreground">{inr(Number(payment.amount))}</p>
                       <p className="text-muted-foreground">
-                        {format(new Date(payment.paid_at), "MMM dd, yyyy")} | {payment.payment_method}
+                        {format(new Date(payment.paid_at), "MMM dd, yyyy, h:mm a")} | {payment.payment_method}
                       </p>
                     </div>
                     <Button size="sm" variant="outline" onClick={() => onEditPayment(payment)}>
@@ -1375,7 +1375,7 @@ function LedgerCard({ item, compact = false }: { item: LedgerItem; compact?: boo
             </div>
             <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {format(new Date(item.date), "MMM dd, yyyy")} • {item.method}
+              {format(new Date(item.date), "MMM dd, yyyy, h:mm a")} • {item.method}
               {item.person ? ` • ${item.person}` : ""}
             </p>
           </div>

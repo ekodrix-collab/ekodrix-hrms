@@ -50,6 +50,8 @@ type FounderFinancials = {
         revenue: number;
         expenses: number;
         net: number;
+        brokerAmount?: number;
+        employeeShare?: number;
     }[];
 };
 
@@ -101,19 +103,7 @@ export function FounderFinanceView() {
     const summary = dashboard?.summary;
     const ledger = dashboard?.ledger ?? [];
     const projectBreakdown = financials?.projectBreakdown ?? [];
-    const cashRevenueRows = Object.values(
-        ledger
-            .filter((item) => item.type === "revenue" && item.sourceType === "cash_revenue")
-            .reduce<Record<string, { title: string; badge: string; amount: number }>>((accumulator, item) => {
-                const badge = item.category || "Cash Revenue";
-                const key = `${item.title}::${badge}`;
-                if (!accumulator[key]) {
-                    accumulator[key] = { title: item.title, badge, amount: 0 };
-                }
-                accumulator[key].amount += Number(item.amount || 0);
-                return accumulator;
-            }, {})
-    ).sort((left, right) => right.amount - left.amount);
+
 
     return (
         <div className="space-y-6 pb-8">
@@ -203,7 +193,6 @@ export function FounderFinanceView() {
                             label="Cash Revenue"
                             value={summary?.cashRevenue ?? 0}
                             tone="text-emerald-600 dark:text-emerald-300"
-                            badges={Array.from(new Set(cashRevenueRows.map((row) => row.badge))).filter(Boolean)}
                         />
                         <Row label="Approved Claims (Inflow)" value={summary?.approvedClaimRevenue ?? 0} tone="text-emerald-600 dark:text-emerald-300" />
                         <Row label="Total Income" value={summary?.periodRevenue ?? 0} tone="text-emerald-700 dark:text-emerald-200" strong />
@@ -244,6 +233,8 @@ export function FounderFinanceView() {
                                         <th className="px-4 py-3">Project</th>
                                         <th className="px-4 py-3">Income</th>
                                         <th className="px-4 py-3">Expense</th>
+                                        <th className="px-4 py-3">Broker Fee</th>
+                                        <th className="px-4 py-3">Team Share</th>
                                         <th className="px-4 py-3">Final Profit</th>
                                     </tr>
                                 </thead>
@@ -256,6 +247,8 @@ export function FounderFinanceView() {
                                                 <td className="px-4 py-3 text-sm font-semibold">{project.name}</td>
                                                 <td className="px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">{inr(project.revenue)}</td>
                                                 <td className="px-4 py-3 text-sm text-rose-700 dark:text-rose-300">{inr(project.expenses)}</td>
+                                                <td className="px-4 py-3 text-sm text-zinc-500">{inr(project.brokerAmount ?? 0)}</td>
+                                                <td className="px-4 py-3 text-sm text-zinc-500">{inr(project.employeeShare ?? 0)}</td>
                                                 <td className={`px-4 py-3 text-sm font-black ${project.net >= 0 ? "text-primary" : "text-rose-600 dark:text-rose-300"}`}>
                                                     {inr(project.net)}
                                                 </td>
@@ -286,7 +279,7 @@ export function FounderFinanceView() {
                                         <p className="truncate text-sm font-semibold">{item.title}</p>
                                     </div>
                                     <p className="mt-1 text-xs text-muted-foreground">
-                                        {format(new Date(item.date), "MMM dd, yyyy")}
+                                        {format(new Date(item.date), "MMM dd, yyyy, h:mm a")}
                                         {item.person ? ` - ${item.person}` : ""}
                                     </p>
                                 </div>

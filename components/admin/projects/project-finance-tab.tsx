@@ -711,7 +711,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                             className="group hover:bg-zinc-50/80 dark:hover:bg-zinc-800/30 transition-colors duration-200"
                                         >
                                             <td className="px-6 py-4">
-                                                <p className="text-[11px] font-bold text-muted-foreground/70 tabular-nums">{format(new Date(item.date), 'MMM dd, yyyy')}</p>
+                                                <p className="text-[11px] font-bold text-muted-foreground/70 tabular-nums">{format(new Date(item.date), 'MMM dd, yyyy, h:mm a')}</p>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">

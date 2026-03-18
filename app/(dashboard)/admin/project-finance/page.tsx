@@ -302,7 +302,7 @@ export default function AdminProjectFinancePage() {
                           {item.person && !item.title ? item.person : (item.title || item.category)}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {format(new Date(item.date), "MMM dd, yyyy")} - {item.category}{item.person && item.title ? ` — ${item.person}` : ''}
+                          {format(new Date(item.date), "MMM dd, yyyy, h:mm a")} - {item.category}{item.person && item.title ? ` — ${item.person}` : ''}
                         </p>
                       </div>
                       <p className={`text-sm font-bold ${item.type === "revenue" ? "text-emerald-600" : "text-rose-600"}`}>
