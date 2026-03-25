@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { calculateProjectEmployeeShare, calculateProjectProfit } from "@/actions/project-profit";
 
 export interface Project {
     id: string;
@@ -62,6 +63,7 @@ export async function createProjectAction(formData: FormData) {
     const projectManagerIdRaw = String(formData.get("projectManagerId") ?? "").trim();
     const projectManagerId = projectManagerIdRaw || null;
     const teamMemberIds = parseTeamMemberIds(formData.get("teamMemberIds"));
+    const contractAmount = parseFloat(String(formData.get("contractAmount") ?? "0") || "0");
 
     if (!name) return { ok: false, message: "Project name is required" };
 
@@ -126,7 +128,8 @@ export async function createProjectAction(formData: FormData) {
             priority,
             deadline: deadline || null,
             created_by: user.id,
-            project_manager_id: projectManagerId
+            project_manager_id: projectManagerId,
+            contract_amount: contractAmount || 0
         })
         .select("*")
         .single();
@@ -165,6 +168,11 @@ export async function createProjectAction(formData: FormData) {
 
     revalidatePath("/admin/projects");
     revalidatePath("/employee/projects");
+
+    // Establish initial profit distribution and team shares
+    await calculateProjectProfit(data.id);
+    await calculateProjectEmployeeShare(data.id);
+
     return { ok: true, project: data as Project };
 }
 
@@ -540,5 +548,6 @@ export async function updateProjectMembersAction(projectId: string, memberIds: s
     }
 
     revalidatePath(`/admin/projects/${projectId}`);
+    await calculateProjectEmployeeShare(projectId);
     return { ok: true };
 }

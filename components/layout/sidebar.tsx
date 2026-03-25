@@ -66,7 +66,7 @@ export const adminNav: NavGroup[] = [
     group: "Finance",
     items: [
       { href: "/admin/finance", label: "Company Treasury", icon: CreditCard },
-      { href: "/admin/projects/finance", label: "Project Finance", icon: LayoutGrid },
+      { href: "/admin/project-finance", label: "Project Finance", icon: LayoutGrid },
     ]
   },
   {

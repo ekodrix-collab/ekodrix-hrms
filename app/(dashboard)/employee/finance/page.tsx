@@ -166,8 +166,8 @@ export default function EmployeeFinancePage() {
         })
         .sort((left, right) => {
             if (claimSort === "highest") return Number(right.amount) - Number(left.amount);
-            if (claimSort === "oldest") return new Date(left.expense_date).getTime() - new Date(right.expense_date).getTime();
-            return new Date(right.expense_date).getTime() - new Date(left.expense_date).getTime();
+            if (claimSort === "oldest") return new Date(left.created_at || left.expense_date).getTime() - new Date(right.created_at || right.expense_date).getTime();
+            return new Date(right.created_at || right.expense_date).getTime() - new Date(left.created_at || left.expense_date).getTime();
         });
 
 
@@ -389,7 +389,7 @@ export default function EmployeeFinancePage() {
                                                             </Badge>
                                                         </div>
                                                         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                                                            {item.description} • {format(new Date(item.date), "MMM dd, yyyy")}
+                                                            {item.description} • {format(new Date(item.date), "MMM dd, yyyy, h:mm a")}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -562,7 +562,7 @@ export default function EmployeeFinancePage() {
                                                         </div>
                                                         <div>
                                                             <p className="font-medium text-sm text-zinc-900 dark:text-zinc-100">{claim.description || claim.category}</p>
-                                                            <p className="text-xs text-zinc-500">{format(new Date(claim.expense_date), "MMM dd, yyyy")} | {claim.category}</p>
+                                                            <p className="text-xs text-zinc-500">{format(new Date(claim.created_at || claim.expense_date), "MMM dd, yyyy, h:mm a")} | {claim.category}</p>
                                                         </div>
                                                     </div>
                                                     <div className="text-right">

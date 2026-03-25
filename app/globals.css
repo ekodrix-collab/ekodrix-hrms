@@ -184,4 +184,15 @@
   .card-header + .card-content {
     @apply pt-0 sm:pt-0;
   }
+
+  .no-spinner::-webkit-inner-spin-button,
+  .no-spinner::-webkit-outer-spin-button {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    margin: 0;
+  }
+  .no-spinner {
+    -moz-appearance: textfield !important;
+    appearance: none !important;
+  }
 }

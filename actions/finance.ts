@@ -6,9 +6,10 @@ import { revalidatePath } from "next/cache";
 import { normalizeExpenseCategory } from "@/lib/finance-categories";
 import { getOrgContext } from "@/lib/auth-utils";
 import { eachMonthOfInterval, endOfMonth, format, startOfMonth, subMonths } from "date-fns";
+import { calculateProjectProfit } from "@/actions/project-profit";
 
 type ProjectRelation = { name: string } | { name: string }[] | null;
-type ProjectBreakdownItem = { id: string; name: string; revenue: number; expenses: number; net: number };
+type ProjectBreakdownItem = { id: string; name: string; revenue: number; expenses: number; net: number; brokerAmount?: number; employeeShare?: number };
 const COMPANY_FINANCE_VIEW_ROLES = new Set(["admin", "founder"]);
 
 function canViewCompanyFinance(role: string | null | undefined) {
@@ -181,11 +182,11 @@ function normalizeJoinedProfile<T>(profile: T[] | T | null | undefined): T | nul
     return profile ?? null;
 }
 
-function toIsoDate(value: Date | string | null | undefined) {
+function toIsoDate(value: Date | string | null | undefined, includeTime = false) {
     if (!value) return null;
     const parsed = value instanceof Date ? value : new Date(value);
     if (Number.isNaN(parsed.getTime())) return null;
-    return format(parsed, "yyyy-MM-dd");
+    return includeTime ? parsed.toISOString() : format(parsed, "yyyy-MM-dd");
 }
 
 function normalizeRange(range?: FinanceDateRangeInput) {
@@ -265,11 +266,14 @@ export async function postRevenue(amount: number, source: string, description?: 
 
     if (error) return { error: error.message };
 
-    revalidatePath("/admin/finance");
     if (projectId) {
         revalidatePath(`/admin/projects/${projectId}`);
         revalidatePath(`/admin/projects/${projectId}/finance`);
         revalidatePath("/admin/projects/finance");
+        revalidatePath("/admin/finance");
+        await calculateProjectProfit(projectId);
+    } else {
+        revalidatePath("/admin/finance");
     }
     return { success: true, revenue: data };
 }
@@ -394,9 +398,10 @@ export async function postBusinessExpense(data: {
 
     revalidatePath("/admin/finance");
     if (data.project_id) {
-        revalidatePath(`/admin/projects/${data.project_id}`);
-        revalidatePath(`/admin/projects/${data.project_id}/finance`);
-        revalidatePath("/admin/projects/finance");
+        revalidatePath(`/admin/project-finance/${data.project_id}`);
+        revalidatePath("/admin/project-finance");
+        revalidatePath("/admin/projects/finance"); // Legacy
+        await calculateProjectProfit(data.project_id);
     }
     return { success: true };
 }
@@ -444,7 +449,7 @@ export async function getCompanyFinancials(projectId?: string) {
 
     let projectBreakdown: ProjectBreakdownItem[] = [];
     if (!projectId) {
-        const [{ data: projRevenue }, { data: projExpenses }] = await Promise.all([
+        const [{ data: projRevenue }, { data: projExpenses }, { data: projDist }] = await Promise.all([
             supabase
                 .from("revenue_logs")
                 .select("project_id, amount, projects(name), creator:profiles!created_by!inner(organization_id)")
@@ -453,7 +458,10 @@ export async function getCompanyFinancials(projectId?: string) {
                 .from("expenses")
                 .select("project_id, amount, projects(name), profiles:paid_by!inner(organization_id)")
                 .eq("profiles.organization_id", organizationId)
-                .in("status", ["approved", "paid"])
+                .in("status", ["approved", "paid"]),
+            supabase
+                .from("project_profit_distribution")
+                .select("project_id, company_amount, broker_amount, employee_pool_amount")
         ]);
 
         const breakdownMap: Record<string, { id: string; name: string; revenue: number; expenses: number; net: number }> = {};
@@ -474,7 +482,32 @@ export async function getCompanyFinancials(projectId?: string) {
             breakdownMap[pId].expenses += Number(e.amount);
         });
 
-        projectBreakdown = Object.values(breakdownMap).map(p => ({ ...p, net: p.revenue - p.expenses }));
+        const distMap = new Map<string, { company: number; broker: number; employee: number }>();
+        projDist?.forEach(d => distMap.set(d.project_id, {
+            company: Number(d.company_amount || 0),
+            broker: Number(d.broker_amount || 0),
+            employee: Number(d.employee_pool_amount || 0)
+        }));
+
+        // Ensure all projects from distMap are in the breakdownMap even if they have no revenue/expenses
+        distMap.forEach((companyAmount, pId) => {
+            if (!breakdownMap[pId]) {
+                // We don't have the project name here easily without another query, 
+                // but usually a project with profit distribution has some logs.
+                // We can use a fallback name or find it if it exists in other arrays.
+                breakdownMap[pId] = { id: pId, name: "Project", revenue: 0, expenses: 0, net: 0 };
+            }
+        });
+
+        projectBreakdown = Object.values(breakdownMap).map(p => {
+            const dist = distMap.get(p.id);
+            return { 
+                ...p, 
+                net: dist ? dist.company : (p.revenue - p.expenses),
+                brokerAmount: dist?.broker || 0,
+                employeeShare: dist?.employee || 0
+            };
+        });
     }
 
     return {
@@ -559,7 +592,7 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         .filter(row => !row.project_id) // Keep treasury cash revenue company-level only
         .map((row) => ({
             id: `revenue-${row.id}`,
-            date: row.received_date,
+            date: row.created_at,
             createdAt: row.created_at,
             amount: Number(row.amount) || 0,
             type: "revenue",
@@ -612,7 +645,7 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         const person = expense.profiles?.full_name || null;
         const isEmployeeClaim = expense.profiles?.role === "employee" || expense.profiles?.role === "founder";
         if (isEmployeeClaim) {
-            const approvedDate = toIsoDate(expense.approved_at);
+            const approvedDate = toIsoDate(expense.approved_at, true);
             const claimPayments = reimbursementsByExpense[expense.id] || [];
 
             if ((expense.status === "approved" || expense.status === "partially_paid" || expense.status === "paid") && approvedDate && approvedDate <= toKey) {
@@ -633,8 +666,8 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
 
             if (claimPayments.length) {
                 claimPayments.forEach((payment) => {
-                    const paidDate = toIsoDate(payment.paid_at);
-                    if (!paidDate || paidDate > toKey) return;
+                    const paidDate = toIsoDate(payment.paid_at, true);
+                    if (!paidDate || toIsoDate(paidDate)! > toKey) return;
 
                     allEvents.push({
                         id: `claim-paid-${payment.id}`,
@@ -651,8 +684,8 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
                     });
                 });
             } else {
-                const reimbursedDate = toIsoDate(expense.reimbursed_at);
-                if (expense.status === "paid" && reimbursedDate && reimbursedDate <= toKey) {
+                const reimbursedDate = toIsoDate(expense.reimbursed_at, true);
+                if (expense.status === "paid" && reimbursedDate && toIsoDate(reimbursedDate)! <= toKey) {
                     allEvents.push({
                         id: `claim-paid-legacy-${expense.id}`,
                         date: reimbursedDate,
@@ -694,7 +727,10 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         });
     });
 
-    const inRange = (dateValue: string) => dateValue >= fromKey && dateValue <= toKey;
+    const inRange = (dateValue: string) => {
+        const d = toIsoDate(dateValue);
+        return d && d >= fromKey && d <= toKey;
+    };
 
     const monthStarts = eachMonthOfInterval({
         start: startOfMonth(from),
@@ -941,7 +977,7 @@ export async function getFinancialHistory(projectId?: string) {
         amount: r.amount,
         title: r.source,
         subtitle: r.description || "Revenue",
-        date: r.received_date,
+        date: r.created_at,
         created_at: r.created_at,
         category: "Income",
         method: "-",
@@ -1008,10 +1044,10 @@ export async function getFinanceVerdicts(projectId: string) {
         .select(`
             *,
             profiles:created_by(full_name, avatar_url),
-            org_project:projects!inner(organization_id)
+            org_project:projects!inner(creator:profiles!created_by!inner(organization_id))
         `)
         .eq("project_id", projectId)
-        .eq("org_project.organization_id", organizationId)
+        .eq("org_project.creator.organization_id", organizationId)
         .order("created_at", { ascending: false });
 
     if (error) return { ok: false, message: error.message };
@@ -1027,9 +1063,9 @@ export async function postFinanceVerdict(projectId: string, content: string) {
 
     const { data: project, error: projectError } = await supabase
         .from("projects")
-        .select("id")
+        .select("id, creator:profiles!created_by!inner(organization_id)")
         .eq("id", projectId)
-        .eq("organization_id", organizationId)
+        .eq("creator.organization_id", organizationId)
         .single();
 
     if (projectError || !project) {
@@ -1062,9 +1098,9 @@ export async function getProjectContractAmount(projectId: string) {
 
     const { data, error } = await supabase
         .from("projects")
-        .select("contract_amount")
+        .select("contract_amount, creator:profiles!created_by!inner(organization_id)")
         .eq("id", projectId)
-        .eq("organization_id", organizationId)
+        .eq("creator.organization_id", organizationId)
         .single();
 
     if (error) return { ok: false, message: error.message, amount: 0 };
@@ -1073,16 +1109,23 @@ export async function getProjectContractAmount(projectId: string) {
 
 export async function updateProjectContractAmount(projectId: string, amount: number) {
     const supabase = createSupabaseServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { ok: false, message: "Not authenticated" };
+    const { user, organizationId, role } = await getOrgContext();
+    
+    if (!user || !organizationId || (role !== 'admin' && role !== 'founder')) {
+        return { ok: false, message: "Admin access required" };
+    }
 
-    const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
+    // Verify project belongs to org
+    const { data: project, error: projectError } = await supabase
+        .from("projects")
+        .select("id, creator:profiles!created_by!inner(organization_id)")
+        .eq("id", projectId)
+        .eq("creator.organization_id", organizationId)
         .single();
 
-    if (profile?.role !== "admin") return { ok: false, message: "Admin access required" };
+    if (projectError || !project) {
+        return { ok: false, message: "Project not found for your organization" };
+    }
 
     const { error } = await supabase
         .from("projects")
@@ -1094,5 +1137,9 @@ export async function updateProjectContractAmount(projectId: string, amount: num
     revalidatePath(`/admin/projects/${projectId}`);
     revalidatePath(`/admin/projects/${projectId}/finance`);
     revalidatePath("/admin/projects/finance");
+    
+    // Recalculate profit distribution
+    await calculateProjectProfit(projectId);
+
     return { ok: true };
 }
