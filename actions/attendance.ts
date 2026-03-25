@@ -249,14 +249,20 @@ export async function getAttendanceHistory() {
   } = await supabase.auth.getUser();
   if (userError || !user) return { ok: false, message: "Not authenticated" };
 
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfMonthStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(startOfMonth);
 
   const { data, error } = await supabase
     .from("attendance")
     .select("*")
     .eq("user_id", user.id)
-    .gte("date", sevenDaysAgo.toISOString().slice(0, 10))
+    .gte("date", startOfMonthStr)
     .order("date", { ascending: false });
 
   if (error) return { ok: false, message: error.message };
