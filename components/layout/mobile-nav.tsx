@@ -3,7 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Menu, LogOut, X, Zap } from "lucide-react";
+import { Menu, LogOut, X } from "lucide-react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -62,8 +63,14 @@ export function MobileNav() {
         <div className="flex h-full flex-col">
           <div className="flex h-20 items-center justify-between border-b border-border/70 px-5">
             <Link href="/" className="group flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
-                <Zap className="h-5 w-5" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-sm overflow-hidden">
+                <Image 
+                  src="/icon-192x192.png" 
+                  alt="Ekodrix Logo" 
+                  width={40} 
+                  height={40} 
+                  className="h-full w-full object-cover scale-[1.1]" 
+                />
               </div>
               <div className="flex flex-col">
                 <DialogTitle className="mt-0.5 text-base font-black uppercase leading-none text-zinc-900 dark:text-zinc-100">

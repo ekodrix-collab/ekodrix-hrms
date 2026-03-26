@@ -50,13 +50,16 @@ function emptyCompanyFinanceDashboard(fromKey: string, toKey: string) {
             pendingClaims: { count: 0, amount: 0 },
             approvedClaims: { count: 0, amount: 0 },
             reimbursedClaims: { count: 0, amount: 0 },
-            rejectedClaims: { count: 0, amount: 0 }
+            rejectedClaims: { count: 0, amount: 0 },
+            advancesLiability: 0
         },
         monthly: [],
         ledger: [],
         claims: [],
         contributors: [],
-        categoryBreakdown: []
+        categoryBreakdown: [],
+        advances: [],
+        advanceContributors: []
     };
 }
 
@@ -530,7 +533,7 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         return emptyCompanyFinanceDashboard(fromKey, toKey);
     }
 
-    const [revenueResult, expenseResult, reimbursementResult, accrualResult, projectFinancialsResult] = await Promise.all([
+    const [revenueResult, expenseResult, reimbursementResult, accrualResult, projectFinancialsResult, advancesResult] = await Promise.all([
         supabase
             .from("revenue_logs")
             .select("id, amount, source, description, received_date, created_at, project_id, creator:profiles!created_by!inner(organization_id)")
@@ -567,7 +570,13 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
             .from("salary_accruals")
             .select("remaining_amount, profiles!user_id!inner(organization_id)")
             .eq("profiles.organization_id", organizationId),
-        getCompanyFinancials() // Aggregated project final verdicts (net)
+        getCompanyFinancials(), // Aggregated project final verdicts (net)
+        supabase
+            .from("employee_funding_ledger")
+            .select("id, employee_id, type, amount, note, created_at, profiles:employee_id(full_name, avatar_url, department, role)")
+            .eq("organization_id", organizationId)
+            .lte("created_at", `${toKey}T23:59:59.999Z`)
+            .order("created_at", { ascending: false })
     ]);
 
     const revenueRows = (revenueResult.data ?? []) as FinanceRevenueRow[];
@@ -581,6 +590,39 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
     const salaryLiability = (accrualResult.data ?? []).reduce((sum, row) => {
         return sum + Number((row as { remaining_amount?: number | string }).remaining_amount ?? 0);
     }, 0);
+
+    const advancesList = ((advancesResult.data ?? []) as any[]).map(row => ({
+        ...row,
+        amount: Number(row.amount),
+        profiles: normalizeJoinedProfile(row.profiles)
+    }));
+
+    let advancesLiability = 0;
+    const advanceMap: Record<string, any> = {};
+    advancesList.forEach(adv => {
+        if (adv.type === 'GIVEN') advancesLiability += adv.amount;
+        else advancesLiability -= adv.amount;
+        
+        const empId = adv.employee_id;
+        if (!advanceMap[empId]) {
+            advanceMap[empId] = {
+                employeeId: empId,
+                name: adv.profiles?.full_name || "Employee",
+                avatar: adv.profiles?.avatar_url || null,
+                totalGiven: 0,
+                totalReturned: 0,
+                outstanding: 0
+            };
+        }
+        if (adv.type === 'GIVEN') {
+            advanceMap[empId].totalGiven += adv.amount;
+            advanceMap[empId].outstanding += adv.amount;
+        } else {
+            advanceMap[empId].totalReturned += adv.amount;
+            advanceMap[empId].outstanding -= adv.amount;
+        }
+    });
+    const advanceContributors = Object.values(advanceMap).sort((a: any, b: any) => b.outstanding - a.outstanding);
 
     const reimbursementsByExpense = reimbursements.reduce<Record<string, FinanceReimbursementRow[]>>((accumulator, reimbursement) => {
         if (!accumulator[reimbursement.expense_id]) accumulator[reimbursement.expense_id] = [];
@@ -604,33 +646,46 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
             person: null
         }));
 
-    // Add project final verdict as virtual treasury events (not raw project income/expense lines)
+    // Add project final verdict as virtual treasury events
     projectFinancialsResult.projectBreakdown?.forEach((project) => {
-        if (project.net > 0) {
+        // We list individual project-level reimbursements and project share payouts as separate expenses in the treasury ledger.
+        // To maintain an accurate treasury balance, the "Project Income" line must represent the 
+        // Gross Company Share before these specific outflows were subtracted.
+        const projectReimbursements = reimbursements.filter(r => {
+            const pExp = expenses.find(e => e.id === r.expense_id);
+            return pExp?.project_id === project.id;
+        }).reduce((sum, r) => sum + Number(r.amount), 0);
+        
+        const projectShares = expenses.filter(e => e.project_id === project.id && normalizeExpenseCategory(e.category) === "Project Share")
+            .reduce((sum, e) => sum + Number(e.amount), 0);
+
+        const adjustedNet = project.net + projectReimbursements + projectShares;
+
+        if (adjustedNet > 0) {
             allEvents.push({
                 id: `project-profit-${project.id}`,
                 date: toKey,
                 createdAt: new Date().toISOString(),
-                amount: project.net,
+                amount: adjustedNet,
                 type: "revenue",
                 sourceType: "cash_revenue",
                 title: `Income from ${project.name}`,
-                description: `Final project verdict registered as income`,
-                category: project.name, // badge shows project name
+                description: `Company share from project (Gross of treasury payouts)`,
+                category: project.name,
                 method: "-",
                 person: null
             });
-        } else if (project.net < 0) {
+        } else if (adjustedNet < 0) {
             allEvents.push({
                 id: `project-loss-${project.id}`,
                 date: toKey,
                 createdAt: new Date().toISOString(),
-                amount: Math.abs(project.net),
+                amount: Math.abs(adjustedNet),
                 type: "expense",
                 sourceType: "business_expense",
                 title: `Loss from ${project.name}`,
-                description: `Final project verdict registered as expense`,
-                category: project.name, // badge shows project name
+                description: `Company loss from project (Gross of treasury payouts)`,
+                category: project.name,
                 method: "-",
                 person: null
             });
@@ -645,63 +700,6 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         const person = expense.profiles?.full_name || null;
         const isEmployeeClaim = expense.profiles?.role === "employee" || expense.profiles?.role === "founder";
         if (isEmployeeClaim) {
-            const approvedDate = toIsoDate(expense.approved_at, true);
-            const claimPayments = reimbursementsByExpense[expense.id] || [];
-
-            if ((expense.status === "approved" || expense.status === "partially_paid" || expense.status === "paid") && approvedDate && approvedDate <= toKey) {
-                allEvents.push({
-                    id: `claim-approved-${expense.id}`,
-                    date: approvedDate,
-                    createdAt: expense.updated_at || expense.created_at,
-                    amount,
-                    type: "revenue",
-                    sourceType: "claim_approval",
-                    title: `Approved claim: ${person || "Employee"}`,
-                    description: expense.description,
-                    category,
-                    method: expense.payment_method,
-                    person
-                });
-            }
-
-            if (claimPayments.length) {
-                claimPayments.forEach((payment) => {
-                    const paidDate = toIsoDate(payment.paid_at, true);
-                    if (!paidDate || toIsoDate(paidDate)! > toKey) return;
-
-                    allEvents.push({
-                        id: `claim-paid-${payment.id}`,
-                        date: paidDate,
-                        createdAt: payment.created_at,
-                        amount: Number(payment.amount) || 0,
-                        type: "expense",
-                        sourceType: "claim_reimbursement",
-                        title: `Reimbursed claim: ${person || "Employee"}`,
-                        description: payment.note || expense.description,
-                        category,
-                        method: payment.payment_method || expense.reimbursement_method || "bank_transfer",
-                        person
-                    });
-                });
-            } else {
-                const reimbursedDate = toIsoDate(expense.reimbursed_at, true);
-                if (expense.status === "paid" && reimbursedDate && toIsoDate(reimbursedDate)! <= toKey) {
-                    allEvents.push({
-                        id: `claim-paid-legacy-${expense.id}`,
-                        date: reimbursedDate,
-                        createdAt: expense.updated_at || expense.created_at,
-                        amount,
-                        type: "expense",
-                        sourceType: "claim_reimbursement",
-                        title: `Reimbursed claim: ${person || "Employee"}`,
-                        description: expense.description,
-                        category,
-                        method: expense.reimbursement_method || "bank_transfer",
-                        person
-                    });
-                }
-            }
-
             return;
         }
 
@@ -709,7 +707,7 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
             return;
         }
 
-        if (expense.project_id) return; // Keep direct project expenses out of treasury ledger
+        if (expense.project_id && category !== "Project Share") return; // Keep direct project expenses out, but include payouts like Shares
 
         const isSalaryExpense = category === "Salary Payments";
         allEvents.push({
@@ -724,6 +722,27 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
             category,
             method: expense.payment_method,
             person
+        });
+    });
+
+    // Add all reimbursement payments as company expenses in the ledger (as requested by user)
+    reimbursements.forEach((r) => {
+        const parentExpense = expenses.find(e => e.id === r.expense_id);
+        if (!parentExpense) return;
+        // User wants all reimbursements paid from treasury to appear in the main ledger
+
+        allEvents.push({
+            id: `reimbursement-${r.id}`,
+            date: r.paid_at,
+            createdAt: r.created_at,
+            amount: Number(r.amount) || 0,
+            type: "expense",
+            sourceType: "claim_reimbursement",
+            title: `Claim Reimbursement: ${parentExpense.profiles?.full_name || "Employee"}`,
+            description: r.note || parentExpense.description,
+            category: normalizeExpenseCategory(parentExpense.category),
+            method: r.payment_method,
+            person: parentExpense.profiles?.full_name || null
         });
     });
 
@@ -790,8 +809,8 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         return bucket;
     });
 
-    const periodRevenue = allEvents.filter(e => e.type === "revenue").reduce((sum, row) => sum + row.amount, 0);
-    const periodExpenses = allEvents.filter(e => e.type === "expense").reduce((sum, row) => sum + row.amount, 0);
+    const periodRevenue = allEvents.filter(e => e.type === "revenue" && inRange(e.date)).reduce((sum, row) => sum + row.amount, 0);
+    const periodExpenses = allEvents.filter(e => e.type === "expense" && inRange(e.date)).reduce((sum, row) => sum + row.amount, 0);
     const periodLedger = allEvents
         .filter((event) => inRange(event.date))
         .sort((left, right) =>
@@ -799,23 +818,29 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
             new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
         );
 
-    const claimRows = claims
+    const allClaimsProcessed = expenses
+        .filter(e => ["pending", "approved", "partially_paid", "paid", "rejected"].includes(e.status))
+        // High-level treasury dashboard should only show company-wide claims (no project_id).
+        // Project-specific claims are managed within each project's finance section.
+        .filter(e => !e.project_id)
         .map((claim) => {
             const claimPayments = reimbursementsByExpense[claim.id] || [];
-            const reimbursedAmount = claimPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+            const totalReimbursed = claimPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
             const totalAmount = Number(claim.amount) || 0;
             return {
                 ...claim,
-                reimbursed_amount: reimbursedAmount,
-                outstanding_amount: Math.max(0, totalAmount - reimbursedAmount),
+                reimbursed_amount: totalReimbursed,
+                outstanding_amount: Math.max(0, totalAmount - totalReimbursed),
                 payment_count: claimPayments.length,
                 payments: claimPayments
             };
-        })
+        });
+
+    const claimRows = allClaimsProcessed
         .filter((claim) => inRange(claim.expense_date))
         .sort((left, right) =>
             new Date(right.expense_date).getTime() - new Date(left.expense_date).getTime() ||
-            new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+            new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()
         );
 
     const contributorMap: Record<string, ContributorSummary> = {};
@@ -827,8 +852,13 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         rejectedClaims: { count: 0, amount: 0 }
     };
 
-    claimRows.forEach((claim) => {
-        const employeeId = claim.profiles?.id || claim.id;
+    // Calculate contributor rankings and total summaries using ALL claims up to toKey
+    allClaimsProcessed.forEach((claim) => {
+        const profile = claim.profiles;
+        // Skip admins in contributor ranking and liability summaries
+        if (profile?.role === "admin") return;
+
+        const employeeId = profile?.id || claim.id;
         const amount = Number(claim.amount) || 0;
         const category = normalizeExpenseCategory(claim.category);
 
@@ -850,25 +880,34 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         }
 
         const contributor = contributorMap[employeeId];
+        
+        // Count all claims for contributor global stats
         contributor.submittedAmount += amount;
         contributor.claimsCount += 1;
         if (new Date(claim.expense_date).getTime() > new Date(contributor.latestExpenseDate).getTime()) {
             contributor.latestExpenseDate = claim.expense_date;
         }
 
-        categoryMap[category] = (categoryMap[category] || 0) + amount;
+        // Only add to category breakdown if in range
+        if (inRange(claim.expense_date)) {
+            categoryMap[category] = (categoryMap[category] || 0) + amount;
+        }
 
         if (claim.status === "pending") {
             contributor.pendingAmount += amount;
-            claimSummary.pendingClaims.count += 1;
-            claimSummary.pendingClaims.amount += amount;
+            if (inRange(claim.expense_date)) {
+                claimSummary.pendingClaims.count += 1;
+                claimSummary.pendingClaims.amount += amount;
+            }
             return;
         }
 
         if (claim.status === "rejected") {
             contributor.rejectedAmount += amount;
-            claimSummary.rejectedClaims.count += 1;
-            claimSummary.rejectedClaims.amount += amount;
+            if (inRange(claim.expense_date)) {
+                claimSummary.rejectedClaims.count += 1;
+                claimSummary.rejectedClaims.amount += amount;
+            }
             return;
         }
 
@@ -878,16 +917,22 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
 
         if (reimbursedAmount > 0) {
             contributor.reimbursedAmount += reimbursedAmount;
-            claimSummary.reimbursedClaims.count += 1;
-            claimSummary.reimbursedClaims.amount += reimbursedAmount;
+            if (inRange(claim.expense_date)) {
+                claimSummary.reimbursedClaims.count += 1;
+                claimSummary.reimbursedClaims.amount += reimbursedAmount;
+            }
         }
 
         if (outstandingAmount > 0) {
             contributor.outstandingApprovedAmount += outstandingAmount;
-            claimSummary.approvedClaims.count += 1;
-            claimSummary.approvedClaims.amount += outstandingAmount;
+            if (inRange(claim.expense_date)) {
+                claimSummary.approvedClaims.count += 1;
+                claimSummary.approvedClaims.amount += outstandingAmount;
+            }
         }
     });
+
+    // Category breakdown and summaries are now fully handled in the consolidated allClaimsProcessed loop above
 
     const contributors = Object.values(contributorMap).sort((left, right) => {
         if (right.approvedAmount !== left.approvedAmount) return right.approvedAmount - left.approvedAmount;
@@ -916,13 +961,16 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
             salaryExpenses: monthly.reduce((sum, row) => sum + row.salaryExpenses, 0),
             totalTransactions: periodLedger.length,
             salaryLiability,
+            advancesLiability,
             ...claimSummary
         },
         monthly,
         ledger: periodLedger,
         claims: claimRows,
         contributors,
-        categoryBreakdown
+        categoryBreakdown,
+        advances: advancesList,
+        advanceContributors
     };
 }
 

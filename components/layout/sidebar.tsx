@@ -22,6 +22,7 @@ import {
   KeyRound,
   Landmark
 } from "lucide-react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { getCurrentUser, signOut } from "@/actions/auth";
@@ -217,8 +218,14 @@ export function Sidebar() {
     <aside className="glass-panel sticky top-3 z-20 hidden h-[calc(100vh-1.5rem)] w-[300px] shrink-0 flex-col overflow-hidden rounded-3xl lg:mx-3 lg:flex">
       <div className="flex h-20 items-center px-6">
         <Link href="/" className="group flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm transition-transform duration-300 group-hover:scale-105">
-            <Zap className="h-6 w-6" />
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-sm transition-transform duration-300 group-hover:scale-105 overflow-hidden">
+            <Image 
+              src="/icon-192x192.png" 
+              alt="Ekodrix Logo" 
+              width={44} 
+              height={44} 
+              className="h-full w-full object-cover scale-[1.1]" 
+            />
           </div>
           <div className="flex flex-col">
             <span className="mt-0.5 text-lg font-black uppercase leading-none text-zinc-900 dark:text-zinc-100">
