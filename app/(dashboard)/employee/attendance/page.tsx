@@ -134,6 +134,64 @@ export default function EmployeeAttendancePage() {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  // Calculate dynamic stats from history
+  const calculateQuickStats = () => {
+    if (!history) {
+      return { avgIn: "09:00 AM", overtime: "0h", present: "0 / 0" };
+    }
+
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    // Calculate total working days in current month (excluding Sundays)
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    let workingDaysCount = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(currentYear, currentMonth, d);
+      if (date.getDay() !== 0) { // 0 is Sunday
+        workingDaysCount++;
+      }
+    }
+
+    let totalMinutes = 0;
+    let count = 0;
+    let overtime = 0;
+    let presentCount = 0;
+
+    history.forEach(entry => {
+      const entryDate = new Date(entry.date);
+      // Only count days in current month and exclude Sundays
+      if (entryDate.getMonth() === currentMonth && entryDate.getFullYear() === currentYear && entryDate.getDay() !== 0) {
+        presentCount++;
+      }
+
+      if (entry.punch_in) {
+        const date = new Date(entry.punch_in);
+        totalMinutes += date.getHours() * 60 + date.getMinutes();
+        count++;
+      }
+      if (entry.total_hours && entry.total_hours > 8) {
+        overtime += (entry.total_hours - 8);
+      }
+    });
+
+    const avgTotalMinutes = count > 0 ? totalMinutes / count : 540; // Default 9 AM
+    const hours = Math.floor(avgTotalMinutes / 60);
+    const minutes = Math.round(avgTotalMinutes % 60);
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    const avgIn = `${displayHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+
+    return {
+      avgIn,
+      overtime: `${overtime.toFixed(1)}h`,
+      present: `${presentCount} / ${workingDaysCount}`
+    };
+  };
+
+  const quickStats = calculateQuickStats();
+
   if (isAttendanceLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -263,23 +321,55 @@ export default function EmployeeAttendancePage() {
           </div>
 
           <div className="lg:col-span-4 space-y-6">
-            <Card className="border-none bg-primary text-white shadow-xl shadow-primary/20 overflow-hidden relative group">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/50 to-transparent pointer-events-none" />
-              <CardContent className="p-6 relative">
-                <div className="flex items-center justify-between mb-4">
-                  <TrendingUp className="h-8 w-8 text-white/50" />
-                  <Badge className="bg-white/20 hover:bg-white/30 border-none text-white font-bold">Week 04</Badge>
+            <Card className="border-none bg-emerald-600 text-white shadow-2xl shadow-emerald-500/30 overflow-hidden relative group isolate">
+              {/* Premium Background Effects */}
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-600" />
+              <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
+              <div className="absolute -bottom-12 -left-12 w-48 h-48 bg-emerald-400/20 rounded-full blur-3xl" />
+              
+              <CardContent className="p-8 relative space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="p-2.5 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl shadow-inner">
+                    <TrendingUp className="h-6 w-6 text-white" />
+                  </div>
+                  <Badge className="bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 text-white font-black px-3 py-1 rounded-full uppercase text-[10px] tracking-widest shadow-lg">
+                    Week 04
+                  </Badge>
                 </div>
-                <h3 className="text-lg font-bold text-white/80">Weekly Performance</h3>
-                <div className="text-4xl font-black mt-1">98.5%</div>
-                <div className="mt-4 h-1.5 w-full bg-black/20 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: "98.5%" }}
-                    className="h-full bg-white"
-                  />
+
+                <div className="space-y-1">
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-white/60">Weekly Efficiency</p>
+                  <h3 className="text-5xl font-black tracking-tight flex items-baseline gap-1">
+                    98.5<span className="text-2xl text-white/50">%</span>
+                  </h3>
                 </div>
-                <p className="mt-2 text-xs font-bold text-white/60">2.5% higher than last week</p>
+
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-wider text-white/80">
+                    <span>Performance Rating</span>
+                    <span className="p-1 bg-white/20 rounded-md">Excelent</span>
+                  </div>
+                  <div className="h-2 w-full bg-black/20 rounded-full overflow-hidden backdrop-blur-sm border border-white/5 p-[1px]">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: "98.5%" }}
+                      transition={{ duration: 1.5, ease: "easeOut" }}
+                      className="h-full bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,0.7)]"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex -space-x-1">
+                      {[1, 2, 3].map(i => (
+                        <div key={i} className="h-4 w-4 rounded-full bg-white/20 border border-white/40 backdrop-blur-md flex items-center justify-center">
+                          <CheckCircle2 className="h-2 w-2 text-white" />
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[10px] font-bold text-white/70">
+                      2.5% improvement <span className="text-white">↑</span> vs last week
+                    </p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -293,15 +383,15 @@ export default function EmployeeAttendancePage() {
               <CardContent className="space-y-4">
                 <div className="flex justify-between items-center p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50">
                   <span className="text-sm font-bold text-zinc-500">Avg. Punch In</span>
-                  <span className="font-black">09:12 AM</span>
+                  <span className="font-black">{quickStats.avgIn}</span>
                 </div>
                 <div className="flex justify-between items-center p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50">
                   <span className="text-sm font-bold text-zinc-500">Overtime Hours</span>
-                  <span className="font-black text-orange-600">12.5h</span>
+                  <span className="font-black text-orange-600">{quickStats.overtime}</span>
                 </div>
                 <div className="flex justify-between items-center p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50">
                   <span className="text-sm font-bold text-zinc-500">Days Present</span>
-                  <span className="font-black text-green-600">22 / 24</span>
+                  <span className="font-black text-green-600">{quickStats.present} days</span>
                 </div>
               </CardContent>
             </Card>
