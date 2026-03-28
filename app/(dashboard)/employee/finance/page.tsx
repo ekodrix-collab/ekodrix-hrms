@@ -39,7 +39,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createExpenseClaim, getMyClaims } from "@/actions/finance-actions";
 import { toast } from "sonner";
 import { UnpaidAccrual } from "@/types/dashboard";
-import { Expense } from "@/types/common";
+import { Expense, EmployeeFunding } from "@/types/common";
 import { EXPENSE_CATEGORIES } from "@/lib/finance-categories";
 import { FounderFinanceView } from "@/components/employee/founder-finance-view";
 
@@ -142,6 +142,8 @@ export default function EmployeeFinancePage() {
         reimbursement: 0
     };
     const totalEarnedYTD = data?.totalEarnedYTD || 0;
+    const advances = data?.advances || [];
+    const advancesMetrics = data?.advancesMetrics || { totalGiven: 0, totalReturned: 0, outstandingAdvance: 0 };
 
     const totalPaid = accruals.reduce((acc: number, curr: UnpaidAccrual) => acc + Number(curr.paid_amount || 0), 0);
     const pendingAmount = accruals.reduce((acc: number, curr: UnpaidAccrual) => acc + Number(curr.remaining_amount || 0), 0);
@@ -149,11 +151,18 @@ export default function EmployeeFinancePage() {
     const pendingClaimsAmount = claims
         .filter((claim) => claim.status === "pending")
         .reduce((acc, claim) => acc + Number(claim.amount || 0), 0);
-    const approvedClaimsAmount = claims
-        .filter((claim) => claim.status === "approved" || claim.status === "partially_paid")
+
+    // Total validated debt (Approved + Partially Paid + Paid)
+    const approvedTotal = claims
+        .filter((claim) => claim.status !== "pending" && claim.status !== "rejected")
         .reduce((acc, claim) => acc + Number(claim.amount || 0), 0);
-    const reimbursedClaimsAmount = claims
-        .reduce((acc, claim) => acc + Number(claim.reimbursed_amount || (claim.status === "paid" ? claim.amount : 0) || 0), 0);
+
+    // Actual money already paid (sum of all reimbursement records)
+    const reimbursedTotal = claims.reduce((acc, claim) => acc + (claim.reimbursed_amount || 0), 0);
+
+    // Current company liability (Total Approved - Total Paid)
+    const outstandingLiability = Math.max(0, approvedTotal - reimbursedTotal);
+
     const rejectedClaimsCount = claims.filter((claim) => claim.status === "rejected").length;
     const filteredClaims = claims
         .filter((claim) => {
@@ -491,16 +500,16 @@ export default function EmployeeFinancePage() {
                                     <div className="rounded-2xl border border-zinc-100 bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
                                         <div className="flex items-center gap-2 text-emerald-600">
                                             <CheckCircle2 className="h-4 w-4" />
-                                            <p className="text-[11px] font-black uppercase tracking-[0.08em]">Approved</p>
+                                            <p className="text-[11px] font-black uppercase tracking-[0.08em]">Outstanding</p>
                                         </div>
-                                        <p className="mt-2 text-lg font-black text-zinc-900 dark:text-zinc-100">{formatCurrency(approvedClaimsAmount)}</p>
+                                        <p className="mt-2 text-lg font-black text-zinc-900 dark:text-zinc-100">{formatCurrency(outstandingLiability)}</p>
                                     </div>
                                     <div className="rounded-2xl border border-zinc-100 bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
                                         <div className="flex items-center gap-2 text-sky-600">
                                             <Wallet className="h-4 w-4" />
                                             <p className="text-[11px] font-black uppercase tracking-[0.08em]">Reimbursed</p>
                                         </div>
-                                        <p className="mt-2 text-lg font-black text-zinc-900 dark:text-zinc-100">{formatCurrency(reimbursedClaimsAmount)}</p>
+                                        <p className="mt-2 text-lg font-black text-zinc-900 dark:text-zinc-100">{formatCurrency(reimbursedTotal)}</p>
                                     </div>
                                     <div className="rounded-2xl border border-zinc-100 bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
                                         <div className="flex items-center gap-2 text-rose-600">
@@ -570,16 +579,18 @@ export default function EmployeeFinancePage() {
                                                         <Badge
                                                             variant={
                                                                 claim.status === "paid" ? "default" :
-                                                                    claim.status === "approved" ? "default" :
-                                                                        claim.status === "partially_paid" ? "secondary" :
-                                                                            claim.status === "rejected" ? "destructive" : "outline"
+                                                                    claim.status === "approved" || claim.status === "partially_paid" ? "default" :
+                                                                        claim.status === "rejected" ? "destructive" : "outline"
                                                             }
-                                                            className={`text-[10px] h-5 capitalize ${claim.status === "paid" ? "bg-emerald-500 hover:bg-emerald-600" :
-                                                                claim.status === "approved" ? "bg-blue-500 hover:bg-blue-600" :
-                                                                    claim.status === "pending" ? "text-amber-600 border-amber-200" : ""
+                                                            className={`text-[10px] h-5 capitalize ${
+                                                                claim.status === "paid" ? "bg-emerald-500 hover:bg-emerald-600" :
+                                                                claim.status === "approved" || claim.status === "partially_paid" ? "bg-blue-500 hover:bg-blue-600" :
+                                                                claim.status === "pending" ? "text-amber-600 border-amber-200" : ""
                                                                 }`}
                                                         >
-                                                            {claim.status === "paid" ? "Reimbursed" : claim.status}
+                                                            {claim.status === "paid" ? "Reimbursed" : 
+                                                             claim.status === "approved" || claim.status === "partially_paid" ? "Approved" : 
+                                                             claim.status}
                                                         </Badge>
                                                     </div>
                                                 </div>
@@ -595,6 +606,67 @@ export default function EmployeeFinancePage() {
                                                 No claims match the selected filters.
                                             </div>
                                         )}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
+                            <CardHeader>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <CardTitle className="text-lg font-bold">Advances Provided</CardTitle>
+                                        <CardDescription>Money you provided to the company (Liability tracking)</CardDescription>
+                                    </div>
+                                    <div className="p-2 bg-amber-50 dark:bg-amber-900/30 text-amber-600 rounded-lg">
+                                        <Wallet className="h-5 w-5" />
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid gap-3 sm:grid-cols-3">
+                                    <div className="rounded-2xl border border-zinc-100 bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+                                        <p className="text-[11px] font-black uppercase tracking-[0.08em] text-emerald-600">Total Given</p>
+                                        <p className="mt-2 text-lg font-black text-zinc-900 dark:text-zinc-100">{formatCurrency(advancesMetrics.totalGiven)}</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-zinc-100 bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+                                        <p className="text-[11px] font-black uppercase tracking-[0.08em] text-sky-600">Total Returned</p>
+                                        <p className="mt-2 text-lg font-black text-zinc-900 dark:text-zinc-100">{formatCurrency(advancesMetrics.totalReturned)}</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-zinc-100 bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+                                        <p className="text-[11px] font-black uppercase tracking-[0.08em] text-amber-600">Outstanding Balance</p>
+                                        <p className="mt-2 text-lg font-black text-zinc-900 dark:text-zinc-100">{formatCurrency(advancesMetrics.outstandingAdvance)}</p>
+                                    </div>
+                                </div>
+
+                                {advances.length === 0 ? (
+                                    <div className="text-center py-6 text-zinc-500 font-medium border-t border-zinc-100 dark:border-zinc-800 mt-4">
+                                        No advances recorded
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                                        {advances.map((item: EmployeeFunding, index: number) => (
+                                            <div key={index} className="flex items-center justify-between p-3 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:shadow-md transition-all">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`p-2 rounded-lg ${item.type === "GIVEN" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400" : "bg-sky-50 text-sky-600 dark:bg-sky-950/30 dark:text-sky-400"}`}>
+                                                        {item.type === "GIVEN" ? <TrendingUp className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
+                                                            {item.type === "GIVEN" ? "Advance Given" : "Repayment Received"}
+                                                        </p>
+                                                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                                            {format(new Date(item.created_at), "MMM dd, yyyy")} {item.note ? `• ${item.note}` : ""}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className={`font-black text-sm ${item.type === "GIVEN" ? "text-emerald-600 dark:text-emerald-400" : "text-sky-600 dark:text-sky-400"}`}>
+                                                        {item.type === "GIVEN" ? "+" : "-"} {formatCurrency(item.amount)}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
                             </CardContent>

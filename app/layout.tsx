@@ -26,6 +26,15 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Ekodrix HRMS",
   },
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/icon.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icon-192x192.png" },
+    ],
+  },
 };
 
 export const viewport = {

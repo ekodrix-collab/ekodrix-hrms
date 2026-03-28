@@ -21,7 +21,7 @@ import {
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { generateMonthlyAccruals, getCompanyFinanceDashboard, postBusinessExpense, postRevenue } from "@/actions/finance";
-import { createExpenseClaimForMember, getClaimEligibleMembers, markClaimAsPaid, updateClaimPayment, updateClaimStatus } from "@/actions/finance-actions";
+import { addEmployeeAdvance, createExpenseClaimForMember, getClaimEligibleMembers, payEmployeeReimbursement, repayEmployeeAdvance, updateClaimStatus } from "@/actions/finance-actions";
 import { getUnpaidAccruals, processSalaryPayment } from "@/actions/payroll-actions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +43,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { EXPENSE_CATEGORIES } from "@/lib/finance-categories";
 import type { UnpaidAccrual } from "@/types/dashboard";
+import type { EmployeeFunding } from "@/types/common";
 
 const METHODS = [
   { value: "cash", label: "Cash" },
@@ -98,6 +99,7 @@ type FinanceSummary = {
   approvedClaims: { count: number; amount: number };
   reimbursedClaims: { count: number; amount: number };
   rejectedClaims: { count: number; amount: number };
+  advancesLiability: number;
 };
 
 type MonthlyRow = {
@@ -177,6 +179,15 @@ type Contributor = {
   latestExpenseDate: string;
 };
 
+type AdvanceContributor = {
+  employeeId: string;
+  name: string;
+  avatar: string | null;
+  totalGiven: number;
+  totalReturned: number;
+  outstanding: number;
+};
+
 type FinanceDashboardResult = {
   dateRange: { from: string; to: string };
   summary: FinanceSummary;
@@ -185,6 +196,8 @@ type FinanceDashboardResult = {
   claims: ClaimItem[];
   contributors: Contributor[];
   categoryBreakdown: { name: string; value: number }[];
+  advances: EmployeeFunding[];
+  advanceContributors: AdvanceContributor[];
 };
 
 const EMPTY_DASHBOARD: FinanceDashboardResult = {
@@ -205,13 +218,16 @@ const EMPTY_DASHBOARD: FinanceDashboardResult = {
     pendingClaims: { count: 0, amount: 0 },
     approvedClaims: { count: 0, amount: 0 },
     reimbursedClaims: { count: 0, amount: 0 },
-    rejectedClaims: { count: 0, amount: 0 }
+    rejectedClaims: { count: 0, amount: 0 },
+    advancesLiability: 0
   },
   monthly: [],
   ledger: [],
   claims: [],
   contributors: [],
-  categoryBreakdown: []
+  categoryBreakdown: [],
+  advances: [],
+  advanceContributors: []
 };
 
 const inr = (value: number) =>
@@ -235,13 +251,10 @@ export default function AdminFinancePage() {
   const [adminClaimForm, setAdminClaimForm] = useState<AdminClaimForm>(createInitialAdminClaimForm);
   const [rejectingClaim, setRejectingClaim] = useState<ClaimItem | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
-  const [payingClaim, setPayingClaim] = useState<ClaimItem | null>(null);
-  const [claimPaymentAmount, setClaimPaymentAmount] = useState("");
   const [reimbursementMethod, setReimbursementMethod] = useState("bank_transfer");
-  const [editingPayment, setEditingPayment] = useState<{ claim: ClaimItem; payment: NonNullable<ClaimItem["payments"]>[number] } | null>(null);
-  const [editingPaymentAmount, setEditingPaymentAmount] = useState("");
-  const [editingPaymentMethod, setEditingPaymentMethod] = useState("bank_transfer");
-  const [editingPaymentDate, setEditingPaymentDate] = useState("");
+  const [payingContributor, setPayingContributor] = useState<Contributor | null>(null);
+  const [viewingClaimsContributor, setViewingClaimsContributor] = useState<Contributor | null>(null);
+  const [reimbursementAmount, setReimbursementAmount] = useState("");
   const [claimSearch, setClaimSearch] = useState("");
   const [claimStatusFilter, setClaimStatusFilter] = useState("all");
   const [ledgerSearch, setLedgerSearch] = useState("");
@@ -253,6 +266,10 @@ export default function AdminFinancePage() {
     category: EXPENSE_CATEGORIES[0],
     payment_method: "cash"
   });
+  
+  const [addAdvanceOpen, setAddAdvanceOpen] = useState(false);
+  const [repayAdvanceOpen, setRepayAdvanceOpen] = useState(false);
+  const [advanceForm, setAdvanceForm] = useState({ employee_id: "", amount: "", note: "" });
 
   const deferredClaimSearch = useDeferredValue(claimSearch);
   const deferredLedgerSearch = useDeferredValue(ledgerSearch);
@@ -277,6 +294,12 @@ export default function AdminFinancePage() {
       setAdminClaimForm((previous) => ({ ...previous, member_id: claimEligibleMembers[0].id }));
     }
   }, [adminClaimForm.member_id, claimEligibleMembers]);
+
+  useEffect(() => {
+    if (!advanceForm.employee_id && claimEligibleMembers.length > 0) {
+      setAdvanceForm((previous) => ({ ...previous, employee_id: claimEligibleMembers[0].id }));
+    }
+  }, [advanceForm.employee_id, claimEligibleMembers]);
 
   const invalidateTreasury = () => {
     queryClient.invalidateQueries({ queryKey: ["company-finance-dashboard"] });
@@ -366,14 +389,14 @@ export default function AdminFinancePage() {
     }
   });
 
-  const claimPaymentMutation = useMutation({
-    mutationFn: (payload: { claimId: string; reimbursementMethod: string; amount: number }) =>
-      markClaimAsPaid(payload.claimId, payload.reimbursementMethod, payload.amount),
+  const reimbursementMutation = useMutation({
+    mutationFn: (payload: { employeeId: string; amount: number; paymentMethod: string; note?: string }) =>
+      payEmployeeReimbursement(payload),
     onSuccess: (result) => {
       if (result.ok) {
         toast.success(result.message);
-        setPayingClaim(null);
-        setClaimPaymentAmount("");
+        setPayingContributor(null);
+        setReimbursementAmount("");
         setReimbursementMethod("bank_transfer");
         invalidateTreasury();
         return;
@@ -382,22 +405,31 @@ export default function AdminFinancePage() {
     }
   });
 
-  const claimPaymentEditMutation = useMutation({
-    mutationFn: (payload: { paymentId: string; claimId: string; amount: number; reimbursementMethod: string; paidAt: string }) =>
-      updateClaimPayment(payload.paymentId, payload.claimId, payload.amount, payload.reimbursementMethod, payload.paidAt),
+  const addAdvanceMutation = useMutation({
+    mutationFn: () => addEmployeeAdvance(advanceForm.employee_id, Number(advanceForm.amount), advanceForm.note),
     onSuccess: (result) => {
       if (result.ok) {
         toast.success(result.message);
-        setEditingPayment(null);
-        setEditingPaymentAmount("");
-        setEditingPaymentMethod("bank_transfer");
-        setEditingPaymentDate("");
+        setAddAdvanceOpen(false);
+        setAdvanceForm((prev) => ({ ...prev, amount: "", note: "" }));
         invalidateTreasury();
-        return;
-      }
-      toast.error(result.message);
+      } else toast.error(result.message);
     }
   });
+
+  const repayAdvanceMutation = useMutation({
+    mutationFn: () => repayEmployeeAdvance(advanceForm.employee_id, Number(advanceForm.amount), advanceForm.note),
+    onSuccess: (result) => {
+      if (result.ok) {
+        toast.success(result.message);
+        setRepayAdvanceOpen(false);
+        setAdvanceForm((prev) => ({ ...prev, amount: "", note: "" }));
+        invalidateTreasury();
+      } else toast.error(result.message);
+    }
+  });
+
+  // Consolidated reimbursement logic replaces individual payment editing
 
   const chartData = dashboard.monthly.map((row) => ({
     label: format(new Date(`${row.monthKey}-01`), "MMM"),
@@ -480,7 +512,7 @@ export default function AdminFinancePage() {
                 <div>
                   <h1 className="text-2xl font-black uppercase tracking-tight text-foreground sm:text-3xl">Company Finance Management</h1>
                   <p className="max-w-3xl text-sm text-muted-foreground">
-                    Monthly treasury view with carry-forward balances, approved employee claims counted as treasury inflow, and reimbursed claims counted as company expense.
+                    Monthly treasury view with carry-forward balances. Employee claims are tracked as debt (outstanding) and not mixed with regular company revenue or expenses.
                   </p>
                 </div>
               </div>
@@ -522,10 +554,11 @@ export default function AdminFinancePage() {
             </div>
 
             <div className="grid gap-4 xl:grid-cols-[1.45fr,0.55fr]">
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <HeroMetric label="Opening Balance" value={inr(dashboard.summary.openingBalance)} tone="text-foreground" />
                 <HeroMetric label="Period Revenue" value={inr(dashboard.summary.periodRevenue)} tone="text-emerald-600 dark:text-emerald-300" />
                 <HeroMetric label="Period Expense" value={inr(dashboard.summary.periodExpenses)} tone="text-rose-600 dark:text-rose-300" />
+                <HeroMetric label="Total Liability" value={inr(dashboard.contributors.reduce((sum, c) => sum + c.outstandingApprovedAmount, 0) + dashboard.summary.advancesLiability)} tone="text-amber-600 dark:text-amber-300" />
                 <HeroMetric label="Net Change" value={inr(dashboard.summary.netChange)} tone={dashboard.summary.netChange >= 0 ? "text-primary" : "text-rose-600 dark:text-rose-300"} />
                 <HeroMetric label="Closing Balance" value={inr(dashboard.summary.closingBalance)} tone={dashboard.summary.closingBalance >= 0 ? "text-primary" : "text-rose-600 dark:text-rose-300"} />
                 <HeroMetric label="Salary Liability" value={inr(dashboard.summary.salaryLiability)} tone="text-amber-700 dark:text-amber-300" />
@@ -580,11 +613,6 @@ export default function AdminFinancePage() {
                       </Button>
                     ))}
                   </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <SummaryPill label="Claim Revenue" value={inr(dashboard.summary.approvedClaimRevenue)} tone="text-emerald-600 dark:text-emerald-300" />
-                    <SummaryPill label="Claim Expense" value={inr(dashboard.summary.reimbursedClaimExpense)} tone="text-rose-600 dark:text-rose-300" />
-                  </div>
                 </div>
               </div>
             </div>
@@ -593,9 +621,10 @@ export default function AdminFinancePage() {
       </header>
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid h-auto grid-cols-2 rounded-2xl border border-border/70 bg-background/80 p-1 md:grid-cols-4">
+        <TabsList className="grid h-auto grid-cols-2 rounded-2xl border border-border/70 bg-background/80 p-1 md:grid-cols-5">
           <TabsTrigger value="overview" className="rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Overview</TabsTrigger>
           <TabsTrigger value="claims" className="rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Claims</TabsTrigger>
+          <TabsTrigger value="funding" className="rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Funding</TabsTrigger>
           <TabsTrigger value="ledger" className="rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Ledger</TabsTrigger>
           <TabsTrigger value="payroll" className="rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Payroll</TabsTrigger>
         </TabsList>
@@ -635,15 +664,13 @@ export default function AdminFinancePage() {
             <div className="space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Revenue Composition</CardTitle>
-                  <CardDescription>Approved employee claims are counted as treasury inflow until the company reimburses them.</CardDescription>
+                  <CardTitle className="text-base">Revenue & Expense Composition</CardTitle>
+                  <CardDescription>Breakdown of treasury inflows and outflows.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <SummaryPill label="Cash Revenue" value={inr(dashboard.summary.cashRevenue)} tone="text-emerald-600 dark:text-emerald-300" />
-                  <SummaryPill label="Approved Claim Revenue" value={inr(dashboard.summary.approvedClaimRevenue)} tone="text-primary" />
                   <SummaryPill label="Direct Company Expenses" value={inr(dashboard.summary.directExpenses)} tone="text-rose-600 dark:text-rose-300" />
                   <SummaryPill label="Salary Expenses" value={inr(dashboard.summary.salaryExpenses)} tone="text-amber-700 dark:text-amber-300" />
-                  <SummaryPill label="Reimbursed Claims" value={inr(dashboard.summary.reimbursedClaimExpense)} tone="text-sky-600 dark:text-sky-300" />
                 </CardContent>
               </Card>
 
@@ -654,7 +681,7 @@ export default function AdminFinancePage() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <SummaryPill label="Pending Review" value={`${dashboard.summary.pendingClaims.count} • ${inr(dashboard.summary.pendingClaims.amount)}`} tone="text-amber-700 dark:text-amber-300" />
-                  <SummaryPill label="Approved Pending Payment" value={`${dashboard.summary.approvedClaims.count} • ${inr(dashboard.summary.approvedClaims.amount)}`} tone="text-primary" />
+                  <SummaryPill label="Outstanding" value={`${dashboard.summary.approvedClaims.count} • ${inr(dashboard.summary.approvedClaims.amount)}`} tone="text-primary" />
                   <SummaryPill label="Reimbursed" value={`${dashboard.summary.reimbursedClaims.count} • ${inr(dashboard.summary.reimbursedClaims.amount)}`} tone="text-sky-600 dark:text-sky-300" />
                   <SummaryPill label="Rejected" value={`${dashboard.summary.rejectedClaims.count} • ${inr(dashboard.summary.rejectedClaims.amount)}`} tone="text-rose-600 dark:text-rose-300" />
                 </CardContent>
@@ -700,8 +727,6 @@ export default function AdminFinancePage() {
                       <th className="px-4 py-3">Expense</th>
                       <th className="px-4 py-3">Net</th>
                       <th className="px-4 py-3">Closing</th>
-                      <th className="px-4 py-3">Claim Revenue</th>
-                      <th className="px-4 py-3">Claim Expense</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -713,8 +738,6 @@ export default function AdminFinancePage() {
                         <td className="px-4 py-3 text-rose-600 dark:text-rose-300">{inr(row.expense)}</td>
                         <td className={`px-4 py-3 font-semibold ${row.netChange >= 0 ? "text-primary" : "text-rose-600 dark:text-rose-300"}`}>{inr(row.netChange)}</td>
                         <td className={`px-4 py-3 font-semibold ${row.closingBalance >= 0 ? "text-foreground" : "text-rose-600 dark:text-rose-300"}`}>{inr(row.closingBalance)}</td>
-                        <td className="px-4 py-3">{inr(row.claimRevenue)}</td>
-                        <td className="px-4 py-3">{inr(row.reimbursedClaimExpense)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -802,22 +825,10 @@ export default function AdminFinancePage() {
                     key={claim.id}
                     claim={claim}
                     approving={claimDecisionMutation.isPending}
-                    paying={claimPaymentMutation.isPending}
                     onApprove={() => claimDecisionMutation.mutate({ claimId: claim.id, status: "approved" })}
                     onReject={() => {
                       setRejectingClaim(claim);
                       setRejectionReason("");
-                    }}
-                    onPay={() => {
-                      setPayingClaim(claim);
-                      setClaimPaymentAmount(String(Math.max(0, Number(claim.outstanding_amount ?? claim.amount))));
-                      setReimbursementMethod("bank_transfer");
-                    }}
-                    onEditPayment={(payment) => {
-                      setEditingPayment({ claim, payment });
-                      setEditingPaymentAmount(String(payment.amount));
-                      setEditingPaymentMethod(payment.payment_method);
-                      setEditingPaymentDate(format(new Date(payment.paid_at), "yyyy-MM-dd"));
                     }}
                   />
                 ))}
@@ -841,14 +852,38 @@ export default function AdminFinancePage() {
                           <AvatarFallback>{contributor.name.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold">{contributor.name}</p>
-                          <p className="text-xs text-muted-foreground">{contributor.department || "Unassigned"} • {contributor.claimsCount} claims</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <p className="truncate text-sm font-semibold">{contributor.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {contributor.department || "Unassigned"} •{" "}
+                                <button
+                                  className="font-medium hover:text-foreground hover:underline"
+                                  onClick={() => setViewingClaimsContributor(contributor)}
+                                >
+                                  {contributor.claimsCount} claims
+                                </button>
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 px-2 text-[10px] font-bold uppercase"
+                              disabled={contributor.outstandingApprovedAmount <= 0}
+                              onClick={() => {
+                                setPayingContributor(contributor);
+                                setReimbursementAmount(String(contributor.outstandingApprovedAmount));
+                              }}
+                            >
+                              Pay Reimbursement
+                            </Button>
+                          </div>
                         </div>
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                        <SummaryPill label="Approved" value={inr(contributor.approvedAmount)} tone="text-primary" />
+                        <SummaryPill label="Total Approved" value={inr(contributor.approvedAmount)} tone="text-primary" />
                         <SummaryPill label="Outstanding" value={inr(contributor.outstandingApprovedAmount)} tone="text-amber-700 dark:text-amber-300" />
-                        <SummaryPill label="Paid" value={inr(contributor.reimbursedAmount)} tone="text-sky-600 dark:text-sky-300" />
+                        <SummaryPill label="Reimbursed" value={inr(contributor.reimbursedAmount)} tone="text-sky-600 dark:text-sky-300" />
                         <SummaryPill label="Pending" value={inr(contributor.pendingAmount)} tone="text-rose-600 dark:text-rose-300" />
                       </div>
                     </div>
@@ -879,6 +914,56 @@ export default function AdminFinancePage() {
               </Card>
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="funding" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle className="text-base">Employee Advances & Funding</CardTitle>
+                <CardDescription>Track money given to employees. This liability does not affect company revenue/expense.</CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300" onClick={() => setAddAdvanceOpen(true)}>
+                  <Plus className="h-4 w-4" /> Give Advance
+                </Button>
+                <Button variant="outline" className="border-sky-500/30 bg-sky-500/10 text-sky-700 hover:bg-sky-500/15 dark:text-sky-300" onClick={() => setRepayAdvanceOpen(true)}>
+                  <Receipt className="h-4 w-4" /> Record Repayment
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <SummaryPill label="Total Outstanding Advances" value={inr(dashboard.summary.advancesLiability)} tone="text-amber-600 dark:text-amber-300" />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Team Advances</CardTitle>
+              <CardDescription>Current funding liability per employee.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {dashboard.advanceContributors.map((adv) => (
+                <div key={adv.employeeId} className="rounded-2xl border border-border/70 p-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={adv.avatar || undefined} />
+                      <AvatarFallback>{adv.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{adv.name}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                    <SummaryPill label="Total Given" value={inr(adv.totalGiven)} tone="text-emerald-600 dark:text-emerald-300" />
+                    <SummaryPill label="Total Returned" value={inr(adv.totalReturned)} tone="text-sky-600 dark:text-sky-300" />
+                    <SummaryPill label="Outstanding" value={inr(adv.outstanding)} tone="text-amber-600 dark:text-amber-300" />
+                  </div>
+                </div>
+              ))}
+              {!dashboard.advanceContributors.length && <EmptyState message="No advances recorded for this range." />}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="ledger" className="space-y-4">
@@ -924,6 +1009,8 @@ export default function AdminFinancePage() {
 
       <RevenueDialog open={revenueOpen} onOpenChange={setRevenueOpen} form={revenueForm} setForm={setRevenueForm} mutation={revenueMutation} />
       <ExpenseDialog open={expenseOpen} onOpenChange={setExpenseOpen} form={expenseForm} setForm={setExpenseForm} mutation={expenseMutation} />
+      <AdvanceDialog type="add" open={addAdvanceOpen} onOpenChange={setAddAdvanceOpen} form={advanceForm} setForm={setAdvanceForm} members={claimEligibleMembers} mutation={addAdvanceMutation} />
+      <AdvanceDialog type="repay" open={repayAdvanceOpen} onOpenChange={setRepayAdvanceOpen} form={advanceForm} setForm={setAdvanceForm} members={claimEligibleMembers} mutation={repayAdvanceMutation} />
       <AdminClaimDialog
         open={adminClaimOpen}
         onOpenChange={(open) => {
@@ -970,40 +1057,35 @@ export default function AdminFinancePage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(payingClaim)} onOpenChange={(open) => { if (!open) { setPayingClaim(null); setClaimPaymentAmount(""); setReimbursementMethod("bank_transfer"); } }}>
+      <Dialog open={Boolean(payingContributor)} onOpenChange={(open) => { if (!open) { setPayingContributor(null); setReimbursementAmount(""); setReimbursementMethod("bank_transfer"); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Record Claim Payment</DialogTitle>
-            <DialogDescription>Record a full or partial reimbursement. Every payment is added to expenses on the payment date.</DialogDescription>
+            <DialogTitle>Pay Reimbursement</DialogTitle>
+            <DialogDescription>Record a reimbursement payment to {payingContributor?.name}. The amount will be distributed across their oldest outstanding approved claims.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            {payingClaim && (
-              <div className="rounded-2xl border border-border/70 bg-muted/30 p-3 text-sm">
-                <p className="font-semibold">{payingClaim.profiles?.full_name || "Employee"}</p>
-                <p className="text-muted-foreground">{payingClaim.description} • {inr(Number(payingClaim.amount))} • {payingClaim.category}</p>
+          <div className="space-y-4">
+            {payingContributor && (
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <SummaryPill label="Total Approved" value={inr(payingContributor.approvedAmount)} tone="text-primary" />
+                <SummaryPill label="Outstanding" value={inr(payingContributor.outstandingApprovedAmount)} tone="text-amber-700 dark:text-amber-300" />
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="claim-payment-amount">Current Paying Amount</Label>
+              <Label htmlFor="reimbursement-amount">Payment Amount</Label>
               <Input
-                id="claim-payment-amount"
+                id="reimbursement-amount"
                 type="number"
                 min="0"
-                max={String(Number(payingClaim?.outstanding_amount || payingClaim?.amount || 0))}
-                value={claimPaymentAmount}
-                onChange={(event) => setClaimPaymentAmount(event.target.value)}
-                placeholder="Enter amount to pay now"
+                max={String(payingContributor?.outstandingApprovedAmount || 0)}
+                value={reimbursementAmount}
+                onChange={(event) => setReimbursementAmount(event.target.value)}
+                placeholder="Enter amount to pay"
               />
-              {payingClaim && (
-                <p className="text-xs text-muted-foreground">
-                  Claim total {inr(Number(payingClaim.amount))} | outstanding now {inr(Number(payingClaim.outstanding_amount || payingClaim.amount))}
-                </p>
-              )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="reimbursement-method">Reimbursement Method</Label>
+              <Label htmlFor="contributor-reimbursement-method">Payment Method</Label>
               <Select value={reimbursementMethod} onValueChange={setReimbursementMethod}>
-                <SelectTrigger id="reimbursement-method">
+                <SelectTrigger id="contributor-reimbursement-method">
                   <SelectValue placeholder="Select method" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1013,87 +1095,57 @@ export default function AdminFinancePage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setPayingClaim(null); setClaimPaymentAmount(""); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => setPayingContributor(null)}>Cancel</Button>
             <Button
-              onClick={() => payingClaim && claimPaymentMutation.mutate({ claimId: payingClaim.id, reimbursementMethod, amount: Number(claimPaymentAmount) })}
+              onClick={() => payingContributor && reimbursementMutation.mutate({
+                employeeId: payingContributor.employeeId,
+                amount: Number(reimbursementAmount),
+                paymentMethod: reimbursementMethod
+              })}
               disabled={
-                claimPaymentMutation.isPending ||
-                Number(claimPaymentAmount) <= 0 ||
-                Number(claimPaymentAmount) > Number(payingClaim?.outstanding_amount || payingClaim?.amount || 0)
+                reimbursementMutation.isPending ||
+                Number(reimbursementAmount) <= 0 ||
+                Number(reimbursementAmount) > (payingContributor?.outstandingApprovedAmount || 0)
               }
             >
-              {claimPaymentMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Save Payment
+              {reimbursementMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Confirm Payment
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={Boolean(editingPayment)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setEditingPayment(null);
-            setEditingPaymentAmount("");
-            setEditingPaymentMethod("bank_transfer");
-            setEditingPaymentDate("");
-          }
-        }}
-      >
-        <DialogContent>
+      {/* editingPayment dialog removed */}
+
+      <Dialog open={Boolean(viewingClaimsContributor)} onOpenChange={(open) => { if (!open) setViewingClaimsContributor(null); }}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit Claim Payment</DialogTitle>
-            <DialogDescription>Update the reimbursement entry. Treasury totals will recalculate from this payment ledger.</DialogDescription>
+            <DialogTitle>{viewingClaimsContributor?.name}&apos;s Claims</DialogTitle>
+            <DialogDescription>
+              All claims submitted by {viewingClaimsContributor?.name} in this period.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            {editingPayment && (
-              <div className="rounded-2xl border border-border/70 bg-muted/30 p-3 text-sm">
-                <p className="font-semibold">{editingPayment.claim.profiles?.full_name || "Employee"}</p>
-                <p className="text-muted-foreground">{editingPayment.claim.description} | Claim total {inr(Number(editingPayment.claim.amount))}</p>
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="edit-claim-payment-amount">Amount</Label>
-              <Input
-                id="edit-claim-payment-amount"
-                type="number"
-                min="0"
-                value={editingPaymentAmount}
-                onChange={(event) => setEditingPaymentAmount(event.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-claim-payment-date">Payment Date</Label>
-              <DateField id="edit-claim-payment-date" value={editingPaymentDate} onChange={setEditingPaymentDate} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-reimbursement-method">Reimbursement Method</Label>
-              <Select value={editingPaymentMethod} onValueChange={setEditingPaymentMethod}>
-                <SelectTrigger id="edit-reimbursement-method">
-                  <SelectValue placeholder="Select method" />
-                </SelectTrigger>
-                <SelectContent>
-                  {METHODS.map((method) => <SelectItem key={method.value} value={method.value}>{method.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            {dashboard.claims
+              .filter((claim) => claim.profiles?.id === viewingClaimsContributor?.employeeId)
+              .sort((a, b) => new Date(b.expense_date).getTime() - new Date(a.expense_date).getTime())
+              .map((claim) => (
+                <ClaimCard
+                  key={claim.id}
+                  claim={claim}
+                  approving={claimDecisionMutation.isPending}
+                  onApprove={() => claimDecisionMutation.mutate({ claimId: claim.id, status: "approved" })}
+                  onReject={() => {
+                    setRejectingClaim(claim);
+                    setRejectionReason("");
+                  }}
+                />
+              ))}
+            {viewingClaimsContributor &&
+              dashboard.claims.filter((claim) => claim.profiles?.id === viewingClaimsContributor.employeeId).length === 0 && (
+                <EmptyState message="No claims found for this user in the selected period." />
+              )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingPayment(null)}>Cancel</Button>
-            <Button
-              onClick={() => editingPayment && claimPaymentEditMutation.mutate({
-                paymentId: editingPayment.payment.id,
-                claimId: editingPayment.claim.id,
-                amount: Number(editingPaymentAmount),
-                reimbursementMethod: editingPaymentMethod,
-                paidAt: editingPaymentDate
-              })}
-              disabled={claimPaymentEditMutation.isPending || Number(editingPaymentAmount) <= 0 || !editingPaymentDate}
-            >
-              {claimPaymentEditMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Update Payment
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
@@ -1389,6 +1441,64 @@ function ExpenseDialog({
   );
 }
 
+function AdvanceDialog({
+  type,
+  open,
+  onOpenChange,
+  form,
+  setForm,
+  members,
+  mutation
+}: {
+  type: "add" | "repay";
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  form: { employee_id: string; amount: string; note: string };
+  setForm: Dispatch<SetStateAction<{ employee_id: string; amount: string; note: string }>>;
+  members: ClaimEligibleMember[];
+  mutation: { mutate: () => void; isPending: boolean };
+}) {
+  const isAdd = type === "add";
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{isAdd ? "Give Employee Advance" : "Record Advance Repayment"}</DialogTitle>
+          <DialogDescription>
+            {isAdd ? "Record money given to an employee (increases liability)." : "Record money returned by an employee (decreases liability)."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Employee</Label>
+            <Select value={form.employee_id} onValueChange={(value) => setForm((prev) => ({ ...prev, employee_id: value }))}>
+              <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
+              <SelectContent>
+                {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.full_name || m.email}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Amount</Label>
+            <Input type="number" min="1" value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label>Note (Optional)</Label>
+            <Input value={form.note} onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))} placeholder="Reason or reference" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={() => mutation.mutate()} disabled={!form.employee_id || !form.amount || Number(form.amount) <= 0 || mutation.isPending}>
+            {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isAdd ? "Give Advance" : "Record Repayment"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function HeroMetric({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
     <div className="treasury-metric">
@@ -1437,18 +1547,12 @@ function ClaimCard({
   claim,
   onApprove,
   onReject,
-  onPay,
-  onEditPayment,
-  approving,
-  paying
+  approving
 }: {
   claim: ClaimItem;
   onApprove: () => void;
   onReject: () => void;
-  onPay: () => void;
-  onEditPayment: (payment: NonNullable<ClaimItem["payments"]>[number]) => void;
   approving: boolean;
-  paying: boolean;
 }) {
   return (
     <div className="rounded-2xl border border-border/70 p-4">
@@ -1473,37 +1577,21 @@ function ClaimCard({
                         : ""
                 }
               >
-                {claim.status}
+                {claim.status === "paid" ? "Reimbursed" : 
+                 claim.status === "approved" || claim.status === "partially_paid" ? "Approved" : 
+                 claim.status}
               </Badge>
               <Badge variant="outline">{claim.category}</Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">{claim.description}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {claim.profiles?.department || "Unassigned"} • {format(new Date(claim.expense_date), "MMM dd, yyyy, h:mm a")} • paid via {claim.payment_method}
+              {claim.profiles?.department || "Unassigned"} • {format(new Date(claim.expense_date), "MMM dd, yyyy, h:mm a")} • {claim.payment_method}
             </p>
-            {claim.approved_at && <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-300">Approved {format(new Date(claim.approved_at), "MMM dd, yyyy, h:mm a")}</p>}
-            {claim.reimbursed_at && <p className="mt-1 text-xs text-sky-600 dark:text-sky-300">Reimbursed {format(new Date(claim.reimbursed_at), "MMM dd, yyyy, h:mm a")} via {claim.reimbursement_method || "bank_transfer"}</p>}
+            {claim.approved_at && <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-300 font-medium">Approved {format(new Date(claim.approved_at), "MMM dd, yyyy, h:mm a")}</p>}
             {(Number(claim.reimbursed_amount || 0) > 0 || Number(claim.outstanding_amount || 0) > 0) && (
               <p className="mt-1 text-xs text-muted-foreground">
                 Paid so far {inr(Number(claim.reimbursed_amount || 0))} | Outstanding {inr(Number(claim.outstanding_amount || 0))}
               </p>
-            )}
-            {!!claim.payments?.length && (
-              <div className="mt-3 space-y-2">
-                {claim.payments.map((payment) => (
-                  <div key={payment.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-background/60 px-3 py-2 text-xs">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-foreground">{inr(Number(payment.amount))}</p>
-                      <p className="text-muted-foreground">
-                        {format(new Date(payment.paid_at), "MMM dd, yyyy, h:mm a")} | {payment.payment_method}
-                      </p>
-                    </div>
-                    <Button size="sm" variant="outline" onClick={() => onEditPayment(payment)}>
-                      Edit Payment
-                    </Button>
-                  </div>
-                ))}
-              </div>
             )}
             {claim.rejection_reason && (
               <p className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-950/30 dark:text-rose-200">
@@ -1526,12 +1614,6 @@ function ClaimCard({
                 Reject
               </Button>
             </div>
-          )}
-          {(claim.status === "approved" || claim.status === "partially_paid") && (
-            <Button size="sm" onClick={onPay} disabled={paying}>
-              {paying && <Loader2 className="h-4 w-4 animate-spin" />}
-              Record Payment
-            </Button>
           )}
         </div>
       </div>

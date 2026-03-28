@@ -49,3 +49,20 @@ export interface Standup {
         avatar_url: string | null;
     };
 }
+
+export interface EmployeeFunding {
+    id: string;
+    employee_id: string;
+    organization_id: string;
+    type: 'GIVEN' | 'RETURNED';
+    amount: number;
+    note: string | null;
+    created_at: string;
+    created_by: string | null;
+    profiles?: {
+        full_name: string;
+        avatar_url: string | null;
+        role: string;
+        department: string | null;
+    };
+}
