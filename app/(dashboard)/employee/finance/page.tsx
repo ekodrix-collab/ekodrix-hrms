@@ -39,7 +39,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createExpenseClaim, getMyClaims } from "@/actions/finance-actions";
 import { toast } from "sonner";
 import { UnpaidAccrual } from "@/types/dashboard";
-import { Expense } from "@/types/common";
+import { Expense, EmployeeFunding } from "@/types/common";
 import { EXPENSE_CATEGORIES } from "@/lib/finance-categories";
 import { FounderFinanceView } from "@/components/employee/founder-finance-view";
 
@@ -645,7 +645,7 @@ export default function EmployeeFinancePage() {
                                     </div>
                                 ) : (
                                     <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                                        {advances.map((item: any, index: number) => (
+                                        {advances.map((item: EmployeeFunding, index: number) => (
                                             <div key={index} className="flex items-center justify-between p-3 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:shadow-md transition-all">
                                                 <div className="flex items-center gap-3">
                                                     <div className={`p-2 rounded-lg ${item.type === "GIVEN" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400" : "bg-sky-50 text-sky-600 dark:bg-sky-950/30 dark:text-sky-400"}`}>

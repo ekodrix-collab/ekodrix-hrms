@@ -43,6 +43,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { EXPENSE_CATEGORIES } from "@/lib/finance-categories";
 import type { UnpaidAccrual } from "@/types/dashboard";
+import type { EmployeeFunding } from "@/types/common";
 
 const METHODS = [
   { value: "cash", label: "Cash" },
@@ -195,7 +196,7 @@ type FinanceDashboardResult = {
   claims: ClaimItem[];
   contributors: Contributor[];
   categoryBreakdown: { name: string; value: number }[];
-  advances: any[];
+  advances: EmployeeFunding[];
   advanceContributors: AdvanceContributor[];
 };
 
