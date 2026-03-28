@@ -6,7 +6,8 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Eye, EyeOff, Zap } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
+import Image from "next/image";
 import { toast } from "sonner";
 import { signInWithPassword } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -56,8 +57,14 @@ export function LoginForm() {
             transition={{ duration: durations.slow, ease: easings.easeOut }}
             className="flex items-center gap-3"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-emerald-500 text-primary-foreground shadow-soft">
-              <Zap className="h-5 w-5" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-soft overflow-hidden">
+              <Image 
+                src="/icon-192x192.png" 
+                alt="Ekodrix Logo" 
+                width={40} 
+                height={40} 
+                className="h-full w-full object-cover scale-[1.1]" 
+              />
             </div>
             <div>
               <div className="text-sm font-black uppercase leading-none tracking-[0.1em]">Ekodrix</div>

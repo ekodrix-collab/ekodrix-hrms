@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { durations, easings } from "@/lib/animations";
-import { Sparkles } from "lucide-react";
+import Image from "next/image";
 
 const schema = z.object({
     organizationName: z.string().min(2, "Organization name must be at least 2 characters"),
@@ -60,9 +60,15 @@ export default function SignupPage() {
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: durations.slow, ease: easings.easeOut }}
-                        className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-emerald-500 text-primary-foreground shadow-soft"
+                        className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-soft overflow-hidden"
                     >
-                        <Sparkles className="h-5 w-5" />
+                        <Image 
+                          src="/icon-192x192.png" 
+                          alt="Ekodrix Logo" 
+                          width={44} 
+                          height={44} 
+                          className="h-full w-full object-cover scale-[1.1]" 
+                        />
                     </motion.div>
                     <CardTitle className="text-2xl">Create your workspace</CardTitle>
                     <CardDescription>Get started with WorkFlow Pro for free.</CardDescription>

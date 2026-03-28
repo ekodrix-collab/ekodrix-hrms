@@ -1,6 +1,8 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+
 import { getOrgContext } from "@/lib/auth-utils";
 import { revalidatePath } from "next/cache";
 import { Expense } from "@/types/common";
@@ -534,6 +536,116 @@ export async function markClaimAsPaid(claimId: string, reimbursementMethod: stri
     };
 }
 
+export async function payEmployeeReimbursement(payload: {
+    employeeId: string;
+    amount: number;
+    paymentMethod: string;
+    note?: string;
+}) {
+    const { employeeId, amount, paymentMethod, note } = payload;
+    const supabase = createSupabaseServerClient();
+    // Use admin client for internal queries to bypass RLS on expense_reimbursements
+    const adminSupabase = createSupabaseAdminClient();
+    const { user, organizationId, role } = await getOrgContext();
+
+
+    if (!user || !organizationId || role !== "admin") {
+        return { ok: false, message: "Admin organization context missing" };
+    }
+
+    if (!amount || amount <= 0) {
+        return { ok: false, message: "Payment amount must be greater than zero." };
+    }
+
+    // 1. Fetch all claims that could have a balance for this employee
+    const { data: claims, error: claimsError } = await adminSupabase
+        .from("expenses")
+        .select(`
+            id,
+            amount,
+            status,
+            expense_date,
+            approved_at
+        `)
+        .eq("paid_by", employeeId)
+        .not("status", "in", "(pending,rejected)") // Only consider validated claims
+        .order("expense_date", { ascending: true });
+
+
+    if (claimsError) return { ok: false, message: claimsError.message };
+    if (!claims || claims.length === 0) return { ok: false, message: "No validated claims found for this employee." };
+
+    let remainingPayment = amount;
+    const timestamp = new Date().toISOString();
+    let distributedAny = false;
+    let lastInsertError: string | null = null;
+
+    // 2. Distribute payment across claims based on mathematical outstanding balance
+    for (const claim of claims) {
+        if (remainingPayment <= 0) break;
+
+        const totalClaimAmount = Number(claim.amount || 0);
+        const paymentSummary = await getClaimPaymentSummary(adminSupabase, claim.id);
+
+        if (!paymentSummary.ok) {
+            lastInsertError = `getClaimPaymentSummary failed for claim ${claim.id}: ${paymentSummary.message}`;
+            continue;
+        }
+
+        const outstandingAmount = Math.max(0, totalClaimAmount - paymentSummary.totalPaid);
+        if (outstandingAmount <= 0.01) continue; // Skip if basically zero
+
+        const paymentForThisClaim = Math.min(remainingPayment, outstandingAmount);
+        
+        // Insert reimbursement record using admin client to bypass RLS
+        const { error: insertError } = await adminSupabase
+            .from("expense_reimbursements")
+            .insert({
+                expense_id: claim.id,
+                amount: paymentForThisClaim,
+                payment_method: paymentMethod,
+                paid_at: timestamp,
+                note: note ?? null,
+                created_by: user.id
+            });
+
+
+        if (insertError) {
+            lastInsertError = insertError.message;
+            continue;
+        }
+        distributedAny = true;
+
+        // Refresh claim state (re-calculates status based on ALL payments)
+        await refreshClaimReimbursementState(adminSupabase, claim.id, user.id, claim.approved_at || timestamp);
+
+        
+        remainingPayment -= paymentForThisClaim;
+    }
+
+    if (!distributedAny && amount > 0) {
+        return { ok: false, message: "This employee has no remaining outstanding balance to pay across their approved claims." };
+    }
+
+
+    // 3. Record in employee_payments for the employee view (single aggregate entry)
+    await supabase
+        .from("employee_payments")
+        .insert({
+            employee_id: employeeId,
+            payment_type: "reimbursement",
+            amount: amount - Math.max(0, remainingPayment), // Only record what was actually distributed
+            date: new Date().toISOString().split('T')[0],
+            status: "completed",
+            notes: note || "Consolidated reimbursement payment"
+        });
+
+    revalidatePath("/admin/finance");
+    revalidatePath("/employee/finance");
+
+    return { ok: true, message: `Successfully processed reimbursement payment of INR ${amount - Math.max(0, remainingPayment)}` };
+}
+
 export async function updateClaimPayment(paymentId: string, claimId: string, amount: number, reimbursementMethod: string, paidAt: string, note?: string) {
     const supabase = createSupabaseServerClient();
     const { user, organizationId, role } = await getOrgContext();
@@ -605,8 +717,9 @@ export async function updateClaimPayment(paymentId: string, claimId: string, amo
 }
 
 async function getClaimPaymentSummary(
-    supabase: ReturnType<typeof createSupabaseServerClient>,
+    supabase: ReturnType<typeof createSupabaseServerClient> | ReturnType<typeof createSupabaseAdminClient>,
     claimId: string
+
 ): Promise<{ ok: true; totalPaid: number; latestPayment: { paid_at: string; payment_method: string } | null } | { ok: false; message: string }> {
     const { data: payments, error } = await supabase
         .from("expense_reimbursements")
@@ -629,8 +742,9 @@ async function getClaimPaymentSummary(
 }
 
 async function refreshClaimReimbursementState(
-    supabase: ReturnType<typeof createSupabaseServerClient>,
+    supabase: ReturnType<typeof createSupabaseServerClient> | ReturnType<typeof createSupabaseAdminClient>,
     claimId: string,
+
     userId: string,
     approvedAt: string
 ): Promise<{ ok: true; status: "approved" | "partially_paid" | "paid" } | { ok: false; message: string }> {
@@ -727,3 +841,58 @@ export async function getExpenseAnalytics() {
     return { ok: true, data: { topSpenders, breakdown } };
 }
 
+export async function addEmployeeAdvance(employeeId: string, amount: number, note?: string) {
+    const supabase = createSupabaseServerClient();
+    const { user, organizationId, role } = await getOrgContext();
+
+    if (!user || !organizationId || role !== "admin") {
+        return { ok: false, message: "Admin organization context missing" };
+    }
+
+    if (!amount || amount <= 0) return { ok: false, message: "Amount must be strictly positive" };
+
+    const { error } = await supabase
+        .from("employee_funding_ledger")
+        .insert({
+            employee_id: employeeId,
+            organization_id: organizationId,
+            type: "GIVEN",
+            amount,
+            note: note || null,
+            created_by: user.id
+        });
+
+    if (error) return { ok: false, message: error.message };
+
+    revalidatePath("/admin/finance");
+    revalidatePath("/employee/finance");
+    return { ok: true, message: "Employee advance recorded successfully" };
+}
+
+export async function repayEmployeeAdvance(employeeId: string, amount: number, note?: string) {
+    const supabase = createSupabaseServerClient();
+    const { user, organizationId, role } = await getOrgContext();
+
+    if (!user || !organizationId || role !== "admin") {
+        return { ok: false, message: "Admin organization context missing" };
+    }
+
+    if (!amount || amount <= 0) return { ok: false, message: "Amount must be strictly positive" };
+
+    const { error } = await supabase
+        .from("employee_funding_ledger")
+        .insert({
+            employee_id: employeeId,
+            organization_id: organizationId,
+            type: "RETURNED",
+            amount,
+            note: note || null,
+            created_by: user.id
+        });
+
+    if (error) return { ok: false, message: error.message };
+
+    revalidatePath("/admin/finance");
+    revalidatePath("/employee/finance");
+    return { ok: true, message: "Employee advance repayment recorded successfully" };
+}

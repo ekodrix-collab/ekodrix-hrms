@@ -310,6 +310,16 @@ export async function getEmployeeFinanceData() {
     let totalEarnedYTD = 0;
     const currentYear = new Date().getFullYear();
 
+    const { data: advances } = await supabase
+        .from("employee_funding_ledger")
+        .select("*")
+        .eq("employee_id", user.id)
+        .order("created_at", { ascending: false });
+
+    const totalGiven = (advances || []).filter(a => a.type === 'GIVEN').reduce((acc, curr) => acc + Number(curr.amount), 0);
+    const totalReturned = (advances || []).filter(a => a.type === 'RETURNED').reduce((acc, curr) => acc + Number(curr.amount), 0);
+    const outstandingAdvance = Math.max(0, totalGiven - totalReturned);
+
     (payments as EmployeePaymentRow[] | null)?.forEach((p) => {
         const type = p.payment_type as keyof typeof breakdown;
         const amount = Number(p.amount || 0);
@@ -343,7 +353,9 @@ export async function getEmployeeFinanceData() {
             lastPayoutDate: lastPayout?.created_at || null,
             projectSalaries: projectSharePayments, // Keeping naming for BC but content is updated
             incomeBreakdown: breakdown,
-            totalEarnedYTD
+            totalEarnedYTD,
+            advances: advances || [],
+            advancesMetrics: { totalGiven, totalReturned, outstandingAdvance }
         }
     };
 }
