@@ -129,6 +129,7 @@ type FinancialHistoryExpenseRow = {
 type FinancialHistoryItem = {
     id: string;
     type: "revenue" | "expense";
+    transaction_type?: "revenue" | "expense" | "distribution" | "payout";
     amount: number | string;
     title: string;
     subtitle: string;
@@ -348,6 +349,7 @@ export async function postBusinessExpense(data: {
     payment_method?: string;
     project_id?: string;
     employee_id?: string;
+    transaction_type?: "expense" | "distribution" | "payout";
 }) {
     const supabase = createSupabaseServerClient();
     const { user, organizationId, role } = await getOrgContext();
@@ -370,7 +372,8 @@ export async function postBusinessExpense(data: {
             status: 'paid',
             expense_date: new Date().toISOString(),
             approved_at: new Date().toISOString(),
-            approved_by: user.id
+            approved_by: user.id,
+            transaction_type: data.transaction_type || 'expense'
         });
 
     if (error) return { error: error.message };
@@ -429,7 +432,7 @@ export async function getCompanyFinancials(projectId?: string) {
 
     let expenseQuery = supabase
         .from("expenses")
-        .select("amount, profiles:paid_by!inner(organization_id)")
+        .select("amount, transaction_type, profiles:paid_by!inner(organization_id)")
         .eq("profiles.organization_id", organizationId)
         .in("status", ["approved", "paid"]);
 
@@ -447,7 +450,13 @@ export async function getCompanyFinancials(projectId?: string) {
 
     const totalLiability = projectId ? 0 : (accruals?.reduce((acc, curr) => acc + Number(curr.remaining_amount), 0) || 0);
     const totalSalaryPaid = projectId ? 0 : (accruals?.reduce((acc, curr) => acc + Number(curr.paid_amount), 0) || 0);
-    const totalBusinessExpenses = expenses?.reduce((acc: number, curr) => acc + Number(curr.amount), 0) || 0;
+    const totalBusinessExpenses = expenses?.reduce((acc: number, curr) => {
+        // Only include 'expense' type in totalBusinessExpenses for logic calculations
+        if ((curr as any).transaction_type === 'expense') {
+            return acc + Number(curr.amount);
+        }
+        return acc;
+    }, 0) || 0;
     const totalRevenue = revenue?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
 
     let projectBreakdown: ProjectBreakdownItem[] = [];
@@ -1003,7 +1012,7 @@ export async function getFinancialHistory(projectId?: string) {
 
     let expenseQuery = supabase
         .from("expenses")
-        .select("id, amount, category, description, expense_date, payment_method, created_at, project_id, projects(name), paid_by_profile:profiles!paid_by!inner(organization_id), employee_profile:profiles!employee_id(full_name)")
+        .select("id, amount, category, description, expense_date, payment_method, transaction_type, created_at, project_id, projects(name), paid_by_profile:profiles!paid_by!inner(organization_id), employee_profile:profiles!employee_id(full_name)")
         .eq("paid_by_profile.organization_id", organizationId)
         .in("status", ["approved", "paid"])
         .order("expense_date", { ascending: false });
@@ -1022,6 +1031,7 @@ export async function getFinancialHistory(projectId?: string) {
     const normalizedRevenue: FinancialHistoryItem[] = revenue?.map(r => ({
         id: r.id,
         type: 'revenue',
+        transaction_type: 'revenue',
         amount: r.amount,
         title: r.source,
         subtitle: r.description || "Revenue",
@@ -1033,11 +1043,12 @@ export async function getFinancialHistory(projectId?: string) {
         project_name: getProjectName(r.projects)
     })) || [];
 
-    const normalizedExpenses: FinancialHistoryItem[] = ((expenses || []) as FinancialHistoryExpenseRow[])?.map(e => {
+    const normalizedExpenses: FinancialHistoryItem[] = ((expenses || []) as (FinancialHistoryExpenseRow & { transaction_type: any })[])?.map(e => {
         const employeeProfile = normalizeJoinedProfile(e.employee_profile);
         return {
             id: e.id,
             type: 'expense',
+            transaction_type: e.transaction_type,
             amount: e.amount,
             title: e.description,
             subtitle: normalizeExpenseCategory(e.category),

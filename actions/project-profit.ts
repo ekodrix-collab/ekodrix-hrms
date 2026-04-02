@@ -25,6 +25,7 @@ export async function calculateProjectProfit(projectId: string) {
         .from("expenses")
         .select("amount")
         .eq("project_id", projectId)
+        .eq("transaction_type", "expense")
         .in("status", ["approved", "paid"]);
 
     if (expenseError) return { success: false, error: expenseError.message };
@@ -411,6 +412,7 @@ export async function payEmployeeShare(projectId: string, employeeId: string, pa
             description: `Project Distribution Share for ${share.projects.name}`,
             category: "Project Share",
             payment_method: paymentMethod,
+            transaction_type: "payout",
             project_id: projectId,
             employee_id: employeeId,
             paid_by: user?.id,
@@ -455,5 +457,105 @@ export async function payEmployeeShare(projectId: string, employeeId: string, pa
     revalidatePath("/admin/finance");
     revalidatePath("/admin/employees");
     
+    return { success: true };
+}
+
+export async function payBrokerFee(projectId: string, paymentMethod: string = "bank_transfer") {
+    const supabase = createSupabaseServerClient();
+    const { user, organizationId, role } = await getOrgContext();
+    
+    if (!organizationId || (role !== 'admin' && role !== 'founder')) {
+        return { success: false, error: "Unauthorized" };
+    }
+
+    const { data: dist } = await supabase
+        .from("project_profit_distribution")
+        .select("*, projects(name)")
+        .eq("project_id", projectId)
+        .single();
+
+    if (!dist || dist.is_broker_paid) return { success: false, error: "Already paid or not found" };
+
+    const amount = Number(dist.broker_amount);
+    if (amount <= 0) return { success: true };
+
+    const { error: expenseError } = await supabase
+        .from("expenses")
+        .insert({
+            amount,
+            description: `Broker Fee Payout: ${dist.projects.name}`,
+            category: "Commision / Broker",
+            payment_method: paymentMethod,
+            transaction_type: "payout",
+            project_id: projectId,
+            paid_by: user?.id,
+            organization_id: organizationId,
+            status: 'paid',
+            expense_date: new Date().toISOString(),
+            approved_at: new Date().toISOString(),
+            approved_by: user?.id
+        });
+
+    if (expenseError) return { success: false, error: expenseError.message };
+
+    await supabase
+        .from("project_profit_distribution")
+        .update({
+            is_broker_paid: true,
+            broker_paid_at: new Date().toISOString()
+        })
+        .eq("project_id", projectId);
+
+    revalidatePath(`/admin/project-finance/${projectId}`);
+    return { success: true };
+}
+
+export async function payCompanyProfit(projectId: string, paymentMethod: string = "bank_transfer") {
+    const supabase = createSupabaseServerClient();
+    const { user, organizationId, role } = await getOrgContext();
+    
+    if (!organizationId || (role !== 'admin' && role !== 'founder')) {
+        return { success: false, error: "Unauthorized" };
+    }
+
+    const { data: dist } = await supabase
+        .from("project_profit_distribution")
+        .select("*, projects(name)")
+        .eq("project_id", projectId)
+        .single();
+
+    if (!dist || dist.is_company_paid) return { success: false, error: "Already paid or not found" };
+
+    const amount = Number(dist.company_amount);
+    if (amount <= 0) return { success: true };
+
+    const { error: expenseError } = await supabase
+        .from("expenses")
+        .insert({
+            amount,
+            description: `Company Profit Payout: ${dist.projects.name}`,
+            category: "Project Share",
+            payment_method: paymentMethod,
+            transaction_type: "payout",
+            project_id: projectId,
+            paid_by: user?.id,
+            organization_id: organizationId,
+            status: 'paid',
+            expense_date: new Date().toISOString(),
+            approved_at: new Date().toISOString(),
+            approved_by: user?.id
+        });
+
+    if (expenseError) return { success: false, error: expenseError.message };
+
+    await supabase
+        .from("project_profit_distribution")
+        .update({
+            is_company_paid: true,
+            company_paid_at: new Date().toISOString()
+        })
+        .eq("project_id", projectId);
+
+    revalidatePath(`/admin/project-finance/${projectId}`);
     return { success: true };
 }
