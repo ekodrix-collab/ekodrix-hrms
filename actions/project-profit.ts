@@ -420,7 +420,9 @@ export async function payEmployeeShare(projectId: string, employeeId: string, pa
             status: 'paid',
             expense_date: new Date().toISOString(),
             approved_at: new Date().toISOString(),
-            approved_by: user?.id
+            approved_by: user?.id,
+            ledger_source: 'project',
+            ledger_visibility: 'project_only'
         })
         .select()
         .single();
@@ -493,7 +495,9 @@ export async function payBrokerFee(projectId: string, paymentMethod: string = "b
             status: 'paid',
             expense_date: new Date().toISOString(),
             approved_at: new Date().toISOString(),
-            approved_by: user?.id
+            approved_by: user?.id,
+            ledger_source: 'project',
+            ledger_visibility: 'project_only'
         });
 
     if (expenseError) return { success: false, error: expenseError.message };
@@ -529,24 +533,21 @@ export async function payCompanyProfit(projectId: string, paymentMethod: string 
     const amount = Number(dist.company_amount);
     if (amount <= 0) return { success: true };
 
-    const { error: expenseError } = await supabase
-        .from("expenses")
+    const { error: revenueError } = await supabase
+        .from("revenue_logs")
         .insert({
             amount,
-            description: `Company Profit Payout: ${dist.projects.name}`,
-            category: "Project Share",
-            payment_method: paymentMethod,
-            transaction_type: "payout",
+            source: "Project Profit",
+            description: `Company Profit from project: ${dist.projects.name}`,
+            received_date: new Date().toISOString().split('T')[0],
             project_id: projectId,
-            paid_by: user?.id,
-            organization_id: organizationId,
-            status: 'paid',
-            expense_date: new Date().toISOString(),
-            approved_at: new Date().toISOString(),
-            approved_by: user?.id
+            created_by: user?.id,
+            transaction_type: "company_profit",
+            ledger_source: 'project',
+            ledger_visibility: 'company'
         });
 
-    if (expenseError) return { success: false, error: expenseError.message };
+    if (revenueError) return { success: false, error: revenueError.message };
 
     await supabase
         .from("project_profit_distribution")
