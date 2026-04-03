@@ -14,10 +14,12 @@ import {
     updateProjectContractAmount
 } from "@/actions/finance";
 import {
-    calculateProjectProfit,
     updateProfitDistribution,
     updateEmployeeShare,
-    payEmployeeShare
+    payEmployeeShare,
+    payBrokerFee,
+    payCompanyProfit,
+    calculateProjectProfit
 } from "@/actions/project-profit";
 import {
     Card,
@@ -83,6 +85,7 @@ interface ProjectFinanceTabProps {
 interface ProjectLedgerItem {
     id: string;
     type: "revenue" | "expense";
+    transaction_type?: "revenue" | "expense" | "distribution" | "payout";
     amount: number | string;
     title: string;
     category: string;
@@ -110,6 +113,10 @@ interface ProfitDistribution {
     broker_amount: number;
     company_amount: number;
     employee_pool_amount: number;
+    is_broker_paid: boolean;
+    broker_paid_at?: string;
+    is_company_paid: boolean;
+    company_paid_at?: string;
     updated_at: string;
 }
 
@@ -450,6 +457,34 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
         }
     });
 
+    const payBrokerMutation = useMutation({
+        mutationFn: () => payBrokerFee(project.id),
+        onSuccess: (res) => {
+            if (res.success) {
+                toast.success("Broker fee paid successfully");
+                queryClient.invalidateQueries({ queryKey: ["project-profit-dist", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-financials", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-history", project.id] });
+            } else {
+                toast.error(res.error || "Failed to pay broker fee");
+            }
+        }
+    });
+
+    const payCompanyMutation = useMutation({
+        mutationFn: () => payCompanyProfit(project.id),
+        onSuccess: (res) => {
+            if (res.success) {
+                toast.success("Company profit recorded");
+                queryClient.invalidateQueries({ queryKey: ["project-profit-dist", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-financials", project.id] });
+                queryClient.invalidateQueries({ queryKey: ["project-history", project.id] });
+            } else {
+                toast.error(res.error || "Failed to record company profit");
+            }
+        }
+    });
+
     if (loadingFin || loadingHistory || loadingVerdicts || loadingContract || loadingProfit || loadingShares) {
         return (
             <div className="flex flex-col items-center justify-center py-24 gap-3">
@@ -686,7 +721,9 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-zinc-100/80 dark:divide-zinc-800/60">
-                                    {(history as ProjectLedgerItem[] | undefined)?.map((item, idx: number) => (
+                                    {(history as ProjectLedgerItem[] | undefined)
+                                        ?.filter(item => item.transaction_type !== 'distribution')
+                                        ?.map((item, idx: number) => (
                                         <motion.tr
                                             key={item.id}
                                             initial={{ opacity: 0, x: -10 }}
@@ -706,9 +743,16 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                                         {item.type === 'revenue' ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                                                     </div>
                                                     <div>
-                                                        <p className="text-sm font-black text-zinc-900 dark:text-zinc-100">
-                                                            {item.person && !item.title ? item.person : (item.title || item.category)}
-                                                        </p>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="text-sm font-black text-zinc-900 dark:text-zinc-100">
+                                                                {item.person && !item.title ? item.person : (item.title || item.category)}
+                                                            </p>
+                                                            {item.transaction_type === 'payout' && (
+                                                                <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest border-primary/20 bg-primary/5 text-primary px-1.5 h-4">
+                                                                    Payout
+                                                                </Badge>
+                                                            )}
+                                                        </div>
                                                         <p className="text-[10px] uppercase tracking-[0.15em] font-bold text-muted-foreground/50">
                                                             {item.category}{item.person && item.title ? ` — ${item.person}` : ''}
                                                         </p>
@@ -907,14 +951,52 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                             <div className="space-y-8">
                                 <div className="space-y-6">
                                     {[
-                                        { label: "Broker Fee", key: "broker", color: "bg-amber-500", percent: currentDisplayDistribution.broker, amount: (netProfitPool * currentDisplayDistribution.broker) / 100 },
-                                        { label: "Company Profit", key: "company", color: "bg-primary", percent: currentDisplayDistribution.company, amount: (netProfitPool * currentDisplayDistribution.company) / 100 },
-                                        { label: "Employee Pool", key: "employees", color: "bg-emerald-500", percent: currentDisplayDistribution.employees, amount: (netProfitPool * currentDisplayDistribution.employees) / 100 }
+                                        { 
+                                            label: "Broker Fee", 
+                                            key: "broker", 
+                                            color: "bg-amber-500", 
+                                            percent: currentDisplayDistribution.broker, 
+                                            amount: (netProfitPool * currentDisplayDistribution.broker) / 100,
+                                            isPaid: profitDist.is_broker_paid,
+                                            onPay: () => payBrokerMutation.mutate(),
+                                            loading: payBrokerMutation.isPending
+                                        },
+                                        { 
+                                            label: "Company Profit", 
+                                            key: "company", 
+                                            color: "bg-primary", 
+                                            percent: currentDisplayDistribution.company, 
+                                            amount: (netProfitPool * currentDisplayDistribution.company) / 100,
+                                            isPaid: profitDist.is_company_paid,
+                                            onPay: () => payCompanyMutation.mutate(),
+                                            loading: payCompanyMutation.isPending
+                                        },
+                                        { 
+                                            label: "Employee Pool", 
+                                            key: "employees", 
+                                            color: "bg-emerald-500", 
+                                            percent: currentDisplayDistribution.employees, 
+                                            amount: (netProfitPool * currentDisplayDistribution.employees) / 100,
+                                            isPaid: employeeShares?.every(s => s.is_paid),
+                                            onPay: null,
+                                            loading: false
+                                        }
                                     ].map((segment) => (
                                         <div key={segment.key} className="space-y-3">
                                             <div className="flex justify-between items-end">
                                                 <div className="space-y-1">
-                                                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">{segment.label}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">{segment.label}</p>
+                                                        {segment.isPaid ? (
+                                                            <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20 text-[8px] uppercase font-black tracking-widest px-1.5 h-4">
+                                                                Paid
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20 text-[8px] uppercase font-black tracking-widest px-1.5 h-4">
+                                                                Pending
+                                                            </Badge>
+                                                        )}
+                                                    </div>
                                                     <div className="flex items-center gap-3">
                                                         <div className="relative">
                                                             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground/40">₹</span>
@@ -934,11 +1016,24 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                                                 }}
                                                                 onBlur={() => setFocusedField(null)}
                                                                 className={`h-8 pl-5 pr-2 w-28 bg-zinc-100/50 dark:bg-white/5 border-none text-xs font-black rounded-lg focus-visible:ring-1 focus-visible:ring-primary/30 no-spinner ${isDistributionDirty ? 'ring-1 ring-primary/20 bg-primary/[0.02]' : ''}`}
+                                                                disabled={segment.isPaid}
                                                             />
                                                         </div>
                                                         <Badge variant="outline" className="text-[10px] font-black border-none bg-zinc-100 dark:bg-white/5 py-0 px-2 h-5 tabular-nums">
                                                             {segment.percent.toFixed(2)}%
                                                         </Badge>
+                                                        
+                                                        {segment.onPay && !segment.isPaid && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="h-7 px-2 font-black text-[9px] uppercase tracking-wider text-primary hover:bg-primary/5"
+                                                                onClick={segment.onPay}
+                                                                disabled={segment.loading || netProfitPool <= 0}
+                                                            >
+                                                                {segment.loading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Mark Paid"}
+                                                            </Button>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-2 mb-1">
@@ -947,6 +1042,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                                         type="number"
                                                         value={focusedField === `${segment.key}-percent` ? focusedValue : segment.percent.toFixed(2)}
                                                         step="0.01"
+                                                        disabled={segment.isPaid}
                                                         onFocus={() => {
                                                             setFocusedField(`${segment.key}-percent`);
                                                             setFocusedValue(segment.percent.toFixed(2));
@@ -959,7 +1055,7 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                                             }
                                                         }}
                                                         onBlur={() => setFocusedField(null)}
-                                                        className={`w-14 bg-transparent border-b border-zinc-200 dark:border-zinc-800 text-xs font-black text-right focus:border-primary outline-none py-0.5 tabular-nums no-spinner ${isDistributionDirty ? 'text-primary' : ''}`}
+                                                        className={`w-14 bg-transparent border-b border-zinc-200 dark:border-zinc-800 text-xs font-black text-right focus:border-primary outline-none py-0.5 tabular-nums no-spinner ${isDistributionDirty ? 'text-primary' : ''} ${segment.isPaid ? 'opacity-50' : ''}`}
                                                     />
                                                 </div>
                                             </div>
@@ -971,20 +1067,24 @@ export function ProjectFinanceTab({ project }: ProjectFinanceTabProps) {
                                                     className={`absolute h-2 my-auto ${segment.color} rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(0,0,0,0.1)]`}
                                                     style={{ width: `${segment.percent}%` }}
                                                 />
-                                                <input
-                                                    type="range"
-                                                    min="0"
-                                                    max="100"
-                                                    step="0.01"
-                                                    value={segment.percent}
-                                                    onChange={(e) => handleDistributionUpdate({ [segment.key]: Number(e.target.value) })}
-                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                                />
+                                                {!segment.isPaid && (
+                                                    <input
+                                                        type="range"
+                                                        min="0"
+                                                        max="100"
+                                                        step="0.01"
+                                                        value={segment.percent}
+                                                        onChange={(e) => handleDistributionUpdate({ [segment.key]: Number(e.target.value) })}
+                                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                                    />
+                                                )}
                                                 {/* Visual Handle */}
-                                                <motion.div
-                                                    className={`absolute h-4 w-4 bg-white dark:bg-zinc-800 border-2 border-zinc-300 dark:border-zinc-600 rounded-full shadow-md z-0 pointer-events-none group-hover/slider:scale-125 transition-transform`}
-                                                    animate={{ left: `calc(${segment.percent}% - 8px)` }}
-                                                />
+                                                {!segment.isPaid && (
+                                                    <motion.div
+                                                        className={`absolute h-4 w-4 bg-white dark:bg-zinc-800 border-2 border-zinc-300 dark:border-zinc-600 rounded-full shadow-md z-0 pointer-events-none group-hover/slider:scale-125 transition-transform`}
+                                                        animate={{ left: `calc(${segment.percent}% - 8px)` }}
+                                                    />
+                                                )}
                                             </div>
                                         </div>
                                     ))}

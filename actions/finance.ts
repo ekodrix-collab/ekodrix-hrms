@@ -129,6 +129,7 @@ type FinancialHistoryExpenseRow = {
 type FinancialHistoryItem = {
     id: string;
     type: "revenue" | "expense";
+    transaction_type?: "revenue" | "expense" | "distribution" | "payout";
     amount: number | string;
     title: string;
     subtitle: string;
@@ -262,7 +263,10 @@ export async function postRevenue(amount: number, source: string, description?: 
             source,
             description,
             project_id: projectId || null,
-            created_by: user?.id
+            created_by: user?.id,
+            transaction_type: 'revenue',
+            ledger_source: projectId ? 'project' : 'company',
+            ledger_visibility: projectId ? 'project_only' : 'company'
         })
         .select()
         .single();
@@ -348,6 +352,7 @@ export async function postBusinessExpense(data: {
     payment_method?: string;
     project_id?: string;
     employee_id?: string;
+    transaction_type?: "expense" | "distribution" | "payout";
 }) {
     const supabase = createSupabaseServerClient();
     const { user, organizationId, role } = await getOrgContext();
@@ -370,7 +375,10 @@ export async function postBusinessExpense(data: {
             status: 'paid',
             expense_date: new Date().toISOString(),
             approved_at: new Date().toISOString(),
-            approved_by: user.id
+            approved_by: user.id,
+            transaction_type: data.transaction_type || 'expense',
+            ledger_source: data.project_id ? 'project' : 'company',
+            ledger_visibility: data.project_id ? 'project_only' : 'company'
         });
 
     if (error) return { error: error.message };
@@ -429,7 +437,7 @@ export async function getCompanyFinancials(projectId?: string) {
 
     let expenseQuery = supabase
         .from("expenses")
-        .select("amount, profiles:paid_by!inner(organization_id)")
+        .select("amount, transaction_type, profiles:paid_by!inner(organization_id)")
         .eq("profiles.organization_id", organizationId)
         .in("status", ["approved", "paid"]);
 
@@ -447,7 +455,13 @@ export async function getCompanyFinancials(projectId?: string) {
 
     const totalLiability = projectId ? 0 : (accruals?.reduce((acc, curr) => acc + Number(curr.remaining_amount), 0) || 0);
     const totalSalaryPaid = projectId ? 0 : (accruals?.reduce((acc, curr) => acc + Number(curr.paid_amount), 0) || 0);
-    const totalBusinessExpenses = expenses?.reduce((acc: number, curr) => acc + Number(curr.amount), 0) || 0;
+    const totalBusinessExpenses = expenses?.reduce((acc: number, curr) => {
+        // Only include 'expense' type in totalBusinessExpenses for logic calculations
+        if ((curr as any).transaction_type === 'expense') {
+            return acc + Number(curr.amount);
+        }
+        return acc;
+    }, 0) || 0;
     const totalRevenue = revenue?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
 
     let projectBreakdown: ProjectBreakdownItem[] = [];
@@ -536,8 +550,9 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
     const [revenueResult, expenseResult, reimbursementResult, accrualResult, projectFinancialsResult, advancesResult] = await Promise.all([
         supabase
             .from("revenue_logs")
-            .select("id, amount, source, description, received_date, created_at, project_id, creator:profiles!created_by!inner(organization_id)")
+            .select("id, amount, source, description, received_date, created_at, project_id, ledger_visibility, creator:profiles!created_by!inner(organization_id)")
             .eq("creator.organization_id", organizationId)
+            .eq("ledger_visibility", "company")
             .lte("received_date", toKey)
             .order("received_date", { ascending: true }),
         supabase
@@ -556,9 +571,11 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
                 reimbursed_at,
                 status,
                 project_id,
+                ledger_visibility,
                 profiles:paid_by!inner(id, full_name, avatar_url, role, department, organization_id)
             `)
             .eq("profiles.organization_id", organizationId)
+            .eq("ledger_visibility", "company")
             .lte("expense_date", toKey)
             .order("expense_date", { ascending: true }),
         supabase
@@ -631,7 +648,6 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
     }, {});
 
     const allEvents: FinanceLedgerEvent[] = revenueRows
-        .filter(row => !row.project_id) // Keep treasury cash revenue company-level only
         .map((row) => ({
             id: `revenue-${row.id}`,
             date: row.created_at,
@@ -645,52 +661,6 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
             method: "-",
             person: null
         }));
-
-    // Add project final verdict as virtual treasury events
-    projectFinancialsResult.projectBreakdown?.forEach((project) => {
-        // We list individual project-level reimbursements and project share payouts as separate expenses in the treasury ledger.
-        // To maintain an accurate treasury balance, the "Project Income" line must represent the 
-        // Gross Company Share before these specific outflows were subtracted.
-        const projectReimbursements = reimbursements.filter(r => {
-            const pExp = expenses.find(e => e.id === r.expense_id);
-            return pExp?.project_id === project.id;
-        }).reduce((sum, r) => sum + Number(r.amount), 0);
-        
-        const projectShares = expenses.filter(e => e.project_id === project.id && normalizeExpenseCategory(e.category) === "Project Share")
-            .reduce((sum, e) => sum + Number(e.amount), 0);
-
-        const adjustedNet = project.net + projectReimbursements + projectShares;
-
-        if (adjustedNet > 0) {
-            allEvents.push({
-                id: `project-profit-${project.id}`,
-                date: toKey,
-                createdAt: new Date().toISOString(),
-                amount: adjustedNet,
-                type: "revenue",
-                sourceType: "cash_revenue",
-                title: `Income from ${project.name}`,
-                description: `Company share from project (Gross of treasury payouts)`,
-                category: project.name,
-                method: "-",
-                person: null
-            });
-        } else if (adjustedNet < 0) {
-            allEvents.push({
-                id: `project-loss-${project.id}`,
-                date: toKey,
-                createdAt: new Date().toISOString(),
-                amount: Math.abs(adjustedNet),
-                type: "expense",
-                sourceType: "business_expense",
-                title: `Loss from ${project.name}`,
-                description: `Company loss from project (Gross of treasury payouts)`,
-                category: project.name,
-                method: "-",
-                person: null
-            });
-        }
-    });
 
     const claims = expenses.filter((expense) => expense.profiles?.role === "employee" || expense.profiles?.role === "founder");
 
@@ -706,8 +676,6 @@ export async function getCompanyFinanceDashboard(range?: FinanceDateRangeInput) 
         if (expense.status !== "approved" && expense.status !== "paid") {
             return;
         }
-
-        if (expense.project_id && category !== "Project Share") return; // Keep direct project expenses out, but include payouts like Shares
 
         const isSalaryExpense = category === "Salary Payments";
         allEvents.push({
@@ -1003,7 +971,7 @@ export async function getFinancialHistory(projectId?: string) {
 
     let expenseQuery = supabase
         .from("expenses")
-        .select("id, amount, category, description, expense_date, payment_method, created_at, project_id, projects(name), paid_by_profile:profiles!paid_by!inner(organization_id), employee_profile:profiles!employee_id(full_name)")
+        .select("id, amount, category, description, expense_date, payment_method, transaction_type, created_at, project_id, projects(name), paid_by_profile:profiles!paid_by!inner(organization_id), employee_profile:profiles!employee_id(full_name)")
         .eq("paid_by_profile.organization_id", organizationId)
         .in("status", ["approved", "paid"])
         .order("expense_date", { ascending: false });
@@ -1022,6 +990,7 @@ export async function getFinancialHistory(projectId?: string) {
     const normalizedRevenue: FinancialHistoryItem[] = revenue?.map(r => ({
         id: r.id,
         type: 'revenue',
+        transaction_type: 'revenue',
         amount: r.amount,
         title: r.source,
         subtitle: r.description || "Revenue",
@@ -1033,11 +1002,12 @@ export async function getFinancialHistory(projectId?: string) {
         project_name: getProjectName(r.projects)
     })) || [];
 
-    const normalizedExpenses: FinancialHistoryItem[] = ((expenses || []) as FinancialHistoryExpenseRow[])?.map(e => {
+    const normalizedExpenses: FinancialHistoryItem[] = ((expenses || []) as (FinancialHistoryExpenseRow & { transaction_type: any })[])?.map(e => {
         const employeeProfile = normalizeJoinedProfile(e.employee_profile);
         return {
             id: e.id,
             type: 'expense',
+            transaction_type: e.transaction_type,
             amount: e.amount,
             title: e.description,
             subtitle: normalizeExpenseCategory(e.category),
