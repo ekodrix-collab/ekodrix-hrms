@@ -7,12 +7,15 @@ export default async function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Middleware already guards all dashboard routes and validates auth.
+  // Use getSession() here (reads from cookie, no network call) as a fast
+  // server-side check before rendering the shell.
   const supabase = createSupabaseServerClient();
   const {
-    data: { user }
-  } = await supabase.auth.getUser();
+    data: { session }
+  } = await supabase.auth.getSession();
 
-  if (!user) redirect("/login");
+  if (!session) redirect("/login");
 
   return <DashboardShell>{children}</DashboardShell>;
 }

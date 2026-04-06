@@ -7,20 +7,19 @@ export default async function EmployeeLayout({
 }: {
     children: React.ReactNode;
 }) {
+    // Middleware already validates auth for /employee/* routes.
+    // Use getSession() (cookie read, no network call) as a cheap server guard.
     const supabase = createSupabaseServerClient();
 
     const {
-        data: { user },
-    } = await supabase.auth.getUser();
+        data: { session },
+    } = await supabase.auth.getSession();
 
-    if (!user) {
-        console.log("Employee Layout: No user, redirecting to login");
+    if (!session) {
         redirect("/login");
     }
 
-    // Both employees and admins can access employee pages
-    // So we just verify authentication
-    console.log("Employee Layout: User authenticated, rendering content");
-
+    // Both employees and admins can access employee pages —
+    // middleware already enforces role-based access control.
     return <>{children}</>;
 }
