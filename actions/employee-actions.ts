@@ -25,78 +25,148 @@ export async function getEmployeeDashboardStats(localDate?: string) {
 
     const weekStart = weekStartDate.toISOString().slice(0, 10);
     const weekEnd = weekEndDate.toISOString().slice(0, 10);
+    const startOfDay = `${today}T00:00:00Z`;
+    const endOfDay = `${today}T23:59:59Z`;
 
-    // 1. Get today's hours from attendance
-    const { data: attendance } = await supabase
-        .from("attendance")
-        .select("total_hours")
-        .eq("user_id", user.id)
-        .eq("date", today)
-        .maybeSingle();
-
-    // 2. Get pending tasks count (todo + in_progress)
-    const { count: pendingTasksCount } = await supabase
-        .from("tasks")
-        .select("*", { count: 'exact', head: true })
-        .eq("user_id", user.id)
-        .neq("status", "done");
-
-    // 3. Get total hours this week
-    const { data: weeklyAttendance } = await supabase
-        .from("attendance")
-        .select("total_hours")
-        .eq("user_id", user.id)
-        .gte("date", weekStart)
-        .lte("date", weekEnd);
-
-    const weeklyHours = weeklyAttendance?.reduce((acc, curr) => acc + Number(curr.total_hours || 0), 0) || 0;
-
-    // 4. Get all pending tasks for overview
-    const { data: pendingTasks } = await supabase
-        .from("tasks")
-        .select("id, title, priority, status, description, due_date")
-        .eq("user_id", user.id)
-        .neq("status", "done")
-        .order("position", { ascending: true });
-
-    // 5. Get team presence: ALL employees who have punched in today (company-wide)
-    // Use admin client to bypass RLS — employees can't normally read other users' attendance
+    // Admin client for team presence (bypasses RLS for cross-user reads)
     const adminClient = createSupabaseAdminClient();
-    const { data: todayAttendanceRecords, error: presenceError } = await adminClient
-        .from("attendance")
-        .select(`
-            user_id,
-            punch_in,
-            punch_out,
-            status,
-            profiles!user_id (
-                id,
-                full_name,
-                avatar_url,
-                role
-            ),
-            attendance_breaks (
-                start_time,
-                end_time
-            )
-        `)
-        .eq("date", today)
-        .not("punch_in", "is", null)
-        .order("punch_in", { ascending: true });
+
+    // ─── BATCH 1: All 8 independent queries run in parallel ─────────────────
+    const [
+        attendanceResult,
+        pendingTasksCountResult,
+        weeklyAttendanceResult,
+        pendingTasksResult,
+        teamPresenceResult,
+        todayStandupResult,
+        completedTodayResult,
+        recentAttendanceResult,
+    ] = await Promise.all([
+        // 1. Today's attendance record (id + total_hours)
+        supabase
+            .from("attendance")
+            .select("id, total_hours")
+            .eq("user_id", user.id)
+            .eq("date", today)
+            .maybeSingle(),
+
+        // 2. Pending tasks count
+        supabase
+            .from("tasks")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", user.id)
+            .neq("status", "done"),
+
+        // 3. Weekly attendance hours
+        supabase
+            .from("attendance")
+            .select("total_hours")
+            .eq("user_id", user.id)
+            .gte("date", weekStart)
+            .lte("date", weekEnd),
+
+        // 4. Pending tasks list (for focus tasks)
+        supabase
+            .from("tasks")
+            .select("id, title, priority, status, description, due_date")
+            .eq("user_id", user.id)
+            .neq("status", "done")
+            .order("position", { ascending: true }),
+
+        // 5. Team presence: all employees punched in today
+        adminClient
+            .from("attendance")
+            .select(`
+                user_id,
+                punch_in,
+                punch_out,
+                status,
+                profiles!user_id (
+                    id,
+                    full_name,
+                    avatar_url,
+                    role
+                ),
+                attendance_breaks (
+                    start_time,
+                    end_time
+                )
+            `)
+            .eq("date", today)
+            .not("punch_in", "is", null)
+            .order("punch_in", { ascending: true }),
+
+        // 6. Today's standup
+        supabase
+            .from("daily_standups")
+            .select("*")
+            .eq("user_id", user.id)
+            .eq("date", today)
+            .maybeSingle(),
+
+        // 7. Tasks completed today (for smart standup suggestions)
+        supabase
+            .from("tasks")
+            .select("id, title")
+            .eq("user_id", user.id)
+            .eq("status", "done")
+            .gte("updated_at", startOfDay)
+            .lte("updated_at", endOfDay),
+
+        // 8. Recent attendance for streak calculation (last ~3 months)
+        supabase
+            .from("attendance")
+            .select("date")
+            .eq("user_id", user.id)
+            .order("date", { ascending: false })
+            .limit(90),
+    ]);
+
+    const attendance = attendanceResult.data;
+    const pendingTasksCount = pendingTasksCountResult.count;
+    const weeklyAttendance = weeklyAttendanceResult.data;
+    const pendingTasks = pendingTasksResult.data;
+    const todayAttendanceRecords = teamPresenceResult.data;
+    const presenceError = teamPresenceResult.error;
+    const todayStandup = todayStandupResult.data;
+    const completedToday = completedTodayResult.data;
+    const recentAttendance = recentAttendanceResult.data;
 
     if (presenceError) {
         console.error("Team presence query error:", presenceError.message);
     }
 
-    // Map into TeamMemberPresence shape
+    // ─── BATCH 2: Break time — depends on attendance.id from Batch 1 ────────
+    let totalBreakSeconds = 0;
+    let lastBreakStartTime: string | null = null;
+
+    if (attendance?.id) {
+        const { data: breaks } = await supabase
+            .from("attendance_breaks")
+            .select("start_time, end_time")
+            .eq("attendance_id", attendance.id);
+
+        if (breaks) {
+            const now = new Date();
+            for (const b of breaks) {
+                const start = new Date(b.start_time);
+                if (!b.end_time) {
+                    lastBreakStartTime = b.start_time;
+                }
+                const end = b.end_time ? new Date(b.end_time) : now;
+                totalBreakSeconds += Math.floor((end.getTime() - start.getTime()) / 1000);
+            }
+        }
+    }
+
+    // ─── Derived values ──────────────────────────────────────────────────────
+    const weeklyHours = weeklyAttendance?.reduce((acc, curr) => acc + Number(curr.total_hours || 0), 0) || 0;
+
+    // Map team presence records into a consistent shape
     const teamPresence = (todayAttendanceRecords || []).map((record: any) => {
         const profile = Array.isArray(record.profiles) ? record.profiles[0] : record.profiles;
-
-        // Check if they have an active break (end_time is null)
         const breaks = record.attendance_breaks || [];
         const isActiveBreak = breaks.some((b: any) => !b.end_time);
-
-        // Priority: if punch_out is set → completed. If active break → on_break. Otherwise default to present.
         const memberStatus = record.punch_out ? "completed" : (isActiveBreak ? "on_break" : "present");
         return {
             id: (profile as { id: string } | null)?.id || record.user_id,
@@ -109,54 +179,23 @@ export async function getEmployeeDashboardStats(localDate?: string) {
         };
     });
 
-    // 6. Get today's standup
-    const { data: todayStandup } = await supabase
-        .from("daily_standups")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("date", today)
-        .maybeSingle();
-
-    // 7. Get tasks completed today for smart standup
-    // We filter by status = 'done' and updated_at being within the local "today" 
-    const startOfDay = `${today}T00:00:00Z`;
-    const endOfDay = `${today}T23:59:59Z`;
-
-    const { data: completedToday } = await supabase
-        .from("tasks")
-        .select("id, title")
-        .eq("user_id", user.id)
-        .eq("status", "done")
-        .gte("updated_at", startOfDay)
-        .lte("updated_at", endOfDay);
-
-    // 8. Calculate attendance streak (consecutive non-Sunday working days)
+    // Attendance streak calculation (uses data already fetched in Batch 1)
     let streak = 0;
-    const { data: recentAttendance } = await supabase
-        .from("attendance")
-        .select("date")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(90); // Look back up to ~3 months
-
     if (recentAttendance && recentAttendance.length > 0) {
         const attendanceDates = new Set(recentAttendance.map(a => a.date));
-        // Start from yesterday and go backwards
         const checkDate = new Date();
         checkDate.setDate(checkDate.getDate() - 1);
 
-        // If today has attendance, start counting from today
         if (attendanceDates.has(today)) {
             streak = 1;
         }
 
-        // Count backwards through past days
         for (let i = 0; i < 90; i++) {
-            const dateStr = checkDate.toLocaleDateString('en-CA'); // YYYY-MM-DD
-            const dayOfWeek = checkDate.getDay(); // 0=Sunday
+            const dateStr = checkDate.toLocaleDateString("en-CA");
+            const dow = checkDate.getDay();
 
-            if (dayOfWeek === 0) {
-                // Sunday — skip, don't break streak
+            if (dow === 0) {
+                // Sunday — skip without breaking streak
                 checkDate.setDate(checkDate.getDate() - 1);
                 continue;
             }
@@ -165,42 +204,7 @@ export async function getEmployeeDashboardStats(localDate?: string) {
                 streak++;
                 checkDate.setDate(checkDate.getDate() - 1);
             } else {
-                break; // Gap found, streak ends
-            }
-        }
-
-        // If we started from today and counted today, avoid double-counting
-        if (attendanceDates.has(today)) {
-            // streak already includes today from the initial +1
-        }
-    }
-
-    // 9. Calculate total break time for today
-    let totalBreakSeconds = 0;
-    let lastBreakStartTime = null;
-
-    const { data: todayAttendance } = await supabase
-        .from("attendance")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("date", today)
-        .maybeSingle();
-
-    if (todayAttendance) {
-        const { data: breaks } = await supabase
-            .from("attendance_breaks")
-            .select("start_time, end_time")
-            .eq("attendance_id", todayAttendance.id);
-
-        if (breaks) {
-            const now = new Date();
-            for (const b of breaks) {
-                const start = new Date(b.start_time);
-                if (!b.end_time) {
-                    lastBreakStartTime = b.start_time;
-                }
-                const end = b.end_time ? new Date(b.end_time) : now;
-                totalBreakSeconds += Math.floor((end.getTime() - start.getTime()) / 1000);
+                break;
             }
         }
     }
@@ -217,10 +221,12 @@ export async function getEmployeeDashboardStats(localDate?: string) {
             focusTasksList: pendingTasks || [],
             teamPresence: teamPresence || [],
             todayStandup: todayStandup || null,
-            completedToday: completedToday || []
-        }
+            completedToday: completedToday || [],
+        },
     };
 }
+
+
 
 export async function getEmployeeFinanceData() {
     const supabase = createSupabaseServerClient();
