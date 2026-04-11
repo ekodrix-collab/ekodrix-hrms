@@ -928,3 +928,18 @@ export async function rejectTaskClaimAction(taskId: string, claimantId?: string)
   }
   return { ok: true };
 }
+
+export async function getTaskAttachmentsAction(taskId: string) {
+  const supabase = createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Not authenticated" };
+
+  const { data, error } = await supabase
+    .from("task_attachments")
+    .select("*")
+    .eq("task_id", taskId)
+    .order("created_at", { ascending: true });
+
+  if (error) return { ok: false, message: error.message };
+  return { ok: true, data: data || [] };
+}

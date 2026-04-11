@@ -16,6 +16,7 @@ import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { Employee, Project, Task } from "@/types/dashboard";
+import { AdminTaskForm } from "@/components/tasks/admin-task-form";
 
 export const metadata: Metadata = {
     title: "Project Details | Ekodrix",
@@ -29,14 +30,16 @@ export default async function EmployeeProjectDetailPage({ params }: { params: { 
     const result = await getProjectDetailsAction(params.id);
     if (!result.ok || !result.data) return notFound();
 
+    const employeesRes = await getAllEmployeesAction();
+    const allEmployees = employeesRes.ok ? (employeesRes.data as unknown as Employee[] ?? []) : [];
+
     const project = result.data as Project;
     if (project.can_manage_project) {
-        const employeesRes = await getAllEmployeesAction();
         return (
             <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
                 <ProjectDetailsClient
                     project={project}
-                    employees={employeesRes.ok ? (employeesRes.data as unknown as Employee[] ?? []) : []}
+                    employees={allEmployees}
                     homePath="/employee/projects"
                     showFinanceWorkspace={false}
                     canManageTasks
@@ -123,67 +126,88 @@ export default async function EmployeeProjectDetailPage({ params }: { params: { 
                 {totalTasks > 0 ? (
                     <div className="grid grid-cols-1 gap-4">
                         {allTasks.map((task: Task) => (
-                            <div
+                            <AdminTaskForm
                                 key={task.id}
-                                className="bg-white/40 dark:bg-zinc-900/40 p-5 rounded-[1.5rem] border border-zinc-100 dark:border-zinc-800 flex items-center gap-4 flex-wrap md:flex-nowrap hover:bg-white/70 dark:hover:bg-zinc-900/70 transition-all"
-                            >
-                                {/* Status icon */}
-                                <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${task.status === "done" ? "bg-green-500/10 text-green-500" : task.status === "in_progress" ? "bg-amber-500/10 text-amber-500" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"}`}>
-                                    {task.status === "done" ? <CheckCircle2 className="h-5 w-5" /> : <Clock className="h-5 w-5" />}
-                                </div>
-
-                                {/* Task info */}
-                                <div className="flex-1 min-w-0 space-y-1.5">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="font-bold text-zinc-900 dark:text-zinc-100 truncate">{task.title}</span>
-                                        <TaskStatusBadge status={task.status} />
-                                        <TaskPriorityBadge priority={task.priority} className="text-[8px] h-4 px-1 tracking-tighter" />
-                                        {task.is_open_assignment && (
-                                            <Badge className="text-[8px] h-4 px-1 uppercase font-black bg-blue-500 text-white border-none flex items-center gap-0.5">
-                                                <Zap className="h-2.5 w-2.5 fill-current" />Marketplace
-                                            </Badge>
-                                        )}
-                                    </div>
-                                    {task.description && (
-                                        <p className="text-xs text-zinc-500 font-medium line-clamp-1">{task.description}</p>
-                                    )}
-                                    {/* Subtasks mini progress */}
-                                    {task.subtasks && task.subtasks.length > 0 && (
-                                        <div className="flex items-center gap-2 pt-0.5">
-                                            <div className="h-1 w-24 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                                                <div
-                                                    className="h-full bg-primary transition-all duration-500"
-                                                    style={{ width: `${(task.subtasks.filter((s: { completed: boolean }) => s.completed).length / task.subtasks.length) * 100}%` }}
-                                                />
-                                            </div>
-                                            <span className="text-[9px] font-black text-zinc-400 uppercase">
-                                                {task.subtasks.filter((s: { completed: boolean }) => s.completed).length}/{task.subtasks.length} subtasks
-                                            </span>
+                                employees={allEmployees}
+                                projectId={project.id}
+                                readonly={true}
+                                initialData={{
+                                    id: task.id,
+                                    title: task.title,
+                                    description: task.description || "",
+                                    priority: task.priority,
+                                    status: task.status,
+                                    dueDate: task.due_date,
+                                    assignment_status: task.assignment_status || "assigned",
+                                    user_id: task.user_id || task.assignee?.id,
+                                    subtasks: task.subtasks || [],
+                                    estimated_hours: task.estimated_hours,
+                                    difficulty_score: task.difficulty_score,
+                                    task_type: task.task_type,
+                                }}
+                                trigger={
+                                    <div
+                                        className="bg-white/40 dark:bg-zinc-900/40 p-5 rounded-[1.5rem] border border-zinc-100 dark:border-zinc-800 flex items-center gap-4 flex-wrap md:flex-nowrap hover:bg-white/70 dark:hover:bg-zinc-900/70 transition-all cursor-pointer group/card"
+                                    >
+                                        {/* Status icon */}
+                                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${task.status === "done" ? "bg-green-500/10 text-green-500" : task.status === "in_progress" ? "bg-amber-500/10 text-amber-500" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"}`}>
+                                            {task.status === "done" ? <CheckCircle2 className="h-5 w-5" /> : <Clock className="h-5 w-5" />}
                                         </div>
-                                    )}
-                                </div>
 
-                                {/* Assignee */}
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <Avatar className="h-7 w-7 border-2 border-white dark:border-zinc-800">
-                                        <AvatarImage src={task.assignee?.avatar_url || undefined} />
-                                        <AvatarFallback className="text-[8px] font-bold uppercase">{task.assignee?.full_name?.charAt(0) || "U"}</AvatarFallback>
-                                    </Avatar>
-                                    <div className="flex flex-col">
-                                        <span className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-widest whitespace-nowrap">
-                                            {task.assignee?.full_name || "Unassigned"}
-                                        </span>
-                                        {task.assignment_status === "pending_approval" && (
-                                            <span className="text-[8px] font-black text-amber-500 uppercase">Pending Approval</span>
-                                        )}
+                                        {/* Task info */}
+                                        <div className="flex-1 min-w-0 space-y-1.5 text-left">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="font-bold text-zinc-900 dark:text-zinc-100 truncate group-hover/card:text-primary transition-colors">{task.title}</span>
+                                                <TaskStatusBadge status={task.status} />
+                                                <TaskPriorityBadge priority={task.priority} className="text-[8px] h-4 px-1 tracking-tighter" />
+                                                {task.is_open_assignment && (
+                                                    <Badge className="text-[8px] h-4 px-1 uppercase font-black bg-blue-500 text-white border-none flex items-center gap-0.5">
+                                                        <Zap className="h-2.5 w-2.5 fill-current" />Marketplace
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            {task.description && (
+                                                <p className="text-xs text-zinc-500 font-medium line-clamp-1">{task.description}</p>
+                                            )}
+                                            {/* Subtasks mini progress */}
+                                            {task.subtasks && task.subtasks.length > 0 && (
+                                                <div className="flex items-center gap-2 pt-0.5">
+                                                    <div className="h-1 w-24 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-primary transition-all duration-500"
+                                                            style={{ width: `${(task.subtasks.filter((s: { completed: boolean }) => s.completed).length / task.subtasks.length) * 100}%` }}
+                                                        />
+                                                    </div>
+                                                    <span className="text-[9px] font-black text-zinc-400 uppercase">
+                                                        {task.subtasks.filter((s: { completed: boolean }) => s.completed).length}/{task.subtasks.length} subtasks
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Assignee */}
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <Avatar className="h-7 w-7 border-2 border-white dark:border-zinc-800">
+                                                <AvatarImage src={task.assignee?.avatar_url || undefined} />
+                                                <AvatarFallback className="text-[8px] font-bold uppercase">{task.assignee?.full_name?.charAt(0) || "U"}</AvatarFallback>
+                                            </Avatar>
+                                            <div className="flex flex-col text-left">
+                                                <span className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-widest whitespace-nowrap">
+                                                    {task.assignee?.full_name || "Unassigned"}
+                                                </span>
+                                                {task.assignment_status === "pending_approval" && (
+                                                    <span className="text-[8px] font-black text-amber-500 uppercase">Pending Approval</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Due date */}
+                                        <div className="shrink-0">
+                                            <DueDateBadge dueDate={task.due_date} />
+                                        </div>
                                     </div>
-                                </div>
-
-                                {/* Due date */}
-                                <div className="shrink-0">
-                                    <DueDateBadge dueDate={task.due_date} />
-                                </div>
-                            </div>
+                                }
+                            />
                         ))}
                     </div>
                 ) : (
