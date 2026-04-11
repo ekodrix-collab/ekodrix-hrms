@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { getTaskAttachmentsAction } from "@/actions/tasks";
 import { TaskAttachment } from "@/types/tasks";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import Image from "next/image";
 
 interface Employee {
     id: string;
@@ -401,7 +402,7 @@ RULES:
             if (!res.ok) throw new Error("Delete failed");
             setAttachments((prev) => prev.filter((a) => a.id !== id));
             toast.success("Attachment deleted");
-        } catch (_err) {
+        } catch {
             toast.error("Failed to delete attachment");
         }
     };
@@ -481,7 +482,7 @@ RULES:
                     await Promise.all(uploadPromises);
                     toast.success(pendingFiles.length === 1 ? "Image uploaded" : "Images uploaded");
                     setPendingFiles([]);
-                } catch (_err) {
+                } catch {
                     toast.error("Some images failed to upload. You can retry from the edit form.");
                 } finally {
                     setIsUploading(false);
@@ -999,10 +1000,12 @@ RULES:
                                 {/* Saved Attachments */}
                                 {attachments.map((att) => (
                                     <div key={att.id} className="relative aspect-square rounded-xl overflow-hidden border border-zinc-200 group bg-zinc-100">
-                                        <img
+                                        <Image
                                             src={att.image_url}
                                             alt="Attachment"
-                                            className="w-full h-full object-cover"
+                                            fill
+                                            className="object-cover"
+                                            unoptimized
                                         />
                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                             <button
@@ -1117,10 +1120,12 @@ RULES:
                             <X className="h-6 w-6" />
                         </button>
 
-                        <img
+                        <Image
                             src={previewImageUrl}
                             alt="Full screen preview"
-                            className="max-w-full max-h-full object-contain shadow-2xl rounded-lg animate-in zoom-in-95 duration-300"
+                            fill
+                            className="object-contain animate-in zoom-in-95 duration-300"
+                            unoptimized
                             onClick={(e) => e.stopPropagation()}
                         />
                     </div>
