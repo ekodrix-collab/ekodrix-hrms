@@ -34,7 +34,8 @@ import {
   ShieldAlert,
   Eye,
   ListChecks,
-  FolderSearch
+  FolderSearch,
+  Image as ImageIcon
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -59,7 +60,8 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { getTasksAction, createTaskAction, moveTaskAction, updateTaskAction, deleteTaskAction, toggleSubtaskAction, getMyClaimedTasksAction } from "@/actions/tasks";
+import { getTasksAction, createTaskAction, moveTaskAction, updateTaskAction, deleteTaskAction, toggleSubtaskAction, getMyClaimedTasksAction, getTaskAttachmentsAction } from "@/actions/tasks";
+import { TaskAttachment } from "@/types/tasks";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -368,6 +370,8 @@ export default function EmployeeTasksPage() {
   const [newSubtaskEditValue, setNewSubtaskEditValue] = useState("");
   const [editingSubtaskIndex, setEditingSubtaskIndex] = useState<number | null>(null);
   const [editingSubtaskValue, setEditingSubtaskValue] = useState("");
+  const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -385,6 +389,20 @@ export default function EmployeeTasksPage() {
       setTasks(tasksData);
     }
   }, [tasksData]);
+
+  useEffect(() => {
+    if (selectedTask?.id) {
+      getTaskAttachmentsAction(selectedTask.id).then((res) => {
+        if (res.ok && res.data) {
+          setAttachments(res.data);
+        } else {
+          setAttachments([]);
+        }
+      });
+    } else {
+      setAttachments([]);
+    }
+  }, [selectedTask?.id]);
 
   const resetNewSubtaskEditor = () => {
     setNewSubtaskEditIndex(null);
@@ -1148,68 +1166,140 @@ export default function EmployeeTasksPage() {
               </DialogContent>
             </Dialog>
 
-            <Dialog open={!!selectedTask} onOpenChange={(open) => !open && setSelectedTask(null)}>
-              <DialogContent className="sm:max-w-2xl max-h-[88vh] overflow-y-auto rounded-3xl border-zinc-200 dark:border-zinc-800">
+            <Dialog open={!!selectedTask} onOpenChange={(open) => {
+              if (!open) {
+                setSelectedTask(null);
+                setPreviewImageUrl(null);
+              }
+            }}>
+              <DialogContent className="sm:max-w-2xl p-0 overflow-hidden rounded-[2rem] border-zinc-200 dark:border-zinc-800 shadow-2xl">
                 {selectedTask && (
-                  <div className="space-y-6">
-                    <DialogHeader>
-                      <DialogTitle className="text-2xl font-black text-zinc-900 dark:text-zinc-100">
-                        {selectedTask.title}
-                      </DialogTitle>
-                      <DialogDescription>
-                        Full task details to review scope, deadlines, and checklist.
-                      </DialogDescription>
-                    </DialogHeader>
+                  <div className="flex flex-col max-h-[90vh]">
+                    <div className="overflow-y-auto p-8 pb-12 custom-scrollbar">
+                      <div className="space-y-6">
+                        <DialogHeader>
+                          <DialogTitle className="text-2xl font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-tight italic">
+                            {selectedTask.title}
+                          </DialogTitle>
+                          <DialogDescription className="font-medium text-zinc-500">
+                            Full task details to review scope, deadlines, and checklist.
+                          </DialogDescription>
+                        </DialogHeader>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      <TaskPriorityBadge priority={selectedTask.priority} />
-                      <Badge variant="outline" className="text-[10px] uppercase font-black tracking-widest border-blue-200 bg-blue-50/60 text-blue-700 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-400">
-                        <FolderSearch className="h-3 w-3 mr-1" />
-                        {selectedTask.project?.name || selectedTask.projects?.name || "Internal"}
-                      </Badge>
-                      <Badge variant="outline" className="text-[10px] uppercase font-black tracking-widest">
-                        {selectedTask.status.replace("_", " ")}
-                      </Badge>
-                      <Badge variant="outline" className="text-[10px] uppercase font-black tracking-widest">
-                        {selectedTask.due_date ? format(new Date(selectedTask.due_date), "MMM d, yyyy") : "No Deadline"}
-                      </Badge>
-                    </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <TaskPriorityBadge priority={selectedTask.priority} />
+                          <Badge variant="outline" className="text-[10px] uppercase font-black tracking-widest border-blue-200 bg-blue-50/60 text-blue-700 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-400 h-6">
+                            <FolderSearch className="h-3 w-3 mr-1" />
+                            {selectedTask.project?.name || selectedTask.projects?.name || "Internal"}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] uppercase font-black tracking-widest h-6 border-zinc-200 text-zinc-500">
+                            {selectedTask.status.replace("_", " ")}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] uppercase font-black tracking-widest h-6 border-zinc-200 text-zinc-500">
+                            {selectedTask.due_date ? format(new Date(selectedTask.due_date), "MMM d, yyyy") : "No Deadline"}
+                          </Badge>
+                        </div>
 
-                    <div className="rounded-2xl border border-zinc-200/70 dark:border-zinc-800 p-4 space-y-2">
-                      <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-zinc-500">
-                        <Clock className="h-3.5 w-3.5 text-primary" />
-                        Description
+                        <div className="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 p-5 space-y-2">
+                          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                            <Clock className="h-3.5 w-3.5 text-primary" />
+                            Description
+                          </div>
+                          <p className="whitespace-pre-wrap text-sm font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                            {selectedTask.description || "No description provided for this task."}
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl border border-zinc-100 dark:border-zinc-800 p-5 space-y-4">
+                          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                            <ListChecks className="h-3.5 w-3.5 text-primary" />
+                            Subtasks
+                          </div>
+                          {selectedTask.subtasks && selectedTask.subtasks.length > 0 ? (
+                            <ul className="space-y-3">
+                              {selectedTask.subtasks.map((subtask, idx) => (
+                                <li
+                                  key={`${selectedTask.id}-detail-subtask-${idx}`}
+                                  className="flex items-start gap-3 p-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800"
+                                >
+                                  <span className="mt-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-lg bg-primary/10 text-[10px] font-black text-primary">
+                                    {idx + 1}
+                                  </span>
+                                  <span className={`text-sm font-bold ${subtask.completed ? "text-zinc-400 line-through" : "text-zinc-700 dark:text-zinc-300"}`}>
+                                    {subtask.title}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-xs font-bold text-zinc-300 uppercase tracking-widest py-4 text-center border-2 border-dashed border-zinc-50 rounded-xl">No subtasks added</p>
+                          )}
+                        </div>
+
+                        {/* Image Attachments Section */}
+                        <div className="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 p-5 space-y-4">
+                          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                            <ImageIcon className="h-3.5 w-3.5 text-primary" />
+                            Image Attachments
+                          </div>
+                          
+                          <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
+                            {attachments.map((att) => (
+                              <div key={att.id} className="relative aspect-square rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 group bg-white dark:bg-zinc-900 flex items-center justify-center shadow-sm hover:shadow-md transition-all">
+                                <img
+                                  src={att.image_url}
+                                  alt="Attachment"
+                                  className="w-full h-full object-cover"
+                                />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewImageUrl(att.image_url)}
+                                    className="h-9 w-9 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors backdrop-blur-sm"
+                                  >
+                                    <Eye className="h-4 w-4 text-white" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                            {attachments.length === 0 && (
+                              <div className="col-span-full py-10 rounded-2xl border-2 border-dashed border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center gap-3">
+                                <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                                  <ImageIcon className="h-5 w-5 text-zinc-300" />
+                                </div>
+                                <p className="text-[10px] font-black text-zinc-300 uppercase tracking-widest">No visual assets currently attached</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Bottom Spacer for safe scrolling */}
+                        <div className="h-8" />
                       </div>
-                      <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
-                        {selectedTask.description || "No description provided for this task."}
-                      </p>
                     </div>
+                  </div>
+                )}
 
-                    <div className="rounded-2xl border border-zinc-200/70 dark:border-zinc-800 p-4 space-y-3">
-                      <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-zinc-500">
-                        <ListChecks className="h-3.5 w-3.5 text-primary" />
-                        Subtasks
-                      </div>
-                      {selectedTask.subtasks && selectedTask.subtasks.length > 0 ? (
-                        <ul className="space-y-2">
-                          {selectedTask.subtasks.map((subtask, idx) => (
-                            <li
-                              key={`${selectedTask.id}-detail-subtask-${idx}`}
-                              className="flex items-start gap-2 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 px-3 py-2"
-                            >
-                              <span className="mt-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary">
-                                {idx + 1}
-                              </span>
-                              <span className={`text-sm ${subtask.completed ? "text-zinc-400 line-through" : "text-zinc-700 dark:text-zinc-300"}`}>
-                                {subtask.title}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-zinc-500">No subtasks added for this task.</p>
-                      )}
-                    </div>
+                {/* Lightbox Overlay */}
+                {previewImageUrl && (
+                  <div 
+                    className="fixed inset-0 z-[100] bg-black/90 animate-in fade-in duration-200 flex items-center justify-center p-4 md:p-10"
+                    onClick={() => setPreviewImageUrl(null)}
+                  >
+                    <button
+                      onClick={() => setPreviewImageUrl(null)}
+                      className="absolute top-6 right-6 h-12 w-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all z-[110]"
+                      title="Close Preview"
+                    >
+                      <X className="h-6 w-6" />
+                    </button>
+
+                    <img
+                      src={previewImageUrl}
+                      alt="Full screen preview"
+                      className="max-w-full max-h-full object-contain shadow-2xl rounded-lg animate-in zoom-in-95 duration-300"
+                      onClick={(e) => e.stopPropagation()}
+                    />
                   </div>
                 )}
               </DialogContent>

@@ -444,3 +444,67 @@ LEFT JOIN public.expense_categories ec ON e.category_id = ec.id
 GROUP BY DATE_TRUNC('month', expense_date), category_id, ec.name
 ORDER BY month DESC, total_amount DESC;
 
+-- =============================================
+-- 13. TASK ATTACHMENTS TABLE
+-- =============================================
+CREATE TABLE public.task_attachments (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    task_id     UUID NOT NULL REFERENCES public.tasks(id) ON DELETE CASCADE,
+    image_url   TEXT NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.task_attachments ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated users can read attachments"
+    ON public.task_attachments FOR SELECT
+    USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Admin can delete attachments"
+    ON public.task_attachments FOR DELETE
+    USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+CREATE POLICY "Authenticated users can insert attachments"
+    ON public.task_attachments FOR INSERT
+    WITH CHECK (auth.role() = 'authenticated');
+
+CREATE INDEX idx_task_attachments_task_id ON public.task_attachments(task_id);
+
+-- =============================================
+-- 14. STORAGE POLICIES (task-attachments)
+-- =============================================
+
+-- Ensure bucket exists
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('task-attachments', 'task-attachments', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Policy to allow public read access to objects in the bucket
+CREATE POLICY "Public Access"
+ON storage.objects FOR SELECT
+USING ( bucket_id = 'task-attachments' );
+
+-- Policy to allow authenticated users to upload objects
+CREATE POLICY "Authenticated Upload"
+ON storage.objects FOR INSERT
+WITH CHECK (
+    bucket_id = 'task-attachments' 
+    AND auth.role() = 'authenticated'
+);
+
+-- Policy to allow admins to delete objects
+CREATE POLICY "Admin Delete"
+ON storage.objects FOR DELETE
+USING (
+    bucket_id = 'task-attachments' 
+    AND EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE id = auth.uid() AND role = 'admin'
+    )
+);
+
