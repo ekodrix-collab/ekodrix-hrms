@@ -17,7 +17,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { Employee, Project, Task } from "@/types/dashboard";
 import { AdminTaskForm } from "@/components/tasks/admin-task-form";
-import { getAllEmployeesAction } from "@/actions/tasks";
 
 export const metadata: Metadata = {
     title: "Project Details | Ekodrix",
