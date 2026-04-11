@@ -55,9 +55,10 @@ const localServiceWorkerCleanupScript = `
       window.location.hostname === "127.0.0.1";
     if (!isLocalhost || !("serviceWorker" in navigator)) return;
 
-    const doneKey = "__ekodrix_sw_cleanup_v1";
+    const doneKey = "__ekodrix_sw_cleanup_v2";
     if (sessionStorage.getItem(doneKey) === "1") return;
 
+    // Silently unregister stale SWs and clear caches — NO page reload needed.
     const unregisterAll = navigator.serviceWorker
       .getRegistrations()
       .then((regs) => Promise.all(regs.map((reg) => reg.unregister())));
@@ -67,11 +68,7 @@ const localServiceWorkerCleanupScript = `
 
     Promise.all([unregisterAll, clearCaches]).finally(() => {
       sessionStorage.setItem(doneKey, "1");
-      const url = new URL(window.location.href);
-      if (!url.searchParams.has("__sw_reset")) {
-        url.searchParams.set("__sw_reset", "1");
-        window.location.replace(url.toString());
-      }
+      // Note: No page reload — the stale SW is already unregistered for the NEXT navigation.
     });
   } catch (_) {
     // Ignore cleanup failures and continue rendering app.
@@ -89,7 +86,7 @@ export default function RootLayout({
       <body className={`${outfit.className} ${outfit.variable} ${spaceGrotesk.variable} antialiased`}>
         <Script
           id="localhost-sw-cleanup"
-          strategy="beforeInteractive"
+          strategy="afterInteractive"
           dangerouslySetInnerHTML={{ __html: localServiceWorkerCleanupScript }}
         />
         <ThemeProvider>

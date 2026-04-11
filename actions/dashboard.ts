@@ -64,24 +64,28 @@ export async function getAbsentEmployees(date: string) {
 
 
 export async function getAdminDashboardData() {
+    // Fetch org context ONCE and pass it down — avoids 6x repeated auth+profile DB calls
     const { organizationId, error: authError } = await getOrgContext();
     if (authError || !organizationId) return null;
 
     const [stats, trends, blockers, distributions, activities, teamPresence] = await Promise.all([
-        getDashboardStats(),
-        getAttendanceTrends(),
-        getUrgentBlockers(),
-        getDepartmentDistribution(),
-        getRecentActivities(),
-        getAdminTeamPresence()
+        getDashboardStats(organizationId),
+        getAttendanceTrends(organizationId),
+        getUrgentBlockers(organizationId),
+        getDepartmentDistribution(organizationId),
+        getRecentActivities(organizationId),
+        getAdminTeamPresence(organizationId)
     ]);
 
     return { stats, trends, blockers, distributions, activities, teamPresence };
 }
 
-export async function getDashboardStats() {
+export async function getDashboardStats(organizationId?: string) {
     const supabase = createSupabaseServerClient();
-    const { organizationId } = await getOrgContext();
+    if (!organizationId) {
+        const ctx = await getOrgContext();
+        organizationId = ctx.organizationId ?? undefined;
+    }
     if (!organizationId) return { totalEmployees: 0, presentToday: 0, pendingRequests: 0, performance: 0 };
 
     // 1. Get total employees in org
@@ -123,9 +127,12 @@ export async function getDashboardStats() {
     };
 }
 
-export async function getAttendanceTrends() {
+export async function getAttendanceTrends(organizationId?: string) {
     const supabase = createSupabaseServerClient();
-    const { organizationId } = await getOrgContext();
+    if (!organizationId) {
+        const ctx = await getOrgContext();
+        organizationId = ctx.organizationId ?? undefined;
+    }
     if (!organizationId) return [];
 
     const formatISTDate = (date: Date) => new Intl.DateTimeFormat('en-CA', {
@@ -188,9 +195,12 @@ export async function getAttendanceTrends() {
     return trends;
 }
 
-export async function getUrgentBlockers(): Promise<Blocker[]> {
+export async function getUrgentBlockers(organizationId?: string): Promise<Blocker[]> {
     const supabase = createSupabaseServerClient();
-    const { organizationId } = await getOrgContext();
+    if (!organizationId) {
+        const ctx = await getOrgContext();
+        organizationId = ctx.organizationId ?? undefined;
+    }
     if (!organizationId) return [];
 
     const istDate = new Intl.DateTimeFormat('en-CA', {
@@ -220,9 +230,12 @@ export async function getUrgentBlockers(): Promise<Blocker[]> {
     });
 }
 
-export async function getDepartmentDistribution() {
+export async function getDepartmentDistribution(organizationId?: string) {
     const supabase = createSupabaseServerClient();
-    const { organizationId } = await getOrgContext();
+    if (!organizationId) {
+        const ctx = await getOrgContext();
+        organizationId = ctx.organizationId ?? undefined;
+    }
     if (!organizationId) return [];
 
     const { data: profiles } = await supabase
@@ -244,9 +257,12 @@ export async function getDepartmentDistribution() {
     }));
 }
 
-export async function getRecentActivities(): Promise<Activity[]> {
+export async function getRecentActivities(organizationId?: string): Promise<Activity[]> {
     const supabase = createSupabaseServerClient();
-    const { organizationId } = await getOrgContext();
+    if (!organizationId) {
+        const ctx = await getOrgContext();
+        organizationId = ctx.organizationId ?? undefined;
+    }
     if (!organizationId) return [];
 
     const { data: logs } = await supabase
@@ -399,10 +415,14 @@ export async function getAllExpenses() {
     return expenses || [];
 }
 
-export async function getAdminTeamPresence() {
+export async function getAdminTeamPresence(organizationId?: string) {
     const supabase = createSupabaseServerClient();
-    const { organizationId, error: authError } = await getOrgContext();
-    if (authError || !organizationId) return [];
+    if (!organizationId) {
+        const ctx = await getOrgContext();
+        if (ctx.error || !ctx.organizationId) return [];
+        organizationId = ctx.organizationId;
+    }
+    if (!organizationId) return [];
 
     const today = new Intl.DateTimeFormat("en-CA", {
         timeZone: "Asia/Kolkata",

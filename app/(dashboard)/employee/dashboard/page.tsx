@@ -67,8 +67,8 @@ export default function EmployeeDashboardPage() {
       const res = await getEmployeeDashboardStats(localDate);
       return res.ok ? (res.stats as DashboardStats) : null;
     },
-    staleTime: 30000,
-    refetchInterval: 30000, // Poll every 30s so team presence stays live
+    staleTime: 60000,
+    refetchInterval: 60000, // Poll every 60s — team presence stays live with acceptable freshness
   });
 
   const [elapsedTime, setElapsedTime] = useState(0);
