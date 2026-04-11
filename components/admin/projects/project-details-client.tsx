@@ -32,7 +32,7 @@ import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import {
     Calendar, CheckCircle2, Clock, UsersIcon as Users,
-    KanbanSquare, ArrowLeft, ChevronRight, Edit3, Trash2, Search, XCircle, CheckCircle, ChevronDown, Check
+    KanbanSquare, ArrowLeft, ChevronRight, Edit3, Trash2, Search, XCircle, CheckCircle, ChevronDown, Check, Eye
 } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
@@ -495,6 +495,35 @@ export function ProjectDetailsClient({
 
                                             {/* Action Buttons */}
                                             <div className="flex items-center gap-2 shrink-0">
+                                                {/* View Button (Eye) - Visible to everyone */}
+                                                <AdminTaskForm
+                                                    employees={employees}
+                                                    projectId={project.id}
+                                                    projectOverview={project.description || ""}
+                                                    readonly={true}
+                                                    initialData={{
+                                                        id: task.id,
+                                                        title: task.title,
+                                                        description: task.description || "",
+                                                        priority: task.priority,
+                                                        status: task.status,
+                                                        dueDate: task.due_date ? format(new Date(task.due_date), "yyyy-MM-dd") : "",
+                                                        assignment_status: task.assignment_status || "open",
+                                                        user_id: task.user_id || "",
+                                                        subtasks: task.subtasks || [],
+                                                        estimated_hours: task.estimated_hours,
+                                                        difficulty_score: task.difficulty_score,
+                                                        task_type: task.task_type,
+                                                    }}
+                                                    projectMembers={project.members}
+                                                    projectManagerId={project.project_manager_id || undefined}
+                                                    trigger={
+                                                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-950/20 text-zinc-500 hover:text-blue-600 transition-all" title="View Details">
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                    }
+                                                />
+
                                                 {canManageTasks && task.assignment_status === "pending_approval" && (
                                                     <>
                                                         <Button size="sm" variant="outline" className="h-8 rounded-lg border-red-200 text-red-600 hover:bg-red-50 font-bold text-[10px] uppercase px-3" onClick={() => handleReject(task.id)} disabled={isActionLoading === task.id}>
@@ -529,7 +558,7 @@ export function ProjectDetailsClient({
                                                             projectManagerId={project.project_manager_id || undefined}
                                                             onSuccess={() => router.refresh()}
                                                             trigger={
-                                                                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-primary transition-all">
+                                                                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-primary transition-all" title="Edit Task">
                                                                     <Edit3 className="h-4 w-4" />
                                                                 </Button>
                                                             }
@@ -539,6 +568,7 @@ export function ProjectDetailsClient({
                                                             size="icon"
                                                             className="h-9 w-9 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 text-zinc-500 hover:text-red-500 transition-all"
                                                             disabled={isActionLoading === task.id}
+                                                            title="Delete Task"
                                                             onClick={async () => {
                                                                 if (confirm("Delete this task?")) {
                                                                     setIsActionLoading(task.id);
