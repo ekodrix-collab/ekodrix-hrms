@@ -17,7 +17,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { Employee, Project, Task } from "@/types/dashboard";
 import { AdminTaskForm } from "@/components/tasks/admin-task-form";
-import { getAllEmployeesAction } from "@/actions/tasks";
 
 export const metadata: Metadata = {
     title: "Project Details | Ekodrix",
@@ -36,7 +35,6 @@ export default async function EmployeeProjectDetailPage({ params }: { params: { 
 
     const project = result.data as Project;
     if (project.can_manage_project) {
-        const employeesRes = await getAllEmployeesAction();
         return (
             <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
                 <ProjectDetailsClient
@@ -140,7 +138,7 @@ export default async function EmployeeProjectDetailPage({ params }: { params: { 
                                     priority: task.priority,
                                     status: task.status,
                                     dueDate: task.due_date,
-                                    assignment_status: task.assignment_status,
+                                    assignment_status: task.assignment_status || "assigned",
                                     user_id: task.user_id || task.assignee?.id,
                                     subtasks: task.subtasks || [],
                                     estimated_hours: task.estimated_hours,

@@ -40,6 +40,7 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import Image from "next/image";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -1246,10 +1247,12 @@ export default function EmployeeTasksPage() {
                           <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
                             {attachments.map((att) => (
                               <div key={att.id} className="relative aspect-square rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 group bg-white dark:bg-zinc-900 flex items-center justify-center shadow-sm hover:shadow-md transition-all">
-                                <img
+                                <Image
                                   src={att.image_url}
                                   alt="Attachment"
-                                  className="w-full h-full object-cover"
+                                  fill
+                                  className="object-cover"
+                                  unoptimized
                                 />
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                   <button
@@ -1294,10 +1297,12 @@ export default function EmployeeTasksPage() {
                       <X className="h-6 w-6" />
                     </button>
 
-                    <img
+                    <Image
                       src={previewImageUrl}
                       alt="Full screen preview"
-                      className="max-w-full max-h-full object-contain shadow-2xl rounded-lg animate-in zoom-in-95 duration-300"
+                      fill
+                      className="object-contain animate-in zoom-in-95 duration-300"
+                      unoptimized
                       onClick={(e) => e.stopPropagation()}
                     />
                   </div>

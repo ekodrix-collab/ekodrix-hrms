@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
         const fileName = `${crypto.randomUUID()}.${fileExt}`;
         const filePath = `${taskId}/${fileName}`;
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
             .from("task-attachments")
             .upload(filePath, file);
 
