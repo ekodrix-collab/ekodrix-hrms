@@ -8,6 +8,7 @@ import {
   CalendarDays,
   KanbanSquare,
   Users,
+  MessageSquare,
   StickyNote,
   Settings,
   LogOut,
@@ -49,6 +50,7 @@ export const adminNav: NavGroup[] = [
     items: [
       { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/admin/inbox", label: "Action Inbox", icon: Inbox, badgeKey: "adminInbox" },
+      { href: "/admin/chat", label: "Team Chat", icon: MessageSquare },
       { href: "/admin/projects", label: "Projects", icon: LayoutGrid },
       { href: "/admin/analytics", label: "Analytics", icon: Zap },
     ]
@@ -107,6 +109,7 @@ export const employeeNav: NavGroup[] = [
   {
     group: "Collaboration",
     items: [
+      { href: "/employee/chat", label: "Team Chat", icon: MessageSquare },
       { href: "/employee/team", label: "Directory", icon: Users },
       { href: "/employee/notes", label: "Personal Notes", icon: StickyNote },
     ]
