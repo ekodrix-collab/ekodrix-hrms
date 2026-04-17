@@ -4,6 +4,7 @@ import * as React from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
+import { FloatingChatButton } from "@/components/chat/floating-chat-button";
 
 export function DashboardShell({
   children
@@ -20,6 +21,7 @@ export function DashboardShell({
           <main className="flex-1 px-3 pb-24 pt-10 sm:px-4 sm:pt-12 lg:px-8 lg:pb-8">{children}</main>
         </div>
       </div>
+      <FloatingChatButton />
       <MobileBottomNav />
     </div>
   );
