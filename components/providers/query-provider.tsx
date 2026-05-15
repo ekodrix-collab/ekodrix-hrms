@@ -5,13 +5,19 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useState } from "react";
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
+    const isDev = process.env.NODE_ENV !== "production";
+
     const [queryClient] = useState(
         () =>
             new QueryClient({
                 defaultOptions: {
                     queries: {
-                        staleTime: 60 * 1000,
+                        staleTime: 2 * 60 * 1000,
+                        gcTime: 15 * 60 * 1000,
                         refetchOnWindowFocus: false,
+                        refetchOnReconnect: false,
+                        refetchIntervalInBackground: false,
+                        retry: 1,
                     },
                 },
             })
@@ -20,7 +26,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
     return (
         <QueryClientProvider client={queryClient}>
             {children}
-            <ReactQueryDevtools initialIsOpen={false} />
+            {isDev ? <ReactQueryDevtools initialIsOpen={false} /> : null}
         </QueryClientProvider>
     );
 }

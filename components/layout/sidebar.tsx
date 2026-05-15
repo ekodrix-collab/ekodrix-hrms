@@ -212,7 +212,7 @@ export function Sidebar() {
       const res = await getSidebarCountsAction();
       return res.ok ? res.data : { adminInbox: 0, marketplace: 0 };
     },
-    refetchInterval: 30000, // Refresh counts every 30s
+    refetchInterval: 60000, // Refresh counts every 60s
   });
 
   const navGroups = isAdmin ? adminNav : getEmployeeNavByRole(user?.profile?.role);

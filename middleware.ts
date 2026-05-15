@@ -3,6 +3,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { CookieOptions } from "@supabase/ssr";
 
+const publicRoutes = ["/login", "/signup", "/forgot-password", "/reset-password"];
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -51,13 +53,7 @@ export async function middleware(request: NextRequest) {
   const isJsonRequest = request.headers.get("accept")?.includes("application/json");
   const isBackgroundRequest = isServerAction || isPrefetch || isJsonRequest;
 
-  // Use getUser() instead of getSession() for security
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   // Define route types
-  const publicRoutes = ["/login", "/signup", "/forgot-password", "/reset-password"];
   const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
   const isCallbackRoute = pathname.startsWith("/callback");
   const isSetPasswordRoute = pathname.startsWith("/set-password");
@@ -66,16 +62,26 @@ export async function middleware(request: NextRequest) {
   const isEmployeeRoute = pathname.startsWith("/employee");
 
   // Allow callback, invite, and set-password routes (they handle their own auth)
+  // Skip auth/profile lookups to reduce middleware work on these routes.
   if (isCallbackRoute || isInviteRoute || isSetPasswordRoute) {
     return response;
   }
 
-  // Fetch profile once if user exists to optimize
-  let profile = null;
-  if (user) {
+  // Use getUser() instead of getSession() for security
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Fetch profile only when needed for redirect or route protection decisions.
+  let profile: { role: string | null; status: string | null } | null = null;
+  const needsProfile =
+    Boolean(user) &&
+    (pathname === "/" || isPublicRoute || isAdminRoute || isEmployeeRoute);
+
+  if (needsProfile && user) {
     const { data } = await supabase
       .from("profiles")
-      .select("role, status, organization_id")
+      .select("role, status")
       .eq("id", user.id)
       .single();
     profile = data;
@@ -147,13 +153,15 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder files
-     */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/",
+    "/admin/:path*",
+    "/employee/:path*",
+    "/login",
+    "/signup",
+    "/forgot-password",
+    "/reset-password",
+    "/callback/:path*",
+    "/invite/:path*",
+    "/set-password/:path*",
   ],
 };
