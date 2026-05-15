@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,7 +13,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { getNotifications, markNotificationRead, markAllNotificationsRead } from "@/actions/notifications";
+import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead } from "@/actions/notifications";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -22,21 +22,32 @@ import { Notification } from "@/types/common";
 export function NotificationBell() {
     const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
+    const queryClient = useQueryClient();
+
+    const { data: countResult } = useQuery({
+        queryKey: ["notifications-unread-count"],
+        queryFn: () => getUnreadNotificationCount(),
+        refetchInterval: 60000,
+    });
 
     const { data: result, refetch } = useQuery({
         queryKey: ["notifications"],
         queryFn: () => getNotifications(),
-        refetchInterval: 30000, // Refetch every 30 seconds
+        enabled: isOpen,
+        staleTime: 60000,
     });
 
     const notifications = (result?.data || []) as Notification[];
-    const unreadCount = notifications.filter((n) => !n.is_read).length;
+    const unreadCount = isOpen
+        ? notifications.filter((n) => !n.is_read).length
+        : countResult?.ok ? countResult.count : 0;
 
     const handleMarkRead = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
         const res = await markNotificationRead(id);
         if (res.ok) {
             refetch();
+            void queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
         }
     };
 
@@ -45,6 +56,7 @@ export function NotificationBell() {
         if (res.ok) {
             toast.success("All notifications marked as read");
             refetch();
+            void queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
         }
     };
 
@@ -53,6 +65,7 @@ export function NotificationBell() {
         if (!notification.is_read) {
             await markNotificationRead(notification.id);
             refetch();
+            void queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
         }
 
         // Navigate to entity if applicable

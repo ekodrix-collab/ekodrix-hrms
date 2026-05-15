@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getAdminInboxAction, InboxItem } from "@/actions/inbox";
+import { getSidebarCountsAction } from "@/actions/sidebar";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -14,16 +14,18 @@ export function InboxBell() {
     const isAdmin = pathname?.startsWith("/admin");
 
     const { data: result } = useQuery({
-        queryKey: ["admin-inbox-count"],
-        queryFn: () => getAdminInboxAction(),
+        queryKey: ["sidebar-counts"],
+        queryFn: async () => {
+            const res = await getSidebarCountsAction();
+            return res.ok ? res.data : { adminInbox: 0, marketplace: 0 };
+        },
         enabled: isAdmin,
-        refetchInterval: 30000, // Refetch every 30 seconds
+        refetchInterval: 60000,
     });
 
     if (!isAdmin) return null;
 
-    const items = (result?.data || []) as InboxItem[];
-    const unhandledCount = items.filter((i) => !i.is_handled).length;
+    const unhandledCount = result?.adminInbox ?? 0;
 
     return (
         <Link href="/admin/inbox">

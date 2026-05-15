@@ -19,10 +19,16 @@ export function FloatingChatButton() {
   const { data, refetch } = useQuery({
     queryKey: ["team-chat-unread-count"],
     queryFn: () => getTeamChatUnreadCount(),
-    refetchInterval: 4000,
+    enabled: !isChatPage,
+    refetchInterval: 60000,
+    refetchIntervalInBackground: false,
   });
 
   useEffect(() => {
+    if (isChatPage) {
+      return;
+    }
+
     const supabase = createSupabaseBrowserClient();
     const channel = supabase
       .channel("team-chat-unread")
@@ -42,7 +48,7 @@ export function FloatingChatButton() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [refetch]);
+  }, [isChatPage, refetch]);
 
   if (isChatPage) {
     return null;

@@ -37,7 +37,7 @@ export function MobileNav() {
       const res = await getSidebarCountsAction();
       return res.ok ? res.data : { adminInbox: 0, marketplace: 0 };
     },
-    refetchInterval: 30000,
+    refetchInterval: 60000,
   });
 
   const navGroups = isAdmin ? adminNav : getEmployeeNavByRole(user?.profile?.role);
