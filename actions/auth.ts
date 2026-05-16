@@ -124,7 +124,7 @@ export async function getCurrentUser() {
   // Use admin client to always get profile
   const { data: profile } = await adminClient
     .from("profiles")
-    .select("*")
+    .select("id, full_name, avatar_url, role")
     .eq("id", user.id)
     .single();
 

@@ -7,25 +7,13 @@ import { ArrowLeft, Mail, Building2, Shield, Calendar } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 
-import { useQuery } from "@tanstack/react-query";
-import { getEmployeeById } from "@/actions/employees";
-
 import { Profile } from "@/types/auth";
 
 interface EmployeeDetailsHeaderProps {
     profile: Profile;
 }
 
-export function EmployeeDetailsHeader({ profile: initialProfile }: EmployeeDetailsHeaderProps) {
-    const { data: profile } = useQuery({
-        queryKey: ["employee-profile", initialProfile.id],
-        queryFn: async () => {
-            const res = await getEmployeeById(initialProfile.id);
-            return res.profile;
-        },
-        initialData: initialProfile,
-        refetchInterval: 30000,
-    });
+export function EmployeeDetailsHeader({ profile }: EmployeeDetailsHeaderProps) {
     const getStatusStyle = (status: string) => {
         switch (status) {
             case "active":
