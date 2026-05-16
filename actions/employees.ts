@@ -95,6 +95,21 @@ export async function getEmployeeTasks(id: string) {
 
     return { tasks: tasks || [] };
 }
+
+export async function getEmployeeTaskCount(id: string) {
+    const supabase = createSupabaseServerClient();
+
+    const { count, error } = await supabase
+        .from("tasks")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", id);
+
+    if (error) {
+        return { error: error.message, count: 0 };
+    }
+
+    return { count: count || 0 };
+}
 export async function getAllEmployees() {
     const supabase = createSupabaseServerClient();
     const { organizationId } = await getOrgContext();
