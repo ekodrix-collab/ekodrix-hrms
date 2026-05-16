@@ -1,7 +1,5 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { getEmployeeStats } from "@/actions/employees";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Clock, Calendar, CheckSquare } from "lucide-react";
 
@@ -12,19 +10,11 @@ interface EmployeeStats {
 }
 
 interface EmployeeStatsCardsProps {
-    employeeId: string;
-    initialStats: EmployeeStats;
+    stats: EmployeeStats;
     totalTasks: number;
 }
 
-export function EmployeeStatsCards({ employeeId, initialStats, totalTasks }: EmployeeStatsCardsProps) {
-    const { data: stats } = useQuery<EmployeeStats>({
-        queryKey: ["employee-stats", employeeId],
-        queryFn: async () => getEmployeeStats(employeeId),
-        initialData: initialStats,
-        refetchInterval: 60000,
-    });
-
+export function EmployeeStatsCards({ stats, totalTasks }: EmployeeStatsCardsProps) {
     return (
         <div className="grid gap-4 md:grid-cols-3">
             <Card className="border-none shadow-sm bg-primary/5 dark:bg-primary/10">

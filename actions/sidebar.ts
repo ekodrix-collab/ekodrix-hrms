@@ -22,16 +22,20 @@ export async function getSidebarCountsAction() {
             .eq("is_handled", false);
         adminInbox = count || 0;
     } else {
-        // Count open marketplace tasks not rejected by this user
-        // We'll fetch them all and filter in JS because Supabase 'not in array' is tricky with RPCs sometimes
-        const { data: openTasks } = await supabase
-            .from("tasks")
-            .select("id, rejected_user_ids")
-            .eq("assignment_status", "open");
+        // Count open marketplace tasks without pulling full task rows.
+        const [{ count: openCount }, { count: rejectedCount }] = await Promise.all([
+            supabase
+                .from("tasks")
+                .select("id", { count: "exact", head: true })
+                .eq("assignment_status", "open"),
+            supabase
+                .from("tasks")
+                .select("id", { count: "exact", head: true })
+                .eq("assignment_status", "open")
+                .contains("rejected_user_ids", [user.id]),
+        ]);
 
-        if (openTasks) {
-            marketplace = openTasks.filter(t => !t.rejected_user_ids?.includes(user.id)).length;
-        }
+        marketplace = Math.max(0, (openCount || 0) - (rejectedCount || 0));
     }
 
     return { ok: true, data: { adminInbox, marketplace } };

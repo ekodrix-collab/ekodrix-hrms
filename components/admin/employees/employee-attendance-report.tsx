@@ -6,26 +6,13 @@ import { format } from "date-fns";
 import { Clock, Calendar as CalendarIcon, Home, Building2 } from "lucide-react";
 import { motion } from "framer-motion";
 
-import { useQuery } from "@tanstack/react-query";
-import { getEmployeeAttendance } from "@/actions/employees";
-
 import { AttendanceRecord } from "@/types/dashboard";
 
 interface EmployeeAttendanceReportProps {
     logs: AttendanceRecord[];
-    employeeId: string;
 }
 
-export function EmployeeAttendanceReport({ logs: initialLogs, employeeId }: EmployeeAttendanceReportProps) {
-    const { data: logs } = useQuery({
-        queryKey: ["employee-attendance", employeeId],
-        queryFn: async () => {
-            const res = await getEmployeeAttendance(employeeId);
-            return res.logs;
-        },
-        initialData: initialLogs,
-        refetchInterval: 30000,
-    });
+export function EmployeeAttendanceReport({ logs }: EmployeeAttendanceReportProps) {
     return (
         <Card className="border-none shadow-sm bg-white/60 dark:bg-zinc-900/60 backdrop-blur-xl">
             <CardHeader>
