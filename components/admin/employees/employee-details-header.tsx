@@ -39,7 +39,7 @@ export function EmployeeDetailsHeader({ profile }: EmployeeDetailsHeaderProps) {
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div className="flex items-start gap-4">
                     <Avatar className="h-20 w-20 border-2 border-white shadow-sm ring-1 ring-zinc-200">
-                        <AvatarImage src={profile.avatar_url} />
+                        <AvatarImage src={profile.avatar_url || undefined} />
                         <AvatarFallback className="bg-primary/10 text-primary text-2xl font-bold">
                             {profile.full_name?.charAt(0) || "U"}
                         </AvatarFallback>
