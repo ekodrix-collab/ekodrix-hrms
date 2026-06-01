@@ -21,7 +21,8 @@ import {
   Inbox,
   LayoutGrid,
   KeyRound,
-  Landmark
+  Landmark,
+  FileText
 } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
@@ -70,6 +71,7 @@ export const adminNav: NavGroup[] = [
     items: [
       { href: "/admin/finance", label: "Company Treasury", icon: CreditCard },
       { href: "/admin/project-finance", label: "Project Finance", icon: LayoutGrid },
+      { href: "/admin/invoices", label: "Invoices", icon: FileText },
     ]
   },
   {
