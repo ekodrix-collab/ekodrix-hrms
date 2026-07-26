@@ -92,7 +92,7 @@ export interface InvoiceItemInput {
 
 export interface CreateInvoiceInput {
     invoice_date: string;
-    due_date?: string;
+    due_date?: string | null;
 
     client_name: string;
     client_email?: string;
@@ -112,7 +112,7 @@ export interface CreateInvoiceInput {
 
 export interface UpdateInvoiceInput extends Partial<CreateInvoiceInput> {
     payment_status?: InvoiceStatus;
-    payment_date?: string;
+    payment_date?: string | null;
 }
 
 // ── Filter / list types ────────────────────────────────────────
