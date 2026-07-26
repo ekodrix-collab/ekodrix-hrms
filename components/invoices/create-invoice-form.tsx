@@ -91,6 +91,7 @@ export function CreateInvoiceForm({ onSuccess }: CreateInvoiceFormProps) {
     const onSubmit = async (values: FormValues) => {
         const result = await createInvoice({
             ...values,
+            due_date: values.due_date ? values.due_date : undefined,
             client_email: values.client_email || undefined,
             items: values.items.map((item) => ({
                 ...item,

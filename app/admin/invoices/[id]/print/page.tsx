@@ -38,13 +38,17 @@ export default async function InvoicePrintPage({ params }: PrintPageProps) {
 
     const statusLabel = inv.payment_status.replace("_", " ").toUpperCase();
 
-    let reminderMessage = "Thank you for your business. Please make payment by the due date.";
+    let reminderMessage = "Thank you for your business.";
     if (inv.payment_status === "paid") {
         reminderMessage = "Invoice fully paid. Thank you for your business.";
     } else if (inv.payment_status === "partially_paid") {
-        reminderMessage = "Remaining balance payment is pending. Please complete the balance payment before the due date.";
+        reminderMessage = inv.due_date
+            ? "Remaining balance payment is pending. Please complete the balance payment before the due date."
+            : "Remaining balance payment is pending. Please complete the balance payment.";
     } else if (inv.payment_status === "pending") {
-        reminderMessage = "Payment is pending for this invoice.";
+        reminderMessage = inv.due_date
+            ? "Thank you for your business. Please make payment by the due date."
+            : "Payment is pending for this invoice.";
     }
 
     return (
@@ -383,21 +387,21 @@ export default async function InvoicePrintPage({ params }: PrintPageProps) {
                         </div>
 
                         {/* Meta row */}
-                        <div className="meta-row">
+                        <div className="meta-row" style={{ gridTemplateColumns: inv.due_date ? "1fr 1fr 1fr" : "1fr 1fr" }}>
                             <div className="meta-cell">
                                 <div className="meta-label">Invoice Date</div>
                                 <div className="meta-value">
                                     {format(new Date(inv.invoice_date), "dd MMMM yyyy")}
                                 </div>
                             </div>
-                            <div className="meta-cell">
-                                <div className="meta-label">Due Date</div>
-                                <div className="meta-value">
-                                    {inv.due_date
-                                        ? format(new Date(inv.due_date), "dd MMMM yyyy")
-                                        : "—"}
+                            {inv.due_date && (
+                                <div className="meta-cell">
+                                    <div className="meta-label">Due Date</div>
+                                    <div className="meta-value">
+                                        {format(new Date(inv.due_date), "dd MMMM yyyy")}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                             <div className="meta-cell">
                                 <div className="meta-label">Payment Status</div>
                                 <div className="status-pill">{statusLabel}</div>

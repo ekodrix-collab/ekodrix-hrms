@@ -429,8 +429,8 @@ export function InvoiceDetailClient({ id }: InvoiceDetailClientProps) {
                             <InfoRow label="Service" value={inv.service_name} />
                             {inv.description && <InfoRow label="Description" value={inv.description} />}
                             <InfoRow label="Invoice Date" value={format(new Date(inv.invoice_date), "dd MMM yyyy")} />
-                            {inv.due_date && (
-                                <InfoRow label="Due Date" value={format(new Date(inv.due_date), "dd MMM yyyy")} />
+                            {Boolean(inv.due_date) && (
+                                <InfoRow label="Due Date" value={format(new Date(inv.due_date!), "dd MMM yyyy")} />
                             )}
                             {inv.payment_method && (
                                 <InfoRow label="Payment Method" value={inv.payment_method} />
