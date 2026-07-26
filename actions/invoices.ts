@@ -82,7 +82,7 @@ export async function createInvoice(input: CreateInvoiceInput) {
         .insert({
             invoice_number: invoiceNumber,
             invoice_date: input.invoice_date,
-            due_date: input.due_date ?? null,
+            due_date: input.due_date || null,
             client_name: input.client_name,
             client_email: input.client_email ?? null,
             client_phone: input.client_phone ?? null,
@@ -342,7 +342,7 @@ export async function updateInvoice(id: string, input: UpdateInvoiceInput) {
     const updates: Record<string, unknown> = {};
 
     if (input.invoice_date) updates.invoice_date = input.invoice_date;
-    if (input.due_date !== undefined) updates.due_date = input.due_date ?? null;
+    if (input.due_date !== undefined) updates.due_date = input.due_date || null;
     if (input.client_name) updates.client_name = input.client_name;
     if (input.client_email !== undefined) updates.client_email = input.client_email ?? null;
     if (input.client_phone !== undefined) updates.client_phone = input.client_phone ?? null;
